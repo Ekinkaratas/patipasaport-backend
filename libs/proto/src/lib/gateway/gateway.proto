@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package gateway;   
+
+service GatewayService {
+  rpc GetGateway (GatewayRequest) returns (GatewayResponse);
+}
+
+message GatewayRequest {
+  string id = 1;
+}
+
+message GatewayResponse {
+  string id = 1;
+  string name = 2;
+}

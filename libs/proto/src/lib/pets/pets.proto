@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package pets;   
+
+service PetsService {
+  rpc GetPets (PetsRequest) returns (PetsResponse);
+}
+
+message PetsRequest {
+  string id = 1;
+}
+
+message PetsResponse {
+  string id = 1;
+  string name = 2;
+}

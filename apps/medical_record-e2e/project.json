@@ -1,0 +1,24 @@
+{
+  "name": "medical_record-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "implicitDependencies": [
+    "medical_record"
+  ],
+  "targets": {
+    "e2e": {
+      "executor": "@nx/jest:jest",
+      "outputs": [
+        "{workspaceRoot}/coverage/{e2eProjectRoot}"
+      ],
+      "dependsOn": [
+        "medical_record:build",
+        "medical_record:serve"
+      ],
+      "options": {
+        "jestConfig": "apps/medical_record-e2e/jest.config.cts",
+        "passWithNoTests": true
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package access;   
+
+service AccessService {
+  rpc GetAccess (AccessRequest) returns (AccessResponse);
+}
+
+message AccessRequest {
+  string id = 1;
+}
+
+message AccessResponse {
+  string id = 1;
+  string name = 2;
+}

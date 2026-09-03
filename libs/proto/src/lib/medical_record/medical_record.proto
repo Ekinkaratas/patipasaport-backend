@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package medical_record;
+
+service Medical_RecordService {
+  rpc GetMedical_Record (Medical_RecordRequest) returns (Medical_RecordResponse);
+}
+
+message Medical_RecordRequest {
+  string id = 1;
+}
+
+message Medical_RecordResponse {
+  string id = 1;
+  string name = 2;
+}

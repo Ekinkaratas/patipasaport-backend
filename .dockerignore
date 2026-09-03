@@ -1,0 +1,11 @@
+node_modules
+dist
+tmp
+.nx
+.git
+.env
+.env.*
+docker-compose.override.yml
+**/*.log
+apps/*-e2e
+coverage

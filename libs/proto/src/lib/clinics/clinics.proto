@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package clinics;  
+
+service ClinicsService {
+  rpc GetClinics (ClinicsRequest) returns (ClinicsResponse);
+}
+
+message ClinicsRequest {
+  string id = 1;
+}
+
+message ClinicsResponse {
+  string id = 1;
+  string name = 2;
+}

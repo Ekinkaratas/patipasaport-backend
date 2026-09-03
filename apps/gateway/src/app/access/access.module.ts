@@ -1,0 +1,25 @@
+import { Module } from '@nestjs/common';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ACCESS_PACKAGE_NAME } from '@libs/proto';
+import { join } from 'path';
+import { ApiAccessController } from './access.controller';
+import { ApiAccessService } from './access.service';
+
+@Module({
+  imports: [
+    ClientsModule.register([
+      {
+        name: 'ACCESS_SERVICE',
+        transport: Transport.GRPC,
+        options: {
+          url: '0.0.0.0:3001',
+          package: ACCESS_PACKAGE_NAME,
+          protoPath: join(__dirname, 'proto/access/access.proto'),
+        },
+      },
+    ]),
+  ],
+  controllers: [ApiAccessController],
+  providers: [ApiAccessService],
+})
+export class ApiAccessModule {}

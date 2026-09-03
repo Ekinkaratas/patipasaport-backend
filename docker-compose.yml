@@ -1,0 +1,299 @@
+# ============================================================
+# PatiPasaport - docker-compose.yml
+# Tamamen on-premise / yerel calisir, dis bulut servisi kullanilmaz.
+#
+# Baslatmadan once mutlaka:
+#   ./build-base.sh
+# calistirilmis olmali (servis Dockerfile'lari patipasaport-base
+# imajindan FROM aldigi icin).
+# ============================================================
+
+services:
+
+  # ------------------------------------------------------------
+  # ALTYAPI (infrastructure)
+  # ------------------------------------------------------------
+
+  postgres-auth:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${AUTH_DB_USER:-auth_user}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
+      POSTGRES_DB: ${AUTH_DB_NAME:-auth_db}
+    volumes:
+      - pg_auth_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth_user} -d ${AUTH_DB_NAME:-auth_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-users:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${USERS_DB_USER:-users_user}
+      POSTGRES_PASSWORD: ${USERS_DB_PASSWORD:-users_pass}
+      POSTGRES_DB: ${USERS_DB_NAME:-users_db}
+    volumes:
+      - pg_users_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USERS_DB_USER:-users_user} -d ${USERS_DB_NAME:-users_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-clinic:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${CLINIC_DB_USER:-clinic_user}
+      POSTGRES_PASSWORD: ${CLINIC_DB_PASSWORD:-clinic_pass}
+      POSTGRES_DB: ${CLINIC_DB_NAME:-clinic_db}
+    volumes:
+      - pg_clinic_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CLINIC_DB_USER:-clinic_user} -d ${CLINIC_DB_NAME:-clinic_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-access:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ACCESS_DB_USER:-access_user}
+      POSTGRES_PASSWORD: ${ACCESS_DB_PASSWORD:-access_pass}
+      POSTGRES_DB: ${ACCESS_DB_NAME:-access_db}
+    volumes:
+      - pg_access_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ACCESS_DB_USER:-access_user} -d ${ACCESS_DB_NAME:-access_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-medical-record:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${MEDICAL_DB_USER:-medical_user}
+      POSTGRES_PASSWORD: ${MEDICAL_DB_PASSWORD:-medical_pass}
+      POSTGRES_DB: ${MEDICAL_DB_NAME:-medical_db}
+    volumes:
+      - pg_medical_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MEDICAL_DB_USER:-medical_user} -d ${MEDICAL_DB_NAME:-medical_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo-pets:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${PETS_DB_USER:-pets_user}
+      MONGO_INITDB_ROOT_PASSWORD: ${PETS_DB_PASSWORD:-pets_pass}
+      MONGO_INITDB_DATABASE: ${PETS_DB_NAME:-pets_db}
+    volumes:
+      - mongo_pets_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis-access:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis_pass}"]
+    volumes:
+      - redis_access_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_pass}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbit_user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbit_pass}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # AI pipeline'i icin Ollama (local LLM) - Python FastAPI AI servisi
+  # bu tree'de yer almadigi icin (Nx workspace disinda, ayri bir servis
+  # oldugu belirtilmisti) burada sadece Ollama altyapisi tanimlandi.
+  # AI servisinin kendi Dockerfile'i hazir oldugunda "ai-service" adiyla
+  # eklenebilir.
+  #ollama:
+    #image: ollama/ollama:latest
+    #restart: unless-stopped
+    #volumes:
+      #- ollama_data:/root/.ollama
+
+  # ------------------------------------------------------------
+  # UYGULAMA SERVISLERI (Nx monorepo - apps/*)
+  # ------------------------------------------------------------
+
+  auth:
+    build:
+      context: .
+      dockerfile: apps/auth/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres-auth
+      DB_PORT: 5432
+      DB_USER: ${AUTH_DB_USER:-auth_user}
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
+      DB_NAME: ${AUTH_DB_NAME:-auth_db}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD:-rabbit_pass}@rabbitmq:5672
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  users:
+    build:
+      context: .
+      dockerfile: apps/users/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres-users
+      DB_PORT: 5432
+      DB_USER: ${USERS_DB_USER:-users_user}
+      DB_PASSWORD: ${USERS_DB_PASSWORD:-users_pass}
+      DB_NAME: ${USERS_DB_NAME:-users_db}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD:-rabbit_pass}@rabbitmq:5672
+    depends_on:
+      postgres-users:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  clinic:
+    build:
+      context: .
+      dockerfile: apps/clinics/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres-clinic
+      DB_PORT: 5432
+      DB_USER: ${CLINIC_DB_USER:-clinic_user}
+      DB_PASSWORD: ${CLINIC_DB_PASSWORD:-clinic_pass}
+      DB_NAME: ${CLINIC_DB_NAME:-clinic_db}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD:-rabbit_pass}@rabbitmq:5672
+    depends_on:
+      postgres-clinic:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  pets:
+    build:
+      context: .
+      dockerfile: apps/pets/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGO_URI: mongodb://${PETS_DB_USER:-pets_user}:${PETS_DB_PASSWORD:-pets_pass}@mongo-pets:27017/${PETS_DB_NAME:-pets_db}?authSource=admin
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD:-rabbit_pass}@rabbitmq:5672
+    depends_on:
+      mongo-pets:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  access:
+    build:
+      context: .
+      dockerfile: apps/access/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres-access
+      DB_PORT: 5432
+      DB_USER: ${ACCESS_DB_USER:-access_user}
+      DB_PASSWORD: ${ACCESS_DB_PASSWORD:-access_pass}
+      DB_NAME: ${ACCESS_DB_NAME:-access_db}
+      REDIS_HOST: redis-access
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_pass}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD:-rabbit_pass}@rabbitmq:5672
+    depends_on:
+      postgres-access:
+        condition: service_healthy
+      redis-access:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  medical_record:
+    build:
+      context: .
+      dockerfile: apps/medical_record/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres-medical-record
+      DB_PORT: 5432
+      DB_USER: ${MEDICAL_DB_USER:-medical_user}
+      DB_PASSWORD: ${MEDICAL_DB_PASSWORD:-medical_pass}
+      DB_NAME: ${MEDICAL_DB_NAME:-medical_db}
+      RAW_FILES_PATH: /var/medical-files
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD:-rabbit_pass}@rabbitmq:5672
+    volumes:
+      - medical_files:/var/medical-files
+    depends_on:
+      postgres-medical-record:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AUTH_SERVICE_URL: http://auth:3000
+      USERS_SERVICE_URL: http://users:3000
+      CLINIC_SERVICE_URL: http://clinic:3000
+      PETS_SERVICE_URL: http://pets:3000
+      ACCESS_SERVICE_URL: http://access:3000
+      MEDICAL_RECORD_SERVICE_URL: http://medical_record:3000
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD:-rabbit_pass}@rabbitmq:5672
+    depends_on:
+      - auth
+      - users
+      - clinic
+      - pets
+      - access
+      - medical_record
+    ports:
+      - "3000:3000"
+
+volumes:
+  pg_auth_data:
+  pg_users_data:
+  pg_clinic_data:
+  pg_access_data:
+  pg_medical_data:
+  mongo_pets_data:
+  redis_access_data:
+  rabbitmq_data:
+  medical_files:
