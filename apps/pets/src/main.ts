@@ -4,6 +4,11 @@ import { AppModule } from './app/app.module';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { PETS_PACKAGE_NAME } from '@libs/proto';
 import { join } from 'path';
+import {
+  RpcExceptionFilter,
+  LoggingInterceptor,
+  createWinstonLogger,
+} from '@libs/common';
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(
@@ -15,8 +20,12 @@ async function bootstrap() {
         package: PETS_PACKAGE_NAME,
         protoPath: join(__dirname, 'proto/pets/pets.proto'),
       },
+      logger: createWinstonLogger('pets'),
     },
   );
+
+  app.useGlobalFilters(new RpcExceptionFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor('pets'));
 
   await app.listen();
   Logger.log(`🚀 Application is running on pets`);

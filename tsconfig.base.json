@@ -15,7 +15,8 @@
     "skipDefaultLibCheck": true,
     "paths": {
       "@nestjs-template/types": ["./packages/types/src/index.ts"],
-      "@libs/proto": ["./libs/proto/src/index.ts"]
+      "@libs/proto": ["./libs/proto/src/index.ts"],
+      "@libs/common": ["./libs/common/src/index.ts"]
     },
     "strict": false,
     "noUncheckedSideEffectImports": false,
