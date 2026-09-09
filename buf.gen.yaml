@@ -1,0 +1,6 @@
+version: v2
+plugins:
+  - local: [node, node_modules/ts-proto/protoc-gen-ts_proto]
+    out: libs/proto/src/generated
+    opt:
+      - nestJs=true

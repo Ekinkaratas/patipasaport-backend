@@ -1,16 +1,96 @@
 syntax = "proto3";
 
-package access;   
+package access;
 
 service AccessService {
-  rpc GetAccess (AccessRequest) returns (AccessResponse);
+  // Sadece Gateway çağırır. Opaque token -> kısa ömürlü imzalı JWT.
+  rpc ExchangeToken (ExchangeTokenRequest) returns (ExchangeTokenResponse);
+
+  // Alt servisler çağırır. Rıza kontrolü .
+  rpc CheckAccess (CheckAccessRequest) returns (CheckAccessResponse);
+
+  // Rıza yaşam döngüsü. Gateway üzerinden hasta sahibi tetikler.
+  rpc GrantConsent (GrantConsentRequest) returns (ConsentResponse);
+  rpc RevokeConsent (RevokeConsentRequest) returns (ConsentResponse);
+  rpc GetConsentStatus (GetConsentStatusRequest) returns (ConsentResponse);
 }
 
-message AccessRequest {
-  string id = 1;
+enum ConsentStatus {
+  CONSENT_STATUS_UNSPECIFIED = 0;
+  ACTIVE = 1;
+  REVOKED = 2;
+  EXPIRED = 3;
+  NOT_FOUND = 4;
 }
 
-message AccessResponse {
-  string id = 1;
-  string name = 2;
+enum ClientType {
+  CLIENT_TYPE_UNSPECIFIED = 0;
+  WEB = 1;
+  MOBILE = 2;
+}
+
+// ---------- Token exchange ----------
+
+message ExchangeTokenRequest {
+  string opaque_token = 1;
+  ClientType client_type = 2;      
+}
+
+message ExchangeTokenResponse {
+  string jwt = 1;              // metadata'da 'authorization' olarak taşınır
+  int32 expires_in = 2;        // saniye
+  string trace_id = 3;         // metadata'da 'x-trace-id' olarak taşınır
+  string user_id = 4;
+  string role = 5;
+  string clinic_id = 6;        // hasta sahibi ise boş string
+}
+
+// ---------- Rıza kontrolü ----------
+
+// Çağıran servis kim olduğunu JWT'den bilir;
+message CheckAccessRequest {
+  string clinic_id = 1;
+  string pet_id = 2;
+  repeated string required_scopes = 3;   // "medical_read", "chip_number_read"
+}
+
+message CheckAccessResponse {
+  bool allowed = 1;
+  repeated string granted_scopes = 2;    // izin verilen scope'lar
+  repeated string missing_scopes = 3;    // eksik olanlar — 403 mesajı için
+  string consent_id = 4;
+  ConsentStatus status = 5;
+  string expires_at = 6;                 // ISO-8601
+  string denied_reason = 7;              // "REVOKED" | "EXPIRED" | "NO_CONSENT"
+}
+
+// ---------- Rıza yaşam döngüsü ----------
+
+message GrantConsentRequest {
+  string owner_user_id = 1;      // rızayı veren hasta sahibi
+  string clinic_id = 2;
+  string pet_id = 3;
+  repeated string scopes = 4;
+  string expires_at = 5;         // ISO-8601, süresiz ise boş string
+}
+
+message RevokeConsentRequest {
+  string consent_id = 1;
+}
+
+message GetConsentStatusRequest {
+  string clinic_id = 1;
+  string pet_id = 2;
+}
+
+message ConsentResponse {
+  string consent_id = 1;
+  ConsentStatus status = 2;
+  string owner_user_id = 3;
+  string clinic_id = 4;
+  string pet_id = 5;
+  repeated string scopes = 6;
+  string granted_at = 7;         // ISO-8601
+  string expires_at = 8;         // ISO-8601
+  string revoked_at = 9;         // ISO-8601, iptal edilmediyse boş string
 }

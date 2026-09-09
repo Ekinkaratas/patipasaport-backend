@@ -2,15 +2,191 @@ syntax = "proto3";
 
 package medical_record;
 
-service Medical_RecordService {
-  rpc GetMedical_Record (Medical_RecordRequest) returns (Medical_RecordResponse);
+// Tıbbi geçmiş yönetimi, dosya referansı ve physician-in-the-loop onay akışı.
+//
+// Python/FastAPI servisiyle iletişim tamamen RabbitMQ üzerinden asenkrondur (fire-and-forget + callback).
+service MedicalRecordService {
+  rpc ListRecordsByPet (ListRecordsByPetRequest) returns (ListRecordsResponse);
+  rpc CreateRecord (CreateRecordRequest) returns (RecordResponse);
+  rpc ListVaccinations (ListVaccinationsRequest) returns (ListVaccinationsResponse);
+  rpc ListPrescriptions (ListPrescriptionsRequest) returns (ListPrescriptionsResponse);
+
+  // Hekimin onay bekleyen taslakları görmesi sebebiyle yazıldı.
+  rpc ListDraftReviews (ListDraftReviewsRequest) returns (ListDraftReviewsResponse);
+  rpc ReviewDraft (ReviewDraftRequest) returns (DraftReviewResponse);
 }
 
-message Medical_RecordRequest {
-  string id = 1;
+enum RecordType {
+  RECORD_TYPE_UNSPECIFIED = 0;
+  EXAMINATION = 1;
+  VACCINATION = 2;
+  PRESCRIPTION = 3;
+  LAB_RESULT = 4;
+  SURGERY = 5;
 }
 
-message Medical_RecordResponse {
+enum DraftReviewStatus {
+  DRAFT_REVIEW_STATUS_UNSPECIFIED = 0;
+  PENDING = 1;
+  APPROVED = 2;
+  REJECTED = 3;
+}
+
+// Dosya İÇERİĞİ değil, referansı taşınır.
+message FileReference {
+  string document_id = 1;
+  string storage_path = 2;
+  string original_name = 3;
+  string mime_type = 4;
+  int32 size_bytes = 5;
+  string uploaded_at = 6;     // ISO-8601
+}
+
+message MedicalRecord {
   string id = 1;
-  string name = 2;
+  string pet_id = 2;
+  string clinic_id = 3;
+  string author_user_id = 4;      // KAYITLI VERİ — request'te değil, yazılırken JWT'den alınır
+  RecordType type = 5;
+  string title = 6;
+  string notes = 7;
+  string recorded_at = 8;         // ISO-8601, muayene tarihi
+  repeated FileReference attachments = 9;
+  string source_draft_review_id = 10;  // AI taslağından geldiyse dolu
+  string created_at = 11;         // ISO-8601
+}
+
+message ListRecordsByPetRequest {
+  string pet_id = 1;
+  optional RecordType type = 2;
+  string from_date = 3;           // ISO-8601, boş ise filtre yok
+  string to_date = 4;
+  int32 page = 5;
+  int32 page_size = 6;
+}
+
+message ListRecordsResponse {
+  repeated MedicalRecord records = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// author_user_id ve clinic_id, ikisi de JWT'den okunur.
+message CreateRecordRequest {
+  string pet_id = 1;
+  RecordType type = 2;
+  string title = 3;
+  string notes = 4;
+  string recorded_at = 5;
+  repeated FileReference attachments = 6;
+}
+
+message RecordResponse {
+  MedicalRecord record = 1;
+}
+
+// ---------- Aşı ----------
+
+message Vaccination {
+  string id = 1;
+  string record_id = 2;
+  string pet_id = 3;
+  string vaccine_name = 4;
+  string batch_number = 5;
+  string administered_at = 6;     // ISO-8601
+  string next_due_at = 7;         // ISO-8601, yoksa boş string
+  string veterinarian_user_id = 8;
+  string clinic_id = 9;
+}
+
+message ListVaccinationsRequest {
+  string pet_id = 1;
+  optional bool only_upcoming = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ListVaccinationsResponse {
+  repeated Vaccination vaccinations = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// ---------- Reçete ----------
+message Prescription {
+  string id = 1;
+  string record_id = 2;
+  string pet_id = 3;
+  string medication_name = 4;
+  string dosage = 5;              // "250 mg"
+  string frequency = 6;           // "günde 2 kez"
+  int32 duration_days = 7;
+  string instructions = 8;
+  string prescribed_at = 9;       // ISO-8601
+  string veterinarian_user_id = 10;
+  string clinic_id = 11;
+}
+
+message ListPrescriptionsRequest {
+  string pet_id = 1;
+  optional bool only_active = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ListPrescriptionsResponse {
+  repeated Prescription prescriptions = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// ---------- Physician-in-the-loop ----------
+
+// AI'ın ürettiği taslak. Hekim onaylamadan kalıcı kayda DÖNÜŞMEZ.
+message DraftReview {
+  string id = 1;
+  string pet_id = 2;
+  string clinic_id = 3;
+  RecordType proposed_type = 5;
+  string proposed_title = 6;
+  string proposed_notes = 7;
+  repeated FileReference source_files = 8;
+  DraftReviewStatus status = 9;
+  string reviewed_by_user_id = 10;    // KAYITLI VERİ — sorumluluk zinciri
+  string review_note = 11;
+  string created_record_id = 12;      // onaylanınca oluşan kaydın id'si
+  string created_at = 13;             // ISO-8601
+  string reviewed_at = 14;            // ISO-8601
+}
+
+message ListDraftReviewsRequest {
+  optional string pet_id = 1;         // boşsa kliniğin tamamı
+  optional DraftReviewStatus status = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ListDraftReviewsResponse {
+  repeated DraftReview draft_reviews = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// reviewed_by_user_id YOK kimlik JWT'den alınır.
+// İstemciden gelseydi bir hekim başkasının adına onay verebilirdi.
+message ReviewDraftRequest {
+  string id = 1;
+  bool approved = 2;                  // false ise reddedilir
+  string review_note = 3;
+  // Hekim taslağı düzelterek onaylayabilir:
+  optional string edited_title = 4;
+  optional string edited_notes = 5;
+}
+
+message DraftReviewResponse {
+  DraftReview draft_review = 1;
 }

@@ -1,16 +1,104 @@
 syntax = "proto3";
 
-package users;   
+package users;
+
 
 service UsersService {
-  rpc GetUsers (UsersRequest) returns (UsersResponse);
+  // Sadece Auth Service çağırır .
+  rpc CreateUser (CreateUserRequest) returns (UserResponse);
+
+  rpc GetUser (GetUserRequest) returns (UserResponse);
+  rpc UpdateUser (UpdateUserRequest) returns (UserResponse);
+  rpc GetUserRole (GetUserRoleRequest) returns (GetUserRoleResponse);
+  rpc ListUsersByClinic (ListUsersByClinicRequest) returns (ListUsersByClinicResponse);
+
+  // Dar kapsamlı iletişim sorgusu — 'owner_contact_read' scope'u gerektirir.
+  // telefon/adres için Gateway bu RPC'yi çağırıp iki yanıtı birleştirir.
+  rpc GetUserContact (GetUserContactRequest) returns (GetUserContactResponse);
 }
 
-message UsersRequest {
+enum UserRole {
+  USER_ROLE_UNSPECIFIED = 0;
+  VETERINARIAN = 1;
+  PET_OWNER = 2;
+  STAFF = 3;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string full_name = 3;
+  string phone = 4;
+  UserRole role = 5;
+  string clinic_id = 6;      // hasta sahibi için boş string
+  bool is_active = 7;
+  string created_at = 8;     // ISO-8601
+  string updated_at = 9;     // ISO-8601
+}
+
+// Auth Service'in ürettiği user_id ile birebir aynı olmalı.
+message CreateUserRequest {
+  string id = 1;
+  string email = 2;
+  string full_name = 3;
+  string phone = 4;
+  UserRole role = 5;
+  string clinic_id = 6;
+}
+
+message GetUserRequest {
   string id = 1;
 }
 
-message UsersResponse {
+// PATCH semantiği: 'optional' field presence sağlar, böylece
+// "boş gönderildi" ile "hiç gönderilmedi" ayırt edilir.
+message UpdateUserRequest {
   string id = 1;
-  string name = 2;
+  optional string full_name = 2;
+  optional string phone = 3;
+  optional string address_line = 4;
+  optional string city = 5;
+  optional string district = 6;
+}
+
+message GetUserRoleRequest {
+  string id = 1;
+}
+
+message GetUserRoleResponse {
+  string user_id = 1;
+  UserRole role = 2;
+  string clinic_id = 3;
+}
+
+message ListUsersByClinicRequest {
+  string clinic_id = 1;
+  optional UserRole role = 2;
+  int32 page = 3;               // 1'den başlar
+  int32 page_size = 4;
+}
+
+message ListUsersByClinicResponse {
+  repeated User users = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message GetUserContactRequest {
+  string user_id = 1;
+}
+
+message GetUserContactResponse {
+  string user_id = 1;
+  string full_name = 2;
+  string phone = 3;
+  string email = 4;
+  string address_line = 5;
+  string city = 6;
+  string district = 7;
+}
+
+message UserResponse {
+  User user = 1;
 }

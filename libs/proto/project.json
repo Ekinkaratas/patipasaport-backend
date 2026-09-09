@@ -4,14 +4,31 @@
   "sourceRoot": "libs/proto/src",
   "projectType": "library",
   "targets": {
+    "generate": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["{projectRoot}/src/lib/**/*.proto"],
+      "outputs": ["{projectRoot}/src/generated"],
+      "options": {
+        "command": "buf generate"
+      }
+    },
     "build": {
       "executor": "@nx/js:tsc",
+      "dependsOn": ["generate"],
       "outputs": ["{options.outputPath}"],
       "options": {
         "outputPath": "dist/libs/proto",
         "main": "libs/proto/src/index.ts",
         "tsConfig": "libs/proto/tsconfig.lib.json",
-        "assets": ["libs/proto/*.md"]
+        "assets": [
+          "libs/proto/*.md",
+          {
+            "input": "libs/proto/src/lib",
+            "glob": "**/*.proto",
+            "output": "./lib"
+          }
+        ]
       }
     }
   },

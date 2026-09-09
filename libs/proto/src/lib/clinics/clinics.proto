@@ -1,16 +1,148 @@
 syntax = "proto3";
 
-package clinics;  
+package clinics;
 
+// Klinik profili, stok/envanter takibi ve frontend orkestrasyonu (BFF).
+//
+// ZERO TRUST NOTU: Clinic Service'in "izinli" demesi alt servisler için
+// yeterli DEĞİL. Aldığı JWT'yi alt servislere aynen relay eder; onlar da
+// kendi CheckAccess kontrollerini yapar. 
 service ClinicsService {
-  rpc GetClinics (ClinicsRequest) returns (ClinicsResponse);
+  rpc GetClinic (GetClinicRequest) returns (ClinicResponse);
+  rpc ListStockItems (ListStockItemsRequest) returns (ListStockItemsResponse);
+  rpc AddStockItem (AddStockItemRequest) returns (StockItemResponse);
+  rpc GetClinicPetOverview (GetClinicPetOverviewRequest) returns (GetClinicPetOverviewResponse);
+  rpc UploadPetResult (UploadPetResultRequest) returns (UploadPetResultResponse);
 }
 
-message ClinicsRequest {
-  string id = 1;
-}
-
-message ClinicsResponse {
+message Clinic {
   string id = 1;
   string name = 2;
+  string tax_number = 3;
+  string phone = 4;
+  string email = 5;
+  string address_line = 6;
+  string city = 7;
+  string district = 8;
+  string working_hours = 9;   // "Pzt-Cum 09:00-18:00"
+  bool is_active = 10;
+  string created_at = 11;     // ISO-8601
+  string updated_at = 12;     // ISO-8601
+}
+
+message GetClinicRequest {
+  string id = 1;
+}
+
+message ClinicResponse {
+  Clinic clinic = 1;
+}
+
+// ---------- Stok / Envanter ----------
+
+message StockItem {
+  string id = 1;
+  string clinic_id = 2;
+  string name = 3;
+  string category = 4;        // "aşı", "ilaç", "sarf"
+  string unit = 5;            // "adet", "ml", "kutu"
+  int32 quantity = 6;
+  int32 critical_level = 7;   // altına düşünce uyarı
+  bool is_below_critical = 8;
+  string expires_at = 9;      // ISO-8601, yoksa boş string
+  string updated_at = 10;     // ISO-8601
+}
+
+message ListStockItemsRequest {
+  string clinic_id = 1;
+  optional string category = 2;
+  optional bool only_below_critical = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+}
+
+message ListStockItemsResponse {
+  repeated StockItem items = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// Kaydı kimin girdiği JWT'den okunur, istemciden alınmaz.
+message AddStockItemRequest {
+  string clinic_id = 1;
+  string name = 2;
+  string category = 3;
+  string unit = 4;
+  int32 quantity = 5;
+  int32 critical_level = 6;
+  string expires_at = 7;
+}
+
+message StockItemResponse {
+  StockItem item = 1;
+}
+
+// ---------- BFF: klinik ekranındaki hayvan özeti ----------
+
+message GetClinicPetOverviewRequest {
+  string clinic_id = 1;
+  string pet_id = 2;
+}
+
+// Pets + Users + MedicalRecord servislerinden PARALEL toplanır.
+// Alt mesajlar burada yeniden tanımlanır — bu servisin kendi dış
+// sözleşmesidir, alt servisin iç modeli değişse bile kırılmaz.
+message ClinicPetSummary {
+  string pet_id = 1;
+  string name = 2;
+  string species = 3;
+  string breed = 4;
+  string birth_date = 5;
+  string chip_number_masked = 6;
+  string owner_user_id = 7;
+}
+
+// 'owner_contact_read' scope'u yoksa bu blok boş döner.
+message ClinicOwnerSummary {
+  string user_id = 1;
+  string full_name = 2;
+  string phone = 3;
+}
+
+message ClinicRecordSummary {
+  string record_id = 1;
+  string type = 2;            // VACCINATION | PRESCRIPTION | EXAMINATION
+  string title = 3;
+  string recorded_at = 4;     // ISO-8601
+}
+
+message GetClinicPetOverviewResponse {
+  ClinicPetSummary pet = 1;
+  ClinicOwnerSummary owner = 2;
+  repeated ClinicRecordSummary recent_records = 3;
+  int32 pending_draft_review_count = 4;
+  repeated string unavailable_sources = 5;  // kısmi başarı: "medical_record"
+}
+
+// ---------- Sonuç (tahlil/görüntü) yükleme ----------
+
+// DOSYANIN KENDİSİ BURADAN GEÇMEZ. Gateway multipart isteği alır,
+// dosyayı local file system'a yazar, sadece referansını iletir.
+// Bu çağrı Medical Record'a iletilir ve AI pipeline'ını tetikler.
+message UploadPetResultRequest {
+  string clinic_id = 1;
+  string pet_id = 2;
+  string storage_path = 3;    // dosya sisteminde nereye yazıldığı
+  string original_name = 4;
+  string mime_type = 5;       // "application/pdf", "image/jpeg"
+  int32 size_bytes = 6;
+  string note = 7;
+}
+
+message UploadPetResultResponse {
+  string document_id = 1;
+  string record_id = 2;         // Medical Record'da açılan kaydın id'si
+  bool ai_pipeline_queued = 3;  // RabbitMQ'ya atıldı mı
+  string uploaded_at = 4;       // ISO-8601
 }
