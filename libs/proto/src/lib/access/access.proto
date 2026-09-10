@@ -42,7 +42,7 @@ message ExchangeTokenResponse {
   string trace_id = 3;         // metadata'da 'x-trace-id' olarak taşınır
   string user_id = 4;
   string role = 5;
-  string clinic_id = 6;        // hasta sahibi ise boş string
+  string clinic_id = 6;        // // eğer user bir klinik personeli değilse burası boş string döner
 }
 
 // ---------- Rıza kontrolü ----------

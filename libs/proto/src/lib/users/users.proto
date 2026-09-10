@@ -3,17 +3,40 @@ syntax = "proto3";
 package users;
 
 
+//   GetMe                 -> kendi verisi, tam, scope'suz
+//   GetUserContact        -> ÜÇÜNCÜ TARAF iletişim bilgisi, scope zorunlu
+//   ListUsersByClinic     -> yalnızca kendi kliniğinin personeli
+//   GetUserDisplayNames   -> yalnızca görünen ad, elde id varsa
 service UsersService {
-  // Sadece Auth Service çağırır .
+  // Sadece Auth Service çağırır (Register akışının 2. adımı).
   rpc CreateUser (CreateUserRequest) returns (UserResponse);
 
-  rpc GetUser (GetUserRequest) returns (UserResponse);
-  rpc UpdateUser (UpdateUserRequest) returns (UserResponse);
+  // Kullanıcının KENDİ profili. Kimlik JWT'den okunur, request boş.
+  // Adres dahil tam veri döner — kendi verisi olduğu için scope gerekmez.
+  rpc GetMe (GetMeRequest) returns (GetMeResponse);
+
+  // Kullanıcının KENDİ profilini güncellemesi. id yok — JWT'den okunur.
+  rpc UpdateMe (UpdateMeRequest) returns (UserResponse);
+
+  // Diğer servisler çağırır: "bu kullanıcı kim, hangi rolde?"
   rpc GetUserRole (GetUserRoleRequest) returns (GetUserRoleResponse);
+
+  // Kliniğin kendi personel listesi.
   rpc ListUsersByClinic (ListUsersByClinicRequest) returns (ListUsersByClinicResponse);
 
-  // Dar kapsamlı iletişim sorgusu — 'owner_contact_read' scope'u gerektirir.
-  // telefon/adres için Gateway bu RPC'yi çağırıp iki yanıtı birleştirir.
+  // Elde TUTULAN user_id'lerin görünen adını çözer.tam profil döndürmez, yalnızca ad ve rol.
+  // Kullanım yeri: bir tıbbi kayıtta author_user_id var, ekranda
+  // "Dr. Mehmet Yılmaz girdi" yazması gerekiyor. Sadece isim için
+  // 'owner_contact_read' scope'u istemek yanlış olurdu.
+  //
+  // ÇOĞUL olması bilinçli: 20 kayıtlık bir liste tekil RPC ile 20 gRPC
+  // çağrısı demekti (N+1). Tek elemanlı dizi göndermek tekil ihtiyacı
+  // da karşılar.
+  rpc GetUserDisplayNames (GetUserDisplayNamesRequest) returns (GetUserDisplayNamesResponse);
+
+  // BAŞKA bir kullanıcının iletişim bilgisi — 'owner_contact_read'
+  // scope'u KOŞULSUZ gerektirir.
+  // burada sahiplik karşılaştırmasına (requester == target) gerek yok;
   rpc GetUserContact (GetUserContactRequest) returns (GetUserContactResponse);
 }
 
@@ -24,55 +47,83 @@ enum UserRole {
   STAFF = 3;
 }
 
+// Liste ve genel yanıtlarda kullanılan YALIN kullanıcı görünümü.
+//
+// ADRES ALANLARI BİLİNÇLİ OLARAK YOK. adres buraya eklenirse klinik personel
+// listesinde herkesin adresi sızar.
+// Adres yalnızca GetMeResponse ve GetUserContactResponse'ta bulunur.
 message User {
-  string id = 1;
+  string user_id = 1;
   string email = 2;
   string full_name = 3;
   string phone = 4;
   UserRole role = 5;
-  string clinic_id = 6;      // hasta sahibi için boş string
+  string clinic_id = 6;  // eğer user bir klinik personeli değilse burası boş string döner
   bool is_active = 7;
   string created_at = 8;     // ISO-8601
   string updated_at = 9;     // ISO-8601
 }
 
-// Auth Service'in ürettiği user_id ile birebir aynı olmalı.
+// Sadece Auth Service çağırır.
+// Auth Service'in ürettiği id ile birebir aynı olmalı.
+//
+// role ve clinic_id KASITLI OLARAK YOK — bu RPC yalnızca PET_OWNER
+// üretir, rolü servis kendi atar. Veteriner/personel hesapları davet
+// akışında AYRI bir RPC ile açılacak; role'ü buraya geri eklemek davet
+// doğrulamasını atlatılabilir hale getirir. reserved satırı numaraların
+// başka bir anlamla geri kullanılmasını engeller.
 message CreateUserRequest {
   string id = 1;
   string email = 2;
   string full_name = 3;
   string phone = 4;
-  UserRole role = 5;
-  string clinic_id = 6;
+
+  reserved 5, 6;
 }
 
-message GetUserRequest {
-  string id = 1;
+// Boş mesaj — kimlik JWT'den(JWT metadata içerisindedir) okunur, istemci kendi id'sini SÖYLEMEZ.
+message GetMeRequest {}
+
+// Kendi verisi olduğu için tam profil: adres alanları dahil.
+message GetMeResponse {
+  string user_id = 1;
+  string email = 2;
+  string full_name = 3;
+  string phone = 4;
+  UserRole role = 5;
+  string clinic_id = 6;      // eğer user bir klinik personeli değilse burası boş string döner
+  bool is_active = 7;
+  string address_line = 8;   // girilmediyse boş string
+  string city = 9;
+  string district = 10;
+  string created_at = 11;    // ISO-8601
+  string updated_at = 12;    // ISO-8601
 }
 
 // PATCH semantiği: 'optional' field presence sağlar, böylece
 // "boş gönderildi" ile "hiç gönderilmedi" ayırt edilir.
-message UpdateUserRequest {
-  string id = 1;
-  optional string full_name = 2;
-  optional string phone = 3;
-  optional string address_line = 4;
-  optional string city = 5;
-  optional string district = 6;
+//
+// id YOK — JWT'den okunur. 
+message UpdateMeRequest {
+  optional string full_name = 1;
+  optional string phone = 2;
+  optional string address_line = 3;
+  optional string city = 4;
+  optional string district = 5;
 }
 
 message GetUserRoleRequest {
-  string id = 1;
+  string user_id = 1;
 }
 
 message GetUserRoleResponse {
   string user_id = 1;
   UserRole role = 2;
-  string clinic_id = 3;
+  string clinic_id = 3;      // eğer user bir klinik personeli değilse burası boş string döner
 }
 
 message ListUsersByClinicRequest {
-  string clinic_id = 1;
+  string clinic_id = 1; // Boş olamaz: klinik belirtilmezse sorgu anlamsızdır.
   optional UserRole role = 2;
   int32 page = 3;               // 1'den başlar
   int32 page_size = 4;
@@ -85,6 +136,26 @@ message ListUsersByClinicResponse {
   int32 page_size = 4;
 }
 
+message GetUserDisplayNamesRequest {
+  // Servis tarafında ÜST SINIR uygulanmalı (50 önerilir).
+  repeated string user_ids = 1;
+}
+
+// Yalnızca görünen ad ve rol. Buraya alan eklenmicek — mesajın adı
+// ne döndüğünü taahhüt ediyor
+//
+// role dahil çünkü arayüz "Dr." önekini buna göre koyuyor.
+message UserDisplayName {
+  string user_id = 1;
+  string full_name = 2;
+  UserRole role = 3;
+}
+
+message GetUserDisplayNamesResponse {
+  repeated UserDisplayName users = 1;
+  repeated string not_found_ids = 2;
+}
+
 message GetUserContactRequest {
   string user_id = 1;
 }
@@ -94,7 +165,7 @@ message GetUserContactResponse {
   string full_name = 2;
   string phone = 3;
   string email = 4;
-  string address_line = 5;
+  string address_line = 5;   // eğer user bir klinik personeli değilse burası boş string döner
   string city = 6;
   string district = 7;
 }

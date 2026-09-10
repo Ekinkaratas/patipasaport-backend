@@ -67,7 +67,7 @@ export interface IntrospectResponse {
   clientType: ClientType;
   /** VETERINARIAN | PET_OWNER | STAFF */
   role: string;
-  /** hasta sahibi ise boş string */
+  /** eğer user bir klinik personeli değilse burası boş string döner */
   clinicId: string;
   /** token'ın taban scope'ları (rıza DEĞİL) */
   scopes: string[];

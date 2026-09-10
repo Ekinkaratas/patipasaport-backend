@@ -66,7 +66,7 @@ message IntrospectResponse {
   string user_id = 2;
   ClientType client_type = 3;
   string role = 4;              // VETERINARIAN | PET_OWNER | STAFF
-  string clinic_id = 5;         // hasta sahibi ise boş string
+  string clinic_id = 5;         // eğer user bir klinik personeli değilse burası boş string döner
   repeated string scopes = 6;   // token'ın taban scope'ları (rıza DEĞİL)
   string issued_at = 7;         // ISO-8601
   string expires_at = 8;        // ISO-8601

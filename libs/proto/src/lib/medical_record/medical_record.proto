@@ -126,7 +126,7 @@ message Prescription {
   string instructions = 8;
   string prescribed_at = 9;       // ISO-8601
   string veterinarian_user_id = 10;
-  string clinic_id = 11;
+  string clinic_id = 11; // eğer user bir klinik personeli değilse burası boş string döner
 }
 
 message ListPrescriptionsRequest {

@@ -131,7 +131,7 @@ message GetClinicPetOverviewResponse {
 // dosyayı local file system'a yazar, sadece referansını iletir.
 // Bu çağrı Medical Record'a iletilir ve AI pipeline'ını tetikler.
 message UploadPetResultRequest {
-  string clinic_id = 1;
+  string clinic_id = 1; 
   string pet_id = 2;
   string storage_path = 3;    // dosya sisteminde nereye yazıldığı
   string original_name = 4;

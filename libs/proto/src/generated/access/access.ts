@@ -40,7 +40,7 @@ export interface ExchangeTokenResponse {
   traceId: string;
   userId: string;
   role: string;
-  /** hasta sahibi ise boş string */
+  /** // eğer user bir klinik personeli değilse burası boş string döner */
   clinicId: string;
 }
 

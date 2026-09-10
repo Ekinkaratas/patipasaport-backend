@@ -18,13 +18,20 @@ export enum UserRole {
   UNRECOGNIZED = -1,
 }
 
+/**
+ * Liste ve genel yanıtlarda kullanılan YALIN kullanıcı görünümü.
+ *
+ * ADRES ALANLARI BİLİNÇLİ OLARAK YOK. adres buraya eklenirse klinik personel
+ * listesinde herkesin adresi sızar.
+ * Adres yalnızca GetMeResponse ve GetUserContactResponse'ta bulunur.
+ */
 export interface User {
-  id: string;
+  userId: string;
   email: string;
   fullName: string;
   phone: string;
   role: UserRole;
-  /** hasta sahibi için boş string */
+  /** eğer user bir klinik personeli değilse burası boş string döner */
   clinicId: string;
   isActive: boolean;
   /** ISO-8601 */
@@ -33,26 +40,54 @@ export interface User {
   updatedAt: string;
 }
 
-/** Auth Service'in ürettiği user_id ile birebir aynı olmalı. */
+/**
+ * Sadece Auth Service çağırır.
+ * Auth Service'in ürettiği id ile birebir aynı olmalı.
+ *
+ * role ve clinic_id KASITLI OLARAK YOK — bu RPC yalnızca PET_OWNER
+ * üretir, rolü servis kendi atar. Veteriner/personel hesapları davet
+ * akışında AYRI bir RPC ile açılacak; role'ü buraya geri eklemek davet
+ * doğrulamasını atlatılabilir hale getirir. reserved satırı numaraların
+ * başka bir anlamla geri kullanılmasını engeller.
+ */
 export interface CreateUserRequest {
   id: string;
   email: string;
   fullName: string;
   phone: string;
-  role: UserRole;
-  clinicId: string;
 }
 
-export interface GetUserRequest {
-  id: string;
+/** Boş mesaj — kimlik JWT'den(JWT metadata içerisindedir) okunur, istemci kendi id'sini SÖYLEMEZ. */
+export interface GetMeRequest {
+}
+
+/** Kendi verisi olduğu için tam profil: adres alanları dahil. */
+export interface GetMeResponse {
+  userId: string;
+  email: string;
+  fullName: string;
+  phone: string;
+  role: UserRole;
+  /** eğer user bir klinik personeli değilse burası boş string döner */
+  clinicId: string;
+  isActive: boolean;
+  /** girilmediyse boş string */
+  addressLine: string;
+  city: string;
+  district: string;
+  /** ISO-8601 */
+  createdAt: string;
+  /** ISO-8601 */
+  updatedAt: string;
 }
 
 /**
  * PATCH semantiği: 'optional' field presence sağlar, böylece
  * "boş gönderildi" ile "hiç gönderilmedi" ayırt edilir.
+ *
+ * id YOK — JWT'den okunur.
  */
-export interface UpdateUserRequest {
-  id: string;
+export interface UpdateMeRequest {
   fullName?: string | undefined;
   phone?: string | undefined;
   addressLine?: string | undefined;
@@ -61,16 +96,18 @@ export interface UpdateUserRequest {
 }
 
 export interface GetUserRoleRequest {
-  id: string;
+  userId: string;
 }
 
 export interface GetUserRoleResponse {
   userId: string;
   role: UserRole;
+  /** eğer user bir klinik personeli değilse burası boş string döner */
   clinicId: string;
 }
 
 export interface ListUsersByClinicRequest {
+  /** Boş olamaz: klinik belirtilmezse sorgu anlamsızdır. */
   clinicId: string;
   role?:
     | UserRole
@@ -87,6 +124,28 @@ export interface ListUsersByClinicResponse {
   pageSize: number;
 }
 
+export interface GetUserDisplayNamesRequest {
+  /** Servis tarafında ÜST SINIR uygulanmalı (50 önerilir). */
+  userIds: string[];
+}
+
+/**
+ * Yalnızca görünen ad ve rol. Buraya alan eklenmicek — mesajın adı
+ * ne döndüğünü taahhüt ediyor
+ *
+ * role dahil çünkü arayüz "Dr." önekini buna göre koyuyor.
+ */
+export interface UserDisplayName {
+  userId: string;
+  fullName: string;
+  role: UserRole;
+}
+
+export interface GetUserDisplayNamesResponse {
+  users: UserDisplayName[];
+  notFoundIds: string[];
+}
+
 export interface GetUserContactRequest {
   userId: string;
 }
@@ -96,6 +155,7 @@ export interface GetUserContactResponse {
   fullName: string;
   phone: string;
   email: string;
+  /** eğer user bir klinik personeli değilse burası boş string döner */
   addressLine: string;
   city: string;
   district: string;
@@ -107,47 +167,113 @@ export interface UserResponse {
 
 export const USERS_PACKAGE_NAME = "users";
 
+/**
+ * GetMe                 -> kendi verisi, tam, scope'suz
+ *   GetUserContact        -> ÜÇÜNCÜ TARAF iletişim bilgisi, scope zorunlu
+ *   ListUsersByClinic     -> yalnızca kendi kliniğinin personeli
+ *   GetUserDisplayNames   -> yalnızca görünen ad, elde id varsa
+ */
+
 export interface UsersServiceClient {
-  /** Sadece Auth Service çağırır . */
+  /** Sadece Auth Service çağırır (Register akışının 2. adımı). */
 
   createUser(request: CreateUserRequest): Observable<UserResponse>;
 
-  getUser(request: GetUserRequest): Observable<UserResponse>;
+  /**
+   * Kullanıcının KENDİ profili. Kimlik JWT'den okunur, request boş.
+   * Adres dahil tam veri döner — kendi verisi olduğu için scope gerekmez.
+   */
 
-  updateUser(request: UpdateUserRequest): Observable<UserResponse>;
+  getMe(request: GetMeRequest): Observable<GetMeResponse>;
+
+  /** Kullanıcının KENDİ profilini güncellemesi. id yok — JWT'den okunur. */
+
+  updateMe(request: UpdateMeRequest): Observable<UserResponse>;
+
+  /** Diğer servisler çağırır: "bu kullanıcı kim, hangi rolde?" */
 
   getUserRole(request: GetUserRoleRequest): Observable<GetUserRoleResponse>;
+
+  /** Kliniğin kendi personel listesi. */
 
   listUsersByClinic(request: ListUsersByClinicRequest): Observable<ListUsersByClinicResponse>;
 
   /**
-   * Dar kapsamlı iletişim sorgusu — 'owner_contact_read' scope'u gerektirir.
-   * telefon/adres için Gateway bu RPC'yi çağırıp iki yanıtı birleştirir.
+   * Elde TUTULAN user_id'lerin görünen adını çözer.tam profil döndürmez, yalnızca ad ve rol.
+   * Kullanım yeri: bir tıbbi kayıtta author_user_id var, ekranda
+   * "Dr. Mehmet Yılmaz girdi" yazması gerekiyor. Sadece isim için
+   * 'owner_contact_read' scope'u istemek yanlış olurdu.
+   *
+   * ÇOĞUL olması bilinçli: 20 kayıtlık bir liste tekil RPC ile 20 gRPC
+   * çağrısı demekti (N+1). Tek elemanlı dizi göndermek tekil ihtiyacı
+   * da karşılar.
+   */
+
+  getUserDisplayNames(request: GetUserDisplayNamesRequest): Observable<GetUserDisplayNamesResponse>;
+
+  /**
+   * BAŞKA bir kullanıcının iletişim bilgisi — 'owner_contact_read'
+   * scope'u KOŞULSUZ gerektirir.
+   * burada sahiplik karşılaştırmasına (requester == target) gerek yok;
    */
 
   getUserContact(request: GetUserContactRequest): Observable<GetUserContactResponse>;
 }
 
+/**
+ * GetMe                 -> kendi verisi, tam, scope'suz
+ *   GetUserContact        -> ÜÇÜNCÜ TARAF iletişim bilgisi, scope zorunlu
+ *   ListUsersByClinic     -> yalnızca kendi kliniğinin personeli
+ *   GetUserDisplayNames   -> yalnızca görünen ad, elde id varsa
+ */
+
 export interface UsersServiceController {
-  /** Sadece Auth Service çağırır . */
+  /** Sadece Auth Service çağırır (Register akışının 2. adımı). */
 
   createUser(request: CreateUserRequest): Promise<UserResponse> | Observable<UserResponse> | UserResponse;
 
-  getUser(request: GetUserRequest): Promise<UserResponse> | Observable<UserResponse> | UserResponse;
+  /**
+   * Kullanıcının KENDİ profili. Kimlik JWT'den okunur, request boş.
+   * Adres dahil tam veri döner — kendi verisi olduğu için scope gerekmez.
+   */
 
-  updateUser(request: UpdateUserRequest): Promise<UserResponse> | Observable<UserResponse> | UserResponse;
+  getMe(request: GetMeRequest): Promise<GetMeResponse> | Observable<GetMeResponse> | GetMeResponse;
+
+  /** Kullanıcının KENDİ profilini güncellemesi. id yok — JWT'den okunur. */
+
+  updateMe(request: UpdateMeRequest): Promise<UserResponse> | Observable<UserResponse> | UserResponse;
+
+  /** Diğer servisler çağırır: "bu kullanıcı kim, hangi rolde?" */
 
   getUserRole(
     request: GetUserRoleRequest,
   ): Promise<GetUserRoleResponse> | Observable<GetUserRoleResponse> | GetUserRoleResponse;
+
+  /** Kliniğin kendi personel listesi. */
 
   listUsersByClinic(
     request: ListUsersByClinicRequest,
   ): Promise<ListUsersByClinicResponse> | Observable<ListUsersByClinicResponse> | ListUsersByClinicResponse;
 
   /**
-   * Dar kapsamlı iletişim sorgusu — 'owner_contact_read' scope'u gerektirir.
-   * telefon/adres için Gateway bu RPC'yi çağırıp iki yanıtı birleştirir.
+   * Elde TUTULAN user_id'lerin görünen adını çözer.tam profil döndürmez, yalnızca ad ve rol.
+   * Kullanım yeri: bir tıbbi kayıtta author_user_id var, ekranda
+   * "Dr. Mehmet Yılmaz girdi" yazması gerekiyor. Sadece isim için
+   * 'owner_contact_read' scope'u istemek yanlış olurdu.
+   *
+   * ÇOĞUL olması bilinçli: 20 kayıtlık bir liste tekil RPC ile 20 gRPC
+   * çağrısı demekti (N+1). Tek elemanlı dizi göndermek tekil ihtiyacı
+   * da karşılar.
+   */
+
+  getUserDisplayNames(
+    request: GetUserDisplayNamesRequest,
+  ): Promise<GetUserDisplayNamesResponse> | Observable<GetUserDisplayNamesResponse> | GetUserDisplayNamesResponse;
+
+  /**
+   * BAŞKA bir kullanıcının iletişim bilgisi — 'owner_contact_read'
+   * scope'u KOŞULSUZ gerektirir.
+   * burada sahiplik karşılaştırmasına (requester == target) gerek yok;
    */
 
   getUserContact(
@@ -159,10 +285,11 @@ export function UsersServiceControllerMethods() {
   return function (constructor: Function) {
     const grpcMethods: string[] = [
       "createUser",
-      "getUser",
-      "updateUser",
+      "getMe",
+      "updateMe",
       "getUserRole",
       "listUsersByClinic",
+      "getUserDisplayNames",
       "getUserContact",
     ];
     for (const method of grpcMethods) {
