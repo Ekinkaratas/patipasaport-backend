@@ -53,17 +53,8 @@
     }
   ],
   "targetDefaults": {
-    "@nx/js:tsc": {
-      "cache": true,
-      "dependsOn": [
-        "^build"
-      ],
-      "inputs": [
-        "production",
-        "^production"
-      ]
-    },
     "build": {
+      "dependsOn": ["^build", { "projects": ["proto"], "target": "generate" }],
       "options": {
         "assets": [{
           "glob": "**/*.proto",
