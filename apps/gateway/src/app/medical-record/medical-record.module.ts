@@ -12,7 +12,7 @@ import { ApiMedicalRecordController } from './medical-record.controller';
         name: 'MEDICAL_RECORD_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: '0.0.0.0:3004',
+          url: process.env.MEDICAL_RECORD_GRPC_URL ?? '0.0.0.0:3004',
           package: MEDICAL_RECORD_PACKAGE_NAME,
           protoPath: join(
             __dirname,

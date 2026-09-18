@@ -12,7 +12,7 @@ import { ApiAccessService } from './access.service';
         name: 'ACCESS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: '0.0.0.0:3001',
+          url: process.env.ACCESS_GRPC_URL ?? '0.0.0.0:3001',
           package: ACCESS_PACKAGE_NAME,
           protoPath: join(__dirname, 'proto/access/access.proto'),
         },

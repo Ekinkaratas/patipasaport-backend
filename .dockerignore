@@ -1,11 +1,43 @@
+# --- build ciktilari / cache ---
 node_modules
 dist
 tmp
+out-tsc
+coverage
 .nx
+
+# --- VCS (.gitignore Nx'in dosya hash'lemesinde kullanildigi icin KALIR) ---
 .git
+
+# --- gizli / ortam dosyalari (env_file ile runtime'da verilir, imaja girmez) ---
 .env
 .env.*
-docker-compose.override.yml
-**/*.log
+!.env.example
+*.pem
+
+# --- Docker'in kendi dosyalari (imaj icinde gereksiz) ---
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# --- e2e projeleri ve test dosyalari ---
 apps/*-e2e
-coverage
+**/*.spec.ts
+**/*.test.ts
+
+# --- IDE / AI asistan / editor ---
+.vscode
+.idea
+.claude
+.cursor
+.agents
+.codex
+.gemini
+.opencode
+.github
+opencode.json
+
+# --- dokumantasyon / loglar ---
+*.md
+LICENSE
+**/*.log

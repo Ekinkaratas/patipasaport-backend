@@ -12,7 +12,7 @@ import { ApiUserController } from './users.controller';
         name: 'USERS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: '0.0.0.0:3006',
+          url: process.env.USERS_GRPC_URL ?? '0.0.0.0:3006',
           package: USERS_PACKAGE_NAME,
           protoPath: join(__dirname, 'proto/users/users.proto'),
         },

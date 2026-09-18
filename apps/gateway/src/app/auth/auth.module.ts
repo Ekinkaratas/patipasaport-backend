@@ -12,7 +12,7 @@ import { ApiAuthController } from './auth.controller';
         name: 'AUTH_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: '0.0.0.0:3002',
+          url: process.env.AUTH_GRPC_URL ?? '0.0.0.0:3002',
           package: AUTH_PACKAGE_NAME,
           protoPath: join(__dirname, 'proto/auth/auth.proto'),
         },

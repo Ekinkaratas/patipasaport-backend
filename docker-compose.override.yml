@@ -1,70 +1,39 @@
 # ============================================================
-# docker-compose.override.yml
-# SADECE GELISTIRME ORTAMI ICIN.
-#
-# docker-compose.yml zaten prod-guvenli halde (sadece gateway disari
-# acik). Bu dosya, "docker compose" komutu ayni klasorde calistirildiginda
-# Compose tarafindan OTOMATIK olarak docker-compose.yml'in UZERINE
-# bindirilir (docker-compose.yml + docker-compose.override.yml birlesir).
-# Yani gelistirirken hicbir ekstra flag gerekmez:
-#
-#   docker compose up -d
-#   -> hem app servisleri hem de burada acilan DB portlari calisir
-#
-# CANLIYA ALIRKEN (veya bu override'i devre disi birakmak icin):
-#   1) En temizi: bu dosyayi o ortamda hic BULUNDURMAYIN
-#      (repo'dan cekilen sunucuda dosyayi silin/kopyalamayin), YA DA
-#   2) Override'i yoksayip sadece ana dosyayi kullanin:
-#      docker compose -f docker-compose.yml up -d
-#
-# Onerilir: bu dosyayi .gitignore'a ekleyip sadece kendi makinenizde
-# tutun, boylece "yanlislikla" prod sunucusuna tasinma riski sifira iner.
+# docker-compose.override.yml  —  SADECE GELİŞTİRME ORTAMI İÇİN
 # ============================================================
 
 services:
 
+  # ---- Altyapi: host portları (sadece localhost'a bağlı) ----
   postgres-auth:
-    ports:
-      - "5433:5432"
-
+    ports: ["127.0.0.1:5433:5432"]
   postgres-users:
-    ports:
-      - "5434:5432"
-
-  postgres-clinic:
-    ports:
-      - "5435:5432"
-
+    ports: ["127.0.0.1:5434:5432"]
+  postgres-clinics:
+    ports: ["127.0.0.1:5435:5432"]
   postgres-access:
-    ports:
-      - "5436:5432"
-
+    ports: ["127.0.0.1:5436:5432"]
   postgres-medical-record:
-    ports:
-      - "5437:5432"
-
+    ports: ["127.0.0.1:5437:5432"]
   mongo-pets:
-    ports:
-      - "27017:27017"
-
+    ports: ["127.0.0.1:27017:27017"]
   redis-access:
-    ports:
-      - "6379:6379"
-
+    ports: ["127.0.0.1:6379:6379"]
   rabbitmq:
     ports:
-      - "5672:5672"     # AMQP
-      - "15672:15672"   # Management UI (tarayicidan: http://localhost:15672)
+      - "127.0.0.1:5672:5672"      # AMQP
+      - "127.0.0.1:15672:15672"    # Management UI -> http://localhost:15672
 
-  #ollama:
-    #ports:
-      #- "11434:11434"
-
-  # Not: auth, users, clinic, pets, access, medical_record, gateway
-  # icin buraya bir sey eklemedim - onlarin API'lerini test etmek
-  # isterseniz gateway zaten disarida (3000), digerlerine de debug
-  # icin dogrudan erismek isterseniz asagidaki gibi ekleyebilirsiniz:
-  #
-  # auth:
-  #   ports:
-  #     - "3001:3000"
+  # ---- gRPC servisleri: grpcurl / Postman ile doğrudan test için ----
+  access:
+    ports: ["127.0.0.1:3001:3001"]
+  auth:
+    ports: ["127.0.0.1:3002:3002"]
+  clinics:
+    ports: ["127.0.0.1:3003:3003"]
+  medical-record:
+    ports: ["127.0.0.1:3004:3004"]
+  pets:
+    ports: ["127.0.0.1:3005:3005"]
+  users:
+    ports: ["127.0.0.1:3006:3006"]

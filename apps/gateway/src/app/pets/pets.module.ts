@@ -12,7 +12,7 @@ import { ApiPetsController } from './pets.controller';
         name: 'PETS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: '0.0.0.0:3005',
+          url: process.env.PETS_GRPC_URL ?? '0.0.0.0:3005',
           package: PETS_PACKAGE_NAME,
           protoPath: join(__dirname, 'proto/pets/pets.proto'),
         },

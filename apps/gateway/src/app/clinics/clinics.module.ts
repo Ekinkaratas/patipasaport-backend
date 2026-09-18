@@ -12,7 +12,7 @@ import { ApiClinicsController } from './clinics.controller';
         name: 'CLINICS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: '0.0.0.0:3003',
+          url: process.env.CLINICS_GRPC_URL ?? '0.0.0.0:3003',
           package: CLINICS_PACKAGE_NAME,
           protoPath: join(__dirname, 'proto/clinics/clinics.proto'),
         },
