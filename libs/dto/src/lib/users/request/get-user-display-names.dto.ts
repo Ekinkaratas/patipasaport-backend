@@ -1,13 +1,7 @@
 import { DtoPrefix, getValidationMessage, ValidationType } from '@libs/common';
 import { users } from '@libs/proto';
 import { Transform } from 'class-transformer';
-import {
-  ArrayMaxSize,
-  ArrayMinSize,
-  ArrayUnique,
-  IsArray,
-  IsUUID,
-} from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsUUID } from 'class-validator';
 
 export class GetUserDisplayNamesRequesDto
   implements users.GetUserDisplayNamesRequest

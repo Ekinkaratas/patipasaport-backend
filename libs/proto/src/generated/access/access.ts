@@ -26,6 +26,20 @@ export enum ClientType {
   UNRECOGNIZED = -1,
 }
 
+export enum DeniedReason {
+  /** DENIED_REASON_UNSPECIFIED - allowed = true olduğunda */
+  DENIED_REASON_UNSPECIFIED = 0,
+  /** DENIED_REASON_NO_CONSENT - hiç rıza verilmemiş */
+  DENIED_REASON_NO_CONSENT = 1,
+  /** DENIED_REASON_REVOKED - rıza iptal edilmiş */
+  DENIED_REASON_REVOKED = 2,
+  /** DENIED_REASON_EXPIRED - rıza penceresi kapanmış */
+  DENIED_REASON_EXPIRED = 3,
+  /** DENIED_REASON_INSUFFICIENT_SCOPE - rıza AKTİF ama istenen scope yok */
+  DENIED_REASON_INSUFFICIENT_SCOPE = 4,
+  UNRECOGNIZED = -1,
+}
+
 export interface ExchangeTokenRequest {
   opaqueToken: string;
   clientType: ClientType;
@@ -34,21 +48,22 @@ export interface ExchangeTokenRequest {
 export interface ExchangeTokenResponse {
   /** metadata'da 'authorization' olarak taşınır */
   jwt: string;
-  /** saniye */
+  /** saniye — kısa tutucam (60 sn) */
   expiresIn: number;
   /** metadata'da 'x-trace-id' olarak taşınır */
   traceId: string;
   userId: string;
   role: string;
-  /** // eğer user bir klinik personeli değilse burası boş string döner */
+  /** role PET_OWNER ise boş string */
   clinicId: string;
+  /** token'a bağlanır: Introspect'te gelen */
+  clientType: ClientType;
 }
 
-/** Çağıran servis kim olduğunu JWT'den bilir; */
+/** Kimlik alanı YOK — çağıran servis kim olduğunu JWT'den bilir. */
 export interface CheckAccessRequest {
   clinicId: string;
   petId: string;
-  /** "medical_read", "chip_number_read" */
   requiredScopes: string[];
 }
 
@@ -62,20 +77,18 @@ export interface CheckAccessResponse {
   status: ConsentStatus;
   /** ISO-8601 */
   expiresAt: string;
-  /** "REVOKED" | "EXPIRED" | "NO_CONSENT" */
-  deniedReason: string;
+  deniedReason: DeniedReason;
 }
 
 export interface GrantConsentRequest {
-  /** rızayı veren hasta sahibi */
-  ownerUserId: string;
   clinicId: string;
   petId: string;
   scopes: string[];
-  /** ISO-8601, süresiz ise boş string */
+  /** ISO-8601 */
   expiresAt: string;
 }
 
+/** owner_user_id YOK — JWT'den okunur. */
 export interface RevokeConsentRequest {
   consentId: string;
 }
@@ -102,12 +115,23 @@ export interface ConsentResponse {
 
 export const ACCESS_PACKAGE_NAME = "access";
 
+/**
+ * KİMLİK ALANI KURALI: Hiçbir request mesajı "bu işlemi yapan kim"
+ * bilgisini taşımaz — kimlik JWT metadata'dan okunur. İstemciden gelen
+ * bir id ASLA kimlik olarak kabul edilmez. Ancak istemcinin yaptığı bir
+ * SEÇİM (hangi kliniğe izin veriyorum, hangi hayvan için) request'te
+ * taşınır; kural "kimlik gelmez", "hiçbir id gelmez" değil.
+ */
+
 export interface AccessServiceClient {
-  /** Sadece Gateway çağırır. Opaque token -> kısa ömürlü imzalı JWT. */
+  /**
+   * Sadece Gateway çağırır. Opaque token -> kısa ömürlü imzalı JWT.
+   * İÇ RPC: HTTP endpoint'i yok, ValidationPipe devreye girmez.
+   */
 
   exchangeToken(request: ExchangeTokenRequest): Observable<ExchangeTokenResponse>;
 
-  /** Alt servisler çağırır. Rıza kontrolü . */
+  /** Alt servisler çağırır. Rıza kontrolü. */
 
   checkAccess(request: CheckAccessRequest): Observable<CheckAccessResponse>;
 
@@ -120,14 +144,25 @@ export interface AccessServiceClient {
   getConsentStatus(request: GetConsentStatusRequest): Observable<ConsentResponse>;
 }
 
+/**
+ * KİMLİK ALANI KURALI: Hiçbir request mesajı "bu işlemi yapan kim"
+ * bilgisini taşımaz — kimlik JWT metadata'dan okunur. İstemciden gelen
+ * bir id ASLA kimlik olarak kabul edilmez. Ancak istemcinin yaptığı bir
+ * SEÇİM (hangi kliniğe izin veriyorum, hangi hayvan için) request'te
+ * taşınır; kural "kimlik gelmez", "hiçbir id gelmez" değil.
+ */
+
 export interface AccessServiceController {
-  /** Sadece Gateway çağırır. Opaque token -> kısa ömürlü imzalı JWT. */
+  /**
+   * Sadece Gateway çağırır. Opaque token -> kısa ömürlü imzalı JWT.
+   * İÇ RPC: HTTP endpoint'i yok, ValidationPipe devreye girmez.
+   */
 
   exchangeToken(
     request: ExchangeTokenRequest,
   ): Promise<ExchangeTokenResponse> | Observable<ExchangeTokenResponse> | ExchangeTokenResponse;
 
-  /** Alt servisler çağırır. Rıza kontrolü . */
+  /** Alt servisler çağırır. Rıza kontrolü. */
 
   checkAccess(
     request: CheckAccessRequest,

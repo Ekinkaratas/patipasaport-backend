@@ -2,11 +2,18 @@ syntax = "proto3";
 
 package access;
 
+
+// KİMLİK ALANI KURALI: Hiçbir request mesajı "bu işlemi yapan kim"
+// bilgisini taşımaz — kimlik JWT metadata'dan okunur. İstemciden gelen
+// bir id ASLA kimlik olarak kabul edilmez. Ancak istemcinin yaptığı bir
+// SEÇİM (hangi kliniğe izin veriyorum, hangi hayvan için) request'te
+// taşınır; kural "kimlik gelmez", "hiçbir id gelmez" değil.
 service AccessService {
   // Sadece Gateway çağırır. Opaque token -> kısa ömürlü imzalı JWT.
+  // İÇ RPC: HTTP endpoint'i yok, ValidationPipe devreye girmez.
   rpc ExchangeToken (ExchangeTokenRequest) returns (ExchangeTokenResponse);
 
-  // Alt servisler çağırır. Rıza kontrolü .
+  // Alt servisler çağırır. Rıza kontrolü.
   rpc CheckAccess (CheckAccessRequest) returns (CheckAccessResponse);
 
   // Rıza yaşam döngüsü. Gateway üzerinden hasta sahibi tetikler.
@@ -29,29 +36,41 @@ enum ClientType {
   MOBILE = 2;
 }
 
+enum DeniedReason {
+  DENIED_REASON_UNSPECIFIED = 0;      // allowed = true olduğunda
+  DENIED_REASON_NO_CONSENT = 1;       // hiç rıza verilmemiş
+  DENIED_REASON_REVOKED = 2;          // rıza iptal edilmiş
+  DENIED_REASON_EXPIRED = 3;          // rıza penceresi kapanmış
+  DENIED_REASON_INSUFFICIENT_SCOPE = 4; // rıza AKTİF ama istenen scope yok
+}
+
 // ---------- Token exchange ----------
 
 message ExchangeTokenRequest {
   string opaque_token = 1;
-  ClientType client_type = 2;      
+  ClientType client_type = 2;
 }
 
 message ExchangeTokenResponse {
   string jwt = 1;              // metadata'da 'authorization' olarak taşınır
-  int32 expires_in = 2;        // saniye
+  int32 expires_in = 2;        // saniye — kısa tutucam (60 sn)
   string trace_id = 3;         // metadata'da 'x-trace-id' olarak taşınır
   string user_id = 4;
   string role = 5;
-  string clinic_id = 6;        // // eğer user bir klinik personeli değilse burası boş string döner
+  string clinic_id = 6;        // role PET_OWNER ise boş string
+  ClientType client_type = 7;  // token'a bağlanır: Introspect'te gelen
+                               // client_type ile karşılaştırılır, uyuşmazsa
+                               // reddedilir. Web'den çalınan token
+                               // mobilde işe yaramaz.
 }
 
 // ---------- Rıza kontrolü ----------
 
-// Çağıran servis kim olduğunu JWT'den bilir;
+// Kimlik alanı YOK — çağıran servis kim olduğunu JWT'den bilir.
 message CheckAccessRequest {
   string clinic_id = 1;
   string pet_id = 2;
-  repeated string required_scopes = 3;   // "medical_read", "chip_number_read"
+  repeated string required_scopes = 3;
 }
 
 message CheckAccessResponse {
@@ -61,19 +80,21 @@ message CheckAccessResponse {
   string consent_id = 4;
   ConsentStatus status = 5;
   string expires_at = 6;                 // ISO-8601
-  string denied_reason = 7;              // "REVOKED" | "EXPIRED" | "NO_CONSENT"
+  DeniedReason denied_reason = 7;           
 }
 
 // ---------- Rıza yaşam döngüsü ----------
 
+// owner_user_id YOK — rızayı VEREN kişinin kimliği JWT metadata'dan okunur.
+
 message GrantConsentRequest {
-  string owner_user_id = 1;      // rızayı veren hasta sahibi
-  string clinic_id = 2;
-  string pet_id = 3;
-  repeated string scopes = 4;
-  string expires_at = 5;         // ISO-8601, süresiz ise boş string
+  string clinic_id = 1;
+  string pet_id = 2;
+  repeated string scopes = 3;
+  string expires_at = 4;         // ISO-8601
 }
 
+// owner_user_id YOK — JWT'den okunur.
 message RevokeConsentRequest {
   string consent_id = 1;
 }

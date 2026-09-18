@@ -19,8 +19,8 @@ async function bootstrap() {
         url: '0.0.0.0:3002',
         package: AUTH_PACKAGE_NAME,
         protoPath: join(__dirname, 'proto/auth/auth.proto'),
-        logger: createWinstonLogger('auth'),
       },
+      logger: createWinstonLogger('auth'),
     },
   );
 
