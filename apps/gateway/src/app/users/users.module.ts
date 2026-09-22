@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { USERS_PACKAGE_NAME } from '@libs/proto';
 import { join } from 'path';
+import { grpcCorrelationClientInterceptor } from '@libs/common';
 import { ApiUserService } from './users.service';
 import { ApiUserController } from './users.controller';
 
@@ -14,6 +15,7 @@ import { ApiUserController } from './users.controller';
         options: {
           url: process.env.USERS_GRPC_URL ?? '0.0.0.0:3006',
           package: USERS_PACKAGE_NAME,
+          channelOptions: { interceptors: [grpcCorrelationClientInterceptor] },
           protoPath: join(__dirname, 'proto/users/users.proto'),
         },
       },

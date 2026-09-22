@@ -1,7 +1,7 @@
 import { LogAction } from './log-action.enum';
 
 export interface LogPayload {
-  requestId: string | null;
+  correlationId: string;
   userId: string | null;
   service: string;
   method: string;

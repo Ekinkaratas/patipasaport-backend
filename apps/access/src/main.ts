@@ -6,6 +6,7 @@ import { join } from 'path';
 import { ACCESS_PACKAGE_NAME } from '@libs/proto';
 import {
   createWinstonLogger,
+  GrpcCorrelationInterceptor,
   LoggingInterceptor,
   RpcExceptionFilter,
 } from '@libs/common';
@@ -25,7 +26,10 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new RpcExceptionFilter());
-  app.useGlobalInterceptors(new LoggingInterceptor('access'));
+  app.useGlobalInterceptors(
+    new GrpcCorrelationInterceptor(),
+    new LoggingInterceptor('access'),
+  );
 
   await app.listen();
   Logger.log(`🚀 Application is running on access`);

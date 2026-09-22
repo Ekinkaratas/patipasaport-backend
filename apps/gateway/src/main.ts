@@ -1,10 +1,16 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
-import { HttpsExceptionFilter, TrimPipe } from '@libs/common';
+import {
+  createWinstonLogger,
+  HttpsExceptionFilter,
+  TrimPipe,
+} from '@libs/common';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: createWinstonLogger('gateway'),
+  });
 
   app.useGlobalPipes(
     new TrimPipe(),

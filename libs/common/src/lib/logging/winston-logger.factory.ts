@@ -1,5 +1,11 @@
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
+import { getCorrelationId } from '../storage';
+
+const addCorrelationId = winston.format((info) => {
+  info.correlationId = getCorrelationId();
+  return info;
+});
 
 export function createWinstonLogger(serviceName: string) {
   const isProduction = process.env['NODE_ENV'] === 'production';
@@ -9,17 +15,26 @@ export function createWinstonLogger(serviceName: string) {
       new winston.transports.Console({
         format: isProduction
           ? winston.format.combine(
+              addCorrelationId(),
               winston.format.timestamp(),
               winston.format.json(),
             )
           : winston.format.combine(
+              addCorrelationId(),
               winston.format.colorize(),
               winston.format.timestamp(),
               winston.format.printf(
-                ({ timestamp, level, context, message, ...meta }) => {
+                ({
+                  timestamp,
+                  level,
+                  context,
+                  message,
+                  correlationId,
+                  ...meta
+                }) => {
                   const line =
                     message !== undefined ? message : JSON.stringify(meta);
-                  return `${timestamp} [${serviceName}] ${level} [${context}]: ${line}`;
+                  return `${timestamp} [${serviceName}] [${correlationId}] ${level} [${context || 'App'}]: ${line}`;
                 },
               ),
             ),

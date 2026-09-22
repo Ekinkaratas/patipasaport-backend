@@ -8,6 +8,7 @@ import {
   RpcExceptionFilter,
   LoggingInterceptor,
   createWinstonLogger,
+  GrpcCorrelationInterceptor,
 } from '@libs/common';
 
 async function bootstrap() {
@@ -25,7 +26,10 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new RpcExceptionFilter());
-  app.useGlobalInterceptors(new LoggingInterceptor('users'));
+  app.useGlobalInterceptors(
+    new GrpcCorrelationInterceptor(),
+    new LoggingInterceptor('users'),
+  );
 
   await app.listen();
   Logger.log(`🚀 Application is running on users`);

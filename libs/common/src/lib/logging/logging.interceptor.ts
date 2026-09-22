@@ -9,6 +9,7 @@ import { Observable, tap, catchError, throwError } from 'rxjs';
 import { LogAction, LogActionMap, LogPayload } from '../enums';
 import { DtoPrefix, ResponseMessages } from '../enums/messages';
 import { RpcException } from '@nestjs/microservices';
+import { getCorrelationId } from '../storage';
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -21,11 +22,11 @@ export class LoggingInterceptor implements NestInterceptor {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const rpcCtx = context.switchToRpc().getContext();
-    const requestId = this.extract(rpcCtx, 'x-request-id');
+    const correlationId = getCorrelationId();
     const userId = this.extract(rpcCtx, 'x-user-id');
     const method = context.getHandler().name;
 
-    const base = { requestId, userId, service: this.serviceName, method };
+    const base = { correlationId, userId, service: this.serviceName, method };
 
     const receivedLog: LogPayload = {
       ...base,
@@ -93,7 +94,7 @@ export class LoggingInterceptor implements NestInterceptor {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private extract(rpcCtx: any, key: string): string | null {
     try {
-      const value = rpcCtx?.getMetadata?.()?.get?.(key);
+      const value = rpcCtx?.get?.(key);
       return Array.isArray(value) && value.length > 0
         ? value[0].toString()
         : null;
