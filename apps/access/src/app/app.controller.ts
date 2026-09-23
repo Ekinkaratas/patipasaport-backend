@@ -1,12 +1,14 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { AppService } from './app.service';
+import { GrpcMethod } from '@nestjs/microservices';
+import { access } from '@libs/proto';
 
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  @Get()
-  getData() {
-    return this.appService.getData();
+  @GrpcMethod('AccessService', 'ExchangeToken')
+  exchangeToken(request: access.ExchangeTokenRequest) {
+    return this.appService.exchangeToken(request);
   }
 }
