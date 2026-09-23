@@ -165,6 +165,9 @@ services:
       dockerfile: Dockerfile
       args: { APP: access }
     image: patipasaport/access:${IMAGE_TAG:-latest}
+    secrets:
+      - access_jwt_private
+      - access_jwt_public
     environment:
       DB_HOST: postgres-access
       DB_PORT: "5432"
@@ -176,6 +179,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       AUTH_GRPC_URL: auth:3002
+      JWT_PRIVATE_KEY_PATH: /run/secrets/access_jwt_private
+      JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3001"]
       <<: *grpc-healthcheck
@@ -339,3 +344,18 @@ volumes:
   redis_access_data:
   rabbitmq_data:
   medical_files:
+
+# Docker secret'i /run/secrets/<secret_adi> olarak mount eder — dosya adindaki
+# .pem uzantisi konteynere TASINMAZ. Servisin environment: blogundaki
+# JWT_*_KEY_PATH degerleri bu yuzden uzantisizdir.
+#
+# LINUX SUNUCU NOTU: non-swarm compose'da secret dosyasinin izinleri host'taki
+# dosyadan gelir; long-syntax'taki uid/gid/mode yok sayılıyordu.
+# Konteyner "USER node" (uid 1000) ile calistigi icin ozel anahtar root'a ait
+# 0600 ise okunamaz ve servis ayaga kalkmaz. Sunucuda bir kez aşağıdaki termnial kodunu çalıştırarak düzeltebilirsiniz:
+#   chown 1000:1000 access_jwt_private.pem && chmod 400 access_jwt_private.pem
+secrets:
+  access_jwt_private:
+    file: ./access_jwt_private.pem
+  access_jwt_public:
+    file: ./access_jwt_public.pem
