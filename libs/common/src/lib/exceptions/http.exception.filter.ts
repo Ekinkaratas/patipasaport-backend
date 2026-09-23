@@ -11,38 +11,51 @@ import { ResponseMessages } from '../enums/messages/ResponseMessages.enum';
 import { BaseResponse } from '../base/base.response';
 import { RpcException } from '@nestjs/microservices';
 import { getStatusFromMessage } from '../enums/mapper/get-status-from-message';
+import { getCorrelationId } from '../storage';
 
 @Catch(HttpException, RpcException)
 export class HttpsExceptionFilter implements ExceptionFilter {
   catch(exception: HttpException | RpcException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const correlationId = getCorrelationId();
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      const message = exception.message;
+      const messages = this.extractMessages(exception);
 
-      const prefix: DtoPrefix[] = Object.values(DtoPrefix);
-      const validationMessage = prefix.find((p) => message?.startsWith(p));
+      const prefixes: DtoPrefix[] = Object.values(DtoPrefix);
+      const validationMessage = messages.find((m) =>
+        prefixes.some((p) => m.startsWith(p)),
+      );
 
       if (validationMessage) {
         return response
           .status(status)
-          .json(new BaseResponse(null, message, false));
+          .json(
+            new BaseResponse(null, validationMessage, false, correlationId),
+          );
       }
 
-      const isCustomMessage = Object.values(ResponseMessages).includes(
-        message as ResponseMessages,
+      const customMessage = messages.find((m) =>
+        Object.values(ResponseMessages).includes(m as ResponseMessages),
       );
-      if (isCustomMessage) {
+      if (customMessage) {
         return response
           .status(status)
-          .json(new BaseResponse(null, message, false));
+          .json(new BaseResponse(null, customMessage, false, correlationId));
       }
 
       return response
         .status(status)
-        .json(new BaseResponse(null, this.mapStatusToMessage(status), false));
+        .json(
+          new BaseResponse(
+            null,
+            this.mapStatusToMessage(status),
+            false,
+            correlationId,
+          ),
+        );
     }
 
     const rpcError =
@@ -71,8 +84,31 @@ export class HttpsExceptionFilter implements ExceptionFilter {
           null,
           isKnownCode ? grpcMessage : ResponseMessages.INTERNAL_SERVER_ERROR,
           false,
+          correlationId,
         ),
       );
+  }
+
+  /**
+   * ValidationPipe, mesajları bir DİZİ olarak BadRequestException'a verir.
+   * Nest'in HttpException.initMessage()'i dizi gördüğünde response.message'ı
+   * string bulamaz ve exception.message'ı sınıf adına ("Bad Request Exception")
+   * düşürür — yani DtoPrefix eşleşmesi asla tutmaz. Gerçek mesajlar
+   * getResponse().message içinde durur; burada her iki biçim de tek bir
+   * diziye normalize edilir.
+   */
+  private extractMessages(exception: HttpException): string[] {
+    const res = exception.getResponse();
+
+    if (typeof res === 'string') return [res];
+
+    if (res && typeof res === 'object') {
+      const raw = (res as { message?: unknown }).message;
+      if (Array.isArray(raw)) return raw.map((m) => String(m));
+      if (typeof raw === 'string') return [raw];
+    }
+
+    return [exception.message];
   }
 
   private mapStatusToMessage(status: number): string {
