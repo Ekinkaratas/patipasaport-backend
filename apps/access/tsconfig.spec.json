@@ -3,7 +3,11 @@
   "compilerOptions": {
     "outDir": "../../dist/out-tsc",
     "module": "commonjs",
-    "moduleResolution": "bundler","types": ["jest", "node"]
+    "moduleResolution": "bundler",
+    // ESM yayinlanan @nestjs paketleri node_modules icinde donusturuldugu icin gerekli
+    "allowJs": true,
+    "esModuleInterop": true,
+    "types": ["jest", "node"]
   },
   "include": [
     "jest.config.ts",
