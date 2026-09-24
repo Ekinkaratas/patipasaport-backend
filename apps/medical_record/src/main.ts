@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app/app.module';
+import { MedicalRecordModule } from './app/medical-record.module';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { join } from 'path';
 import { MEDICAL_RECORD_PACKAGE_NAME } from '@libs/proto';
@@ -13,7 +13,7 @@ import {
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(
-    AppModule,
+    MedicalRecordModule,
     {
       transport: Transport.GRPC,
       options: {

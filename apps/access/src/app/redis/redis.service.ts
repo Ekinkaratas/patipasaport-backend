@@ -8,17 +8,37 @@ import { ConfigService } from '@nestjs/config';
 import { Redis, RedisOptions } from 'ioredis';
 import { createHash } from 'crypto';
 import { access } from '@libs/proto';
+import { rejectRpc, ResponseMessages } from '@libs/common';
 
 /**
  * Kayıt HER ZAMAN TTL'li yazılır — opaque token'ın kendi ömrünü asla aşmaz.
  */
 export interface OpaqueTokenRecord {
-  userId: string /** VETERINARIAN | PET_OWNER | STAFF */;
-  role: string /** role PET_OWNER ise boş string */;
-  clinicId: string /** Token'a bağlanır: ExchangeToken'da gelen client_type ile karşılaştırılır */;
-  clientType: access.ClientType /** Token'ın taban scope'ları (rıza DEĞİL) */;
-  scopes: string[] /** ISO-8601 */;
-  issuedAt: string /** ISO-8601 */;
+  userId: string;
+  /** VETERINARIAN | PET_OWNER | STAFF */
+  role: string;
+  /** role PET_OWNER ise boş string */
+  clinicId: string;
+  /** Token'a bağlanır: ExchangeToken'da gelen client_type ile karşılaştırılır */
+  clientType: access.ClientType;
+  /** Token'ın taban scope'ları (rıza DEĞİL) */
+  scopes: string[];
+  /** ISO-8601 */
+  issuedAt: string;
+  /** ISO-8601 */
+  expiresAt: string;
+}
+
+/** Kayıt oluşturulurken zaman alanları HENÜZ bilinmez; onları bu katman üretir. */
+export type NewOpaqueTokenRecord = Omit<
+  OpaqueTokenRecord,
+  'issuedAt' | 'expiresAt'
+>;
+
+/** Gerçekten uygulanan süre bilgisi — çağıranın cevabı buradan kurulur. */
+export interface CreatedTokenInfo {
+  ttlSeconds: number;
+  issuedAt: string;
   expiresAt: string;
 }
 
@@ -45,12 +65,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     };
 
     this.client = new Redis(options);
-    this.defaultTtl = Number(
-      this.configService.get<string>(
-        'OPAQUE_TOKEN_TTL',
-        String(DEFAULT_TOKEN_TTL),
-      ),
-    );
+    this.defaultTtl = this.resolveDefaultTtl();
 
     this.client.on('error', (error: Error) => {
       this.logger.error(`Redis bağlantı hatası: ${error.message}`);
@@ -71,89 +86,136 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   // ---------- CREATE ----------
   async createTokenRecord(
     opaqueToken: string,
-    record: OpaqueTokenRecord,
+    record: NewOpaqueTokenRecord,
     ttlSeconds?: number,
-  ): Promise<boolean> {
-    const ttl = this.resolveTtl(record, ttlSeconds);
-    if (ttl <= 0) {
-      this.logger.warn(
-        `Süresi dolmuş token için kayıt açılmadı (userId=${record.userId})`,
-      );
-      return false;
-    }
+  ): Promise<CreatedTokenInfo> {
+    const requested = RedisService.isPositiveTtl(ttlSeconds)
+      ? ttlSeconds
+      : this.defaultTtl;
+    const ttl = Math.min(requested, this.defaultTtl);
 
-    await this.client.set(
-      this.tokenKey(opaqueToken),
-      JSON.stringify(record),
-      'EX',
-      ttl,
+    const issuedAt = new Date();
+    const expiresAt = new Date(issuedAt.getTime() + ttl * 1000);
+
+    const stored: OpaqueTokenRecord = {
+      ...record,
+      issuedAt: issuedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    };
+
+    await this.execute('createTokenRecord', () =>
+      this.client.set(
+        this.tokenKey(opaqueToken),
+        JSON.stringify(stored),
+        'EX',
+        ttl,
+      ),
     );
-    return true;
+
+    return {
+      ttlSeconds: ttl,
+      issuedAt: stored.issuedAt,
+      expiresAt: stored.expiresAt,
+    };
   }
 
   // ---------- READ ----------
   async getTokenRecord(opaqueToken: string): Promise<OpaqueTokenRecord | null> {
     const key = this.tokenKey(opaqueToken);
-    const raw = await this.client.get(key);
+    const raw = await this.execute('getTokenRecord', () =>
+      this.client.get(key),
+    );
     if (raw === null) return null;
 
+    let parsed: unknown;
     try {
-      return JSON.parse(raw) as OpaqueTokenRecord;
+      parsed = JSON.parse(raw);
     } catch {
-      this.logger.warn(`Bozuk token kaydı silindi: ${key}`);
-      await this.client.del(key);
+      this.logger.warn(`Bozuk JSON içeren token kaydı silindi: ${key}`);
+      await this.execute('getTokenRecord:del', () => this.client.del(key));
       return null;
     }
+
+    if (!RedisService.isOpaqueTokenRecord(parsed)) {
+      this.logger.warn(`Şekli bozuk token kaydı silindi: ${key}`);
+      await this.execute('getTokenRecord:del', () => this.client.del(key));
+      return null;
+    }
+
+    return parsed;
   }
 
   /** Kayıt var mı — içeriğe ihtiyaç duymayan kontroller için. */
   async hasTokenRecord(opaqueToken: string): Promise<boolean> {
-    const count = await this.client.exists(this.tokenKey(opaqueToken));
+    const count = await this.execute('hasTokenRecord', () =>
+      this.client.exists(this.tokenKey(opaqueToken)),
+    );
     return count > 0;
   }
 
   /** Kalan ömür (saniye). Kayıt yoksa veya TTL'siz ise -1 döner. */
   async getTokenTtl(opaqueToken: string): Promise<number> {
-    const ttl = await this.client.ttl(this.tokenKey(opaqueToken));
+    const ttl = await this.execute('getTokenTtl', () =>
+      this.client.ttl(this.tokenKey(opaqueToken)),
+    );
     return ttl >= 0 ? ttl : -1;
   }
 
   // ---------- UPDATE ----------
   /**
-   * Kaydın alanlarını günceller, TTL'e dokunmaz
+   * Kaydın kimlik alanlarını günceller, TTL'e dokunmaz.
+   * issuedAt/expiresAt bilinçli olarak güncellenemez: Redis anahtarının
+   * ömrüyle kayıttaki tarih ayrışırsa introspect hatalı karar verir.
    *
    * @returns Güncellenmiş kayıt, kayıt yoksa null.
    */
   async updateTokenRecord(
     opaqueToken: string,
-    patch: Partial<OpaqueTokenRecord>,
+    patch: Partial<NewOpaqueTokenRecord>,
   ): Promise<OpaqueTokenRecord | null> {
     const current = await this.getTokenRecord(opaqueToken);
     if (current === null) return null;
 
     const updated: OpaqueTokenRecord = { ...current, ...patch };
-    await this.client.set(
-      this.tokenKey(opaqueToken),
-      JSON.stringify(updated),
-      'KEEPTTL',
+    await this.execute('updateTokenRecord', () =>
+      this.client.set(
+        this.tokenKey(opaqueToken),
+        JSON.stringify(updated),
+        'KEEPTTL',
+      ),
     );
     return updated;
   }
 
   /**
-   * Kaydın ömrünü uzatır — içeriğe dokunmaz.
-   * @returns Kayıt yoksa false.
+   * Kaydın ömrünü uzatır. Anahtarın TTL'i ile kayıttaki expiresAt TEK
+   * işlemde birlikte yazılır; ayrışırlarsa introspect, Redis'in hâlâ canlı
+   * saydığı bir token'ı süresi geçmiş sanıp reddeder.
+   * @returns Uygulanan süre bilgisi, kayıt yoksa null.
    */
   async refreshTokenTtl(
     opaqueToken: string,
     ttlSeconds: number,
-  ): Promise<boolean> {
-    if (ttlSeconds <= 0) return false;
-    const applied = await this.client.expire(
-      this.tokenKey(opaqueToken),
-      Math.min(ttlSeconds, this.defaultTtl),
+  ): Promise<CreatedTokenInfo | null> {
+    if (!RedisService.isPositiveTtl(ttlSeconds)) return null;
+
+    const current = await this.getTokenRecord(opaqueToken);
+    if (current === null) return null;
+
+    const ttl = Math.min(ttlSeconds, this.defaultTtl);
+    const expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
+    const updated: OpaqueTokenRecord = { ...current, expiresAt };
+
+    await this.execute('refreshTokenTtl', () =>
+      this.client.set(
+        this.tokenKey(opaqueToken),
+        JSON.stringify(updated),
+        'EX',
+        ttl,
+      ),
     );
-    return applied === 1;
+
+    return { ttlSeconds: ttl, issuedAt: updated.issuedAt, expiresAt };
   }
 
   // ---------- DELETE ----------
@@ -162,11 +224,38 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * @returns Silinecek kayıt yoksa false.
    */
   async deleteTokenRecord(opaqueToken: string): Promise<boolean> {
-    const deleted = await this.client.del(this.tokenKey(opaqueToken));
+    const deleted = await this.execute('deleteTokenRecord', () =>
+      this.client.del(this.tokenKey(opaqueToken)),
+    );
     return deleted > 0;
   }
 
   // ---------- Yardımcılar ----------
+  /**
+   * Her Redis çağrısını sarar.
+   *
+   * depo erişilemiyorsa 500 hata yerine SERVICE_UNAVAILABLE geri döndürmeye yarar:
+   * geçici, yeniden denenebilir ve bizim tarafımızdaki bir arıza statüsüne girer.
+   *
+   * Hatanın metni yalnızca sunucu logunda kalır; istemci kodu görür.
+   */
+  private async execute<T>(
+    operation: string,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await run();
+    } catch (error) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.SERVICE_UNAVAILABLE,
+        `Redis işlemi başarısız (${operation}): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   /** Healthcheck için ham bağlantı kontrolü. */
   async ping(): Promise<boolean> {
     try {
@@ -177,23 +266,50 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * OPAQUE_TOKEN_TTL yanlış yazılırsa (ör. "3600s") Number() NaN döner;
+   * bu NaN Redis'e EX olarak gider ve token üretimi anlaşılmaz bir
+   * RangeError ile ölür. Geçersiz değer sessizce yutulmaz, loglanır.
+   */
+  private resolveDefaultTtl(): number {
+    const raw = this.configService.get<string>('OPAQUE_TOKEN_TTL');
+    if (raw === undefined) return DEFAULT_TOKEN_TTL;
+
+    const parsed = Number(raw);
+    if (!RedisService.isPositiveTtl(parsed)) {
+      this.logger.warn(
+        `OPAQUE_TOKEN_TTL geçersiz ("${raw}") — varsayılan ${DEFAULT_TOKEN_TTL} sn kullanılıyor`,
+      );
+      return DEFAULT_TOKEN_TTL;
+    }
+    return parsed;
+  }
+
+  private static isPositiveTtl(value: number | undefined): value is number {
+    return value !== undefined && Number.isInteger(value) && value > 0;
+  }
+
+  private static isOpaqueTokenRecord(
+    value: unknown,
+  ): value is OpaqueTokenRecord {
+    if (typeof value !== 'object' || value === null) return false;
+    const r = value as Record<string, unknown>;
+    return (
+      typeof r['userId'] === 'string' &&
+      typeof r['role'] === 'string' &&
+      typeof r['clinicId'] === 'string' &&
+      typeof r['clientType'] === 'number' &&
+      Array.isArray(r['scopes']) &&
+      r['scopes'].every((s) => typeof s === 'string') &&
+      typeof r['issuedAt'] === 'string' &&
+      typeof r['expiresAt'] === 'string'
+    );
+  }
+
+  /**
    * key olarak sha256 özeti kullanılacak.
    */
   private tokenKey(opaqueToken: string): string {
     const digest = createHash('sha256').update(opaqueToken).digest('hex');
     return `${TOKEN_KEY_PREFIX}${digest}`;
-  }
-
-  /** Cache, token'ın kendi ömrünü aşamaz; üst sınır defaultTtl. */
-  private resolveTtl(record: OpaqueTokenRecord, ttlSeconds?: number): number {
-    if (ttlSeconds !== undefined) {
-      return Math.min(ttlSeconds, this.defaultTtl);
-    }
-
-    const expiresAt = Date.parse(record.expiresAt);
-    if (Number.isNaN(expiresAt)) return this.defaultTtl;
-
-    const remaining = Math.floor((expiresAt - Date.now()) / 1000);
-    return Math.min(remaining, this.defaultTtl);
   }
 }

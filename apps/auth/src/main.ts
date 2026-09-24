@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { AppModule } from './app/app.module';
+import { AuthModule } from './app/auth.module';
 import { AUTH_PACKAGE_NAME } from '@libs/proto';
 import { join } from 'path';
 import {
@@ -13,7 +13,7 @@ import {
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(
-    AppModule,
+    AuthModule,
     {
       transport: Transport.GRPC,
       options: {

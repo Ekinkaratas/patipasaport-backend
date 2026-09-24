@@ -9,6 +9,15 @@ package access;
 // SEÇİM (hangi kliniğe izin veriyorum, hangi hayvan için) request'te
 // taşınır; kural "kimlik gelmez", "hiçbir id gelmez" değil.
 service AccessService {
+  // SADECE Auth Service çağırır. Auth kullanıcıyı doğruladıktan sonra
+  // kimliğini buraya emanet eder; opaque token'ı Access üretir ve kendi
+  // store'unda tutar. Auth ürettiği token'ı istemciye access_token olarak
+  // geri verir.
+  rpc CreateToken (CreateTokenRequest) returns (CreateTokenResponse);
+
+  // SADECE Auth Service çağırır. Logout ve refresh rotasyonunda eski opaque token'ı geçersiz kılar.
+  rpc RevokeToken (RevokeTokenRequest) returns (RevokeTokenResponse);
+
   // Sadece Gateway çağırır. Opaque token -> kısa ömürlü imzalı JWT.
   // İÇ RPC: HTTP endpoint'i yok, ValidationPipe devreye girmez.
   rpc ExchangeToken (ExchangeTokenRequest) returns (ExchangeTokenResponse);
@@ -43,6 +52,33 @@ enum DeniedReason {
   DENIED_REASON_EXPIRED = 3;          // rıza penceresi kapanmış
   DENIED_REASON_INSUFFICIENT_SCOPE = 4; // rıza AKTİF ama istenen scope yok
 }
+
+// ---------- Token üretimi ----------
+
+message CreateTokenRequest {
+  string user_id = 1;
+  string role = 2;              // VETERINARIAN | PET_OWNER | STAFF
+  string clinic_id = 3;         // role PET_OWNER ise boş string
+  ClientType client_type = 4;   // token'a bağlanır: ExchangeToken'da
+                                // gelen client_type ile karşılaştırılır
+  repeated string scopes = 5;   // token'ın taban scope'ları (rıza DEĞİL)
+  int32 ttl_seconds = 6;        // 0 ise Access'in varsayılan TTL'i uygulanır
+}
+
+message CreateTokenResponse {
+  string opaque_token = 1;      // istemciye access_token olarak döner;
+                                // Access'te yalnızca sha256 özeti saklanır
+  int32 expires_in = 2;         // saniye
+  string issued_at = 3;         // ISO-8601
+  string expires_at = 4;        // ISO-8601
+}
+
+// ---------- Token Revoke ----------
+
+message RevokeTokenRequest  { string opaque_token = 1; }
+
+message RevokeTokenResponse { bool revoked = 1; }
+
 
 // ---------- Token exchange ----------
 

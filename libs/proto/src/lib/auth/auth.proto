@@ -8,8 +8,7 @@ service AuthService {
   rpc RefreshToken (RefreshTokenRequest) returns (TokenResponse);
   rpc Logout (LogoutRequest) returns (LogoutResponse);
 
-  // Sadece Access Service çağırır — opaque token'ın geçerliliğini sorar.
-  rpc Introspect (IntrospectRequest) returns (IntrospectResponse);
+  
 }
 
 enum ClientType {
@@ -55,19 +54,4 @@ message TokenResponse {
   string user_id = 5;
 }
 
-// ---------- Introspection ----------
 
-message IntrospectRequest {
-  string token = 1;
-}
-
-message IntrospectResponse {
-  bool active = 1;
-  string user_id = 2;
-  ClientType client_type = 3;
-  string role = 4;              // VETERINARIAN | PET_OWNER | STAFF
-  string clinic_id = 5;         // eğer user bir klinik personeli değilse burası boş string döner
-  repeated string scopes = 6;   // token'ın taban scope'ları (rıza DEĞİL)
-  string issued_at = 7;         // ISO-8601
-  string expires_at = 8;        // ISO-8601
-}

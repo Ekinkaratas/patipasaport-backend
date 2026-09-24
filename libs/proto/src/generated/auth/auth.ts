@@ -57,26 +57,6 @@ export interface TokenResponse {
   userId: string;
 }
 
-export interface IntrospectRequest {
-  token: string;
-}
-
-export interface IntrospectResponse {
-  active: boolean;
-  userId: string;
-  clientType: ClientType;
-  /** VETERINARIAN | PET_OWNER | STAFF */
-  role: string;
-  /** eğer user bir klinik personeli değilse burası boş string döner */
-  clinicId: string;
-  /** token'ın taban scope'ları (rıza DEĞİL) */
-  scopes: string[];
-  /** ISO-8601 */
-  issuedAt: string;
-  /** ISO-8601 */
-  expiresAt: string;
-}
-
 export const AUTH_PACKAGE_NAME = "auth";
 
 export interface AuthServiceClient {
@@ -87,10 +67,6 @@ export interface AuthServiceClient {
   refreshToken(request: RefreshTokenRequest): Observable<TokenResponse>;
 
   logout(request: LogoutRequest): Observable<LogoutResponse>;
-
-  /** Sadece Access Service çağırır — opaque token'ın geçerliliğini sorar. */
-
-  introspect(request: IntrospectRequest): Observable<IntrospectResponse>;
 }
 
 export interface AuthServiceController {
@@ -101,17 +77,11 @@ export interface AuthServiceController {
   refreshToken(request: RefreshTokenRequest): Promise<TokenResponse> | Observable<TokenResponse> | TokenResponse;
 
   logout(request: LogoutRequest): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
-
-  /** Sadece Access Service çağırır — opaque token'ın geçerliliğini sorar. */
-
-  introspect(
-    request: IntrospectRequest,
-  ): Promise<IntrospectResponse> | Observable<IntrospectResponse> | IntrospectResponse;
 }
 
 export function AuthServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["register", "login", "refreshToken", "logout", "introspect"];
+    const grpcMethods: string[] = ["register", "login", "refreshToken", "logout"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("AuthService", method)(constructor.prototype[method], method, descriptor);

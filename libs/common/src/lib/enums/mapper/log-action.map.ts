@@ -8,6 +8,7 @@ export const LogActionMap: Record<ResponseMessages, LogAction> = {
   [ResponseMessages.BAD_REQUEST]: LogAction.VALIDATION_FAILED,
   [ResponseMessages.UNPROCESSABLE_ENTITY]: LogAction.VALIDATION_FAILED,
   [ResponseMessages.VALIDATION_ERROR]: LogAction.VALIDATION_FAILED,
+  [ResponseMessages.INVALID_CLIENT_TYPE]: LogAction.VALIDATION_FAILED,
 
   [ResponseMessages.UNAUTH]: LogAction.UNAUTHORIZED,
   [ResponseMessages.TOKEN_EXPIRED]: LogAction.UNAUTHORIZED,

@@ -4,99 +4,125 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { status } from '@grpc/grpc-js';
 import { DtoPrefix } from '../enums/messages/ValidationMessages.enum';
 import { ResponseMessages } from '../enums/messages/ResponseMessages.enum';
 import { BaseResponse } from '../base/base.response';
-import { RpcException } from '@nestjs/microservices';
 import { getStatusFromMessage } from '../enums/mapper/get-status-from-message';
 import { getCorrelationId } from '../storage';
 
-@Catch(HttpException, RpcException)
+interface ResolvedError {
+  httpStatus: HttpStatus;
+  message: string;
+}
+
+@Catch()
 export class HttpsExceptionFilter implements ExceptionFilter {
-  catch(exception: HttpException | RpcException, host: ArgumentsHost) {
-    const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
+  private readonly logger = new Logger(HttpsExceptionFilter.name);
+
+  private static readonly GRPC_TO_HTTP: Partial<Record<number, HttpStatus>> = {
+    [status.INVALID_ARGUMENT]: HttpStatus.BAD_REQUEST,
+    [status.UNAUTHENTICATED]: HttpStatus.UNAUTHORIZED,
+    [status.PERMISSION_DENIED]: HttpStatus.FORBIDDEN,
+    [status.NOT_FOUND]: HttpStatus.NOT_FOUND,
+    [status.ALREADY_EXISTS]: HttpStatus.CONFLICT,
+    [status.RESOURCE_EXHAUSTED]: HttpStatus.TOO_MANY_REQUESTS,
+    [status.UNIMPLEMENTED]: HttpStatus.NOT_IMPLEMENTED,
+    [status.UNAVAILABLE]: HttpStatus.SERVICE_UNAVAILABLE,
+    [status.DEADLINE_EXCEEDED]: HttpStatus.GATEWAY_TIMEOUT,
+  };
+
+  catch(exception: unknown, host: ArgumentsHost) {
+    const response = host.switchToHttp().getResponse<Response>();
     const correlationId = getCorrelationId();
 
-    if (exception instanceof HttpException) {
-      const status = exception.getStatus();
-      const messages = this.extractMessages(exception);
-
-      const prefixes: DtoPrefix[] = Object.values(DtoPrefix);
-      const validationMessage = messages.find((m) =>
-        prefixes.some((p) => m.startsWith(p)),
-      );
-
-      if (validationMessage) {
-        return response
-          .status(status)
-          .json(
-            new BaseResponse(null, validationMessage, false, correlationId),
-          );
-      }
-
-      const customMessage = messages.find((m) =>
-        Object.values(ResponseMessages).includes(m as ResponseMessages),
-      );
-      if (customMessage) {
-        return response
-          .status(status)
-          .json(new BaseResponse(null, customMessage, false, correlationId));
-      }
-
-      return response
-        .status(status)
-        .json(
-          new BaseResponse(
-            null,
-            this.mapStatusToMessage(status),
-            false,
-            correlationId,
-          ),
-        );
-    }
-
-    const rpcError =
-      exception instanceof RpcException ? exception.getError() : exception;
-
-    const grpcMessage =
-      typeof rpcError === 'object' && rpcError !== null && 'message' in rpcError
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (rpcError as any).message
-        : typeof rpcError === 'string'
-          ? rpcError
-          : null;
-
-    const isKnownCode =
-      grpcMessage &&
-      Object.values(ResponseMessages).includes(grpcMessage as ResponseMessages);
-
-    const status = isKnownCode
-      ? getStatusFromMessage(grpcMessage)
-      : HttpStatus.INTERNAL_SERVER_ERROR;
+    const { httpStatus, message } = this.resolve(exception);
 
     return response
-      .status(status)
-      .json(
-        new BaseResponse(
-          null,
-          isKnownCode ? grpcMessage : ResponseMessages.INTERNAL_SERVER_ERROR,
-          false,
-          correlationId,
-        ),
-      );
+      .status(httpStatus)
+      .json(new BaseResponse(null, message, false, correlationId));
   }
 
-  /**
-   * ValidationPipe, mesajları bir DİZİ olarak BadRequestException'a verir.
-   * Nest'in HttpException.initMessage()'i dizi gördüğünde response.message'ı
-   * string bulamaz ve exception.message'ı sınıf adına ("Bad Request Exception")
-   * düşürür — yani DtoPrefix eşleşmesi asla tutmaz. Gerçek mesajlar
-   * getResponse().message içinde durur; burada her iki biçim de tek bir
-   * diziye normalize edilir.
-   */
+  private resolve(exception: unknown): ResolvedError {
+    if (exception instanceof HttpException) {
+      return this.fromHttpException(exception);
+    }
+
+    if (HttpsExceptionFilter.isGrpcError(exception)) {
+      return this.fromGrpcError(exception);
+    }
+
+    this.logger.error(
+      exception instanceof Error
+        ? `Beklenmeyen hata: ${exception.name}: ${exception.message}`
+        : `Beklenmeyen hata: ${String(exception)}`,
+      exception instanceof Error ? exception.stack : undefined,
+    );
+    return {
+      httpStatus: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: ResponseMessages.INTERNAL_SERVER_ERROR,
+    };
+  }
+
+  private fromHttpException(exception: HttpException): ResolvedError {
+    const httpStatus = exception.getStatus();
+    const messages = this.extractMessages(exception);
+
+    const prefixes: DtoPrefix[] = Object.values(DtoPrefix);
+    const validationMessage = messages.find((m) =>
+      prefixes.some((p) => m.startsWith(p)),
+    );
+    if (validationMessage) {
+      return { httpStatus, message: validationMessage };
+    }
+
+    const customMessage = messages.find((m) =>
+      Object.values(ResponseMessages).includes(m as ResponseMessages),
+    );
+    if (customMessage) {
+      return { httpStatus, message: customMessage };
+    }
+
+    return { httpStatus, message: this.mapStatusToMessage(httpStatus) };
+  }
+
+  private fromGrpcError(exception: {
+    code: number;
+    details?: string;
+  }): ResolvedError {
+    const details = exception.details ?? '';
+
+    if (Object.values(ResponseMessages).includes(details as ResponseMessages)) {
+      return { httpStatus: getStatusFromMessage(details), message: details };
+    }
+
+    if (Object.values(DtoPrefix).some((prefix) => details.startsWith(prefix))) {
+      return { httpStatus: HttpStatus.BAD_REQUEST, message: details };
+    }
+
+    const httpStatus =
+      HttpsExceptionFilter.GRPC_TO_HTTP[exception.code] ??
+      HttpStatus.INTERNAL_SERVER_ERROR;
+
+    this.logger.error(
+      `gRPC çağrısı başarısız (code=${exception.code}): ${details}`,
+    );
+    return { httpStatus, message: this.mapStatusToMessage(httpStatus) };
+  }
+
+  private static isGrpcError(
+    value: unknown,
+  ): value is { code: number; details?: string } {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as { code?: unknown }).code === 'number'
+    );
+  }
+
   private extractMessages(exception: HttpException): string[] {
     const res = exception.getResponse();
 
@@ -111,8 +137,8 @@ export class HttpsExceptionFilter implements ExceptionFilter {
     return [exception.message];
   }
 
-  private mapStatusToMessage(status: number): string {
-    switch (status) {
+  private mapStatusToMessage(httpStatus: number): ResponseMessages {
+    switch (httpStatus) {
       case 400:
         return ResponseMessages.BAD_REQUEST;
       case 401:

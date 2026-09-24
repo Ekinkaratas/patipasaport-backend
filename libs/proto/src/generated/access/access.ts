@@ -40,6 +40,39 @@ export enum DeniedReason {
   UNRECOGNIZED = -1,
 }
 
+export interface CreateTokenRequest {
+  userId: string;
+  /** VETERINARIAN | PET_OWNER | STAFF */
+  role: string;
+  /** role PET_OWNER ise boş string */
+  clinicId: string;
+  /** token'a bağlanır: ExchangeToken'da */
+  clientType: ClientType;
+  /** gelen client_type ile karşılaştırılır */
+  scopes: string[];
+  /** 0 ise Access'in varsayılan TTL'i uygulanır */
+  ttlSeconds: number;
+}
+
+export interface CreateTokenResponse {
+  /** istemciye access_token olarak döner; */
+  opaqueToken: string;
+  /** Access'te yalnızca sha256 özeti saklanır */
+  expiresIn: number;
+  /** ISO-8601 */
+  issuedAt: string;
+  /** ISO-8601 */
+  expiresAt: string;
+}
+
+export interface RevokeTokenRequest {
+  opaqueToken: string;
+}
+
+export interface RevokeTokenResponse {
+  revoked: boolean;
+}
+
 export interface ExchangeTokenRequest {
   opaqueToken: string;
   clientType: ClientType;
@@ -125,6 +158,19 @@ export const ACCESS_PACKAGE_NAME = "access";
 
 export interface AccessServiceClient {
   /**
+   * SADECE Auth Service çağırır. Auth kullanıcıyı doğruladıktan sonra
+   * kimliğini buraya emanet eder; opaque token'ı Access üretir ve kendi
+   * store'unda tutar. Auth ürettiği token'ı istemciye access_token olarak
+   * geri verir.
+   */
+
+  createToken(request: CreateTokenRequest): Observable<CreateTokenResponse>;
+
+  /** SADECE Auth Service çağırır. Logout ve refresh rotasyonunda eski opaque token'ı geçersiz kılar. */
+
+  revokeToken(request: RevokeTokenRequest): Observable<RevokeTokenResponse>;
+
+  /**
    * Sadece Gateway çağırır. Opaque token -> kısa ömürlü imzalı JWT.
    * İÇ RPC: HTTP endpoint'i yok, ValidationPipe devreye girmez.
    */
@@ -153,6 +199,23 @@ export interface AccessServiceClient {
  */
 
 export interface AccessServiceController {
+  /**
+   * SADECE Auth Service çağırır. Auth kullanıcıyı doğruladıktan sonra
+   * kimliğini buraya emanet eder; opaque token'ı Access üretir ve kendi
+   * store'unda tutar. Auth ürettiği token'ı istemciye access_token olarak
+   * geri verir.
+   */
+
+  createToken(
+    request: CreateTokenRequest,
+  ): Promise<CreateTokenResponse> | Observable<CreateTokenResponse> | CreateTokenResponse;
+
+  /** SADECE Auth Service çağırır. Logout ve refresh rotasyonunda eski opaque token'ı geçersiz kılar. */
+
+  revokeToken(
+    request: RevokeTokenRequest,
+  ): Promise<RevokeTokenResponse> | Observable<RevokeTokenResponse> | RevokeTokenResponse;
+
   /**
    * Sadece Gateway çağırır. Opaque token -> kısa ömürlü imzalı JWT.
    * İÇ RPC: HTTP endpoint'i yok, ValidationPipe devreye girmez.
@@ -183,7 +246,15 @@ export interface AccessServiceController {
 
 export function AccessServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["exchangeToken", "checkAccess", "grantConsent", "revokeConsent", "getConsentStatus"];
+    const grpcMethods: string[] = [
+      "createToken",
+      "revokeToken",
+      "exchangeToken",
+      "checkAccess",
+      "grantConsent",
+      "revokeConsent",
+      "getConsentStatus",
+    ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("AccessService", method)(constructor.prototype[method], method, descriptor);

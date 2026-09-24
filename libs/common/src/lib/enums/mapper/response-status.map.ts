@@ -25,4 +25,5 @@ export const ResponseStatusMap: Record<ResponseMessages, HttpStatus> = {
   [ResponseMessages.TOKEN_EXPIRED]: HttpStatus.UNAUTHORIZED,
   [ResponseMessages.INVALID_TOKEN]: HttpStatus.UNAUTHORIZED,
   [ResponseMessages.VALIDATION_ERROR]: HttpStatus.BAD_REQUEST,
+  [ResponseMessages.INVALID_CLIENT_TYPE]: HttpStatus.BAD_REQUEST,
 };
