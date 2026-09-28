@@ -1,7 +1,8 @@
 import { Controller, Logger } from '@nestjs/common';
 import { AccessService } from './access.service';
-import { GrpcMethod } from '@nestjs/microservices';
+import { GrpcMethod, Payload } from '@nestjs/microservices';
 import { access } from '@libs/proto';
+import { ExchangeTokenRequestDto } from '@libs/dto';
 
 @Controller()
 export class AccessController {
@@ -11,15 +12,22 @@ export class AccessController {
 
   @GrpcMethod('AccessService', 'ExchangeToken')
   exchangeToken(
-    request: access.ExchangeTokenRequest,
+    @Payload() request: ExchangeTokenRequestDto,
   ): Promise<access.ExchangeTokenResponse> {
     return this.accessService.exchangeToken(request);
   }
 
-  @GrpcMethod('AccessService', 'CreateToken')
-  createToken(
+  @GrpcMethod('AccessService', 'CreateOpaqueToken')
+  createOpaqueToken(
     request: access.CreateTokenRequest,
   ): Promise<access.CreateTokenResponse> {
-    return this.accessService.createToken(request);
+    return this.accessService.createOpaqueToken(request);
+  }
+
+  @GrpcMethod('AccessService', 'RevokeToken')
+  revokeToken(
+    request: access.RevokeTokenRequest,
+  ): Promise<access.RevokeTokenResponse> {
+    return this.accessService.revokeToken(request);
   }
 }

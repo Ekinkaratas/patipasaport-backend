@@ -31,6 +31,7 @@ export interface LoginRequest {
   email: string;
   password: string;
   clientType: ClientType;
+  rememberMe: boolean;
 }
 
 export interface RefreshTokenRequest {
@@ -43,6 +44,14 @@ export interface LogoutRequest {
 
 export interface LogoutResponse {
   success: boolean;
+}
+
+export interface DeleteInCredentialRequest {
+  userId: string;
+}
+
+export interface DeleteInCredentialResponse {
+  deleted: boolean;
 }
 
 /** Register, Login ve Refresh aynı şekli döndüğü için tek mesaj. */
@@ -67,6 +76,8 @@ export interface AuthServiceClient {
   refreshToken(request: RefreshTokenRequest): Observable<TokenResponse>;
 
   logout(request: LogoutRequest): Observable<LogoutResponse>;
+
+  deleteInCredential(request: DeleteInCredentialRequest): Observable<DeleteInCredentialResponse>;
 }
 
 export interface AuthServiceController {
@@ -77,11 +88,15 @@ export interface AuthServiceController {
   refreshToken(request: RefreshTokenRequest): Promise<TokenResponse> | Observable<TokenResponse> | TokenResponse;
 
   logout(request: LogoutRequest): Promise<LogoutResponse> | Observable<LogoutResponse> | LogoutResponse;
+
+  deleteInCredential(
+    request: DeleteInCredentialRequest,
+  ): Promise<DeleteInCredentialResponse> | Observable<DeleteInCredentialResponse> | DeleteInCredentialResponse;
 }
 
 export function AuthServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["register", "login", "refreshToken", "logout"];
+    const grpcMethods: string[] = ["register", "login", "refreshToken", "logout", "deleteInCredential"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("AuthService", method)(constructor.prototype[method], method, descriptor);

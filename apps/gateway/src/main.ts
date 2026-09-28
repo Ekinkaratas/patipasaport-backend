@@ -14,7 +14,11 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new TrimPipe(),
-    new ValidationPipe({ whitelist: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      stopAtFirstError: true,
+    }),
   );
   app.useGlobalFilters(new HttpsExceptionFilter());
 

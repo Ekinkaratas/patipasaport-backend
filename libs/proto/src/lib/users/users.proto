@@ -8,11 +8,17 @@ package users;
 //   ListUsersByClinic     -> yalnızca kendi kliniğinin personeli
 //   GetUserDisplayNames   -> yalnızca görünen ad, elde id varsa
 service UsersService {
-  // Sadece Auth Service çağırır (Register akışının 2. adımı).
+  // Sadece Auth Service çağırır (Register akışının 1. adımı — email ve
+  // telefon çakışmaları credentials yazılmadan önce burada yakalanır).
   rpc CreateUser (CreateUserRequest) returns (UserResponse);
 
+  // Sadece Auth Service çağırır. 
+  // Hesap kapatma / devre dışı bırakma için KULLANILMAZ
+  // o is_active ile yapılır.
+  rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
+
   // Kullanıcının KENDİ profili. Kimlik JWT'den okunur, request boş.
-  // Adres dahil tam veri döner — kendi verisi olduğu için scope gerekmez.
+  // Tam profil döner — kendi verisi olduğu için scope gerekmez.
   rpc GetMe (GetMeRequest) returns (GetMeResponse);
 
   // Kullanıcının KENDİ profilini güncellemesi. id yok — JWT'den okunur.
@@ -48,10 +54,6 @@ enum UserRole {
 }
 
 // Liste ve genel yanıtlarda kullanılan YALIN kullanıcı görünümü.
-//
-// ADRES ALANLARI BİLİNÇLİ OLARAK YOK. adres buraya eklenirse klinik personel
-// listesinde herkesin adresi sızar.
-// Adres yalnızca GetMeResponse ve GetUserContactResponse'ta bulunur.
 message User {
   string user_id = 1;
   string email = 2;
@@ -81,10 +83,22 @@ message CreateUserRequest {
   reserved 5, 6;
 }
 
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+
+message DeleteUserResponse {
+  bool deleted = 1;
+}
+
 // Boş mesaj — kimlik JWT'den(JWT metadata içerisindedir) okunur, istemci kendi id'sini SÖYLEMEZ.
 message GetMeRequest {}
 
-// Kendi verisi olduğu için tam profil: adres alanları dahil.
+// Kendi verisi olduğu için tam profil.
+//
+// Adres alanları kaldırıldı (kullanıcı adresi tutulmuyor); numaralar ve
+// adlar başka bir anlamla geri kullanılmasın diye reserved.
 message GetMeResponse {
   string user_id = 1;
   string email = 2;
@@ -93,11 +107,11 @@ message GetMeResponse {
   UserRole role = 5;
   string clinic_id = 6;      // eğer user bir klinik personeli değilse burası boş string döner
   bool is_active = 7;
-  string address_line = 8;   // girilmediyse boş string
-  string city = 9;
-  string district = 10;
   string created_at = 11;    // ISO-8601
   string updated_at = 12;    // ISO-8601
+
+  reserved 8, 9, 10;
+  reserved "address_line", "city", "district";
 }
 
 // PATCH semantiği: 'optional' field presence sağlar, böylece
@@ -107,9 +121,9 @@ message GetMeResponse {
 message UpdateMeRequest {
   optional string full_name = 1;
   optional string phone = 2;
-  optional string address_line = 3;
-  optional string city = 4;
-  optional string district = 5;
+
+  reserved 3, 4, 5;
+  reserved "address_line", "city", "district";
 }
 
 message GetUserRoleRequest {
@@ -165,9 +179,9 @@ message GetUserContactResponse {
   string full_name = 2;
   string phone = 3;
   string email = 4;
-  string address_line = 5;   // eğer user bir klinik personeli değilse burası boş string döner
-  string city = 6;
-  string district = 7;
+
+  reserved 5, 6, 7;
+  reserved "address_line", "city", "district";
 }
 
 message UserResponse {

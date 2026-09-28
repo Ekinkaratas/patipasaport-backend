@@ -28,7 +28,12 @@ ENV NX_DAEMON=false \
     NX_SKIP_NX_CACHE=true \
     NODE_ENV=production
 COPY . .
+# --excludeTaskDependencies build'in dependsOn'daki prisma-generate'i
+# atlamasına yol açar; Prisma kullanan servislerde client burada üretilir.
 RUN test -n "${APP}" || { echo "APP build-arg zorunlu (orn. --build-arg APP=auth)"; exit 1; } \
+    && if [ -f "apps/${APP}/prisma.config.ts" ]; then \
+         npx prisma generate --config "apps/${APP}/prisma.config.ts"; \
+       fi \
     && npx nx run "${APP}:build" --excludeTaskDependencies --skipNxCache \
     && test -f "dist/apps/${APP}/main.js"
 

@@ -23,6 +23,7 @@ export enum DtoPrefix {
   PAGE_SIZE = 'PAGE_SIZE',
   SCOPES = 'SCOPES',
   EXPIRES_AT = 'EXPIRES_AT',
+  REMEMBER_ME = 'REMEMBER_ME',
 }
 export enum ValidationType {
   NOT_EMPTY = 'NOT_EMPTY',

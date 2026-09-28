@@ -5,3 +5,4 @@ export * from './interceptors';
 export * from './logging';
 export * from './pipes';
 export * from './storage';
+export * from './transforms';

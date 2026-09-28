@@ -1,14 +1,24 @@
-import { DtoPrefix, getValidationMessage, ValidationType } from '@libs/common';
-import { auth } from '@libs/proto';
 import {
+  DtoPrefix,
+  getValidationMessage,
+  normalizeEmail,
+  ValidationType,
+} from '@libs/common';
+import { auth } from '@libs/proto';
+import { Transform } from 'class-transformer';
+import {
+  IsBoolean,
   IsEmail,
   IsIn,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
 
 export class LoginRequestDto implements auth.LoginRequest {
+  // Register ile aynı normalizasyon — kayıtlı email küçük harfle tutulur.
+  @Transform(({ value }) => normalizeEmail(value))
   @IsEmail(
     {},
     {
@@ -18,9 +28,6 @@ export class LoginRequestDto implements auth.LoginRequest {
       ),
     },
   )
-  @IsNotEmpty({
-    message: getValidationMessage(DtoPrefix.EMAIL, ValidationType.NOT_EMPTY),
-  })
   @MaxLength(255, {
     message: getValidationMessage(
       DtoPrefix.EMAIL,
@@ -28,8 +35,18 @@ export class LoginRequestDto implements auth.LoginRequest {
       255,
     ),
   })
+  @IsNotEmpty({
+    message: getValidationMessage(DtoPrefix.EMAIL, ValidationType.NOT_EMPTY),
+  })
   email!: string;
 
+  @MaxLength(72, {
+    message: getValidationMessage(
+      DtoPrefix.PASSWORD,
+      ValidationType.MAX_LENGTH,
+      72,
+    ),
+  })
   @IsString({
     message: getValidationMessage(
       DtoPrefix.PASSWORD,
@@ -38,13 +55,6 @@ export class LoginRequestDto implements auth.LoginRequest {
   })
   @IsNotEmpty({
     message: getValidationMessage(DtoPrefix.PASSWORD, ValidationType.NOT_EMPTY),
-  })
-  @MaxLength(72, {
-    message: getValidationMessage(
-      DtoPrefix.PASSWORD,
-      ValidationType.MAX_LENGTH,
-      72,
-    ),
   })
   password!: string;
 
@@ -55,4 +65,14 @@ export class LoginRequestDto implements auth.LoginRequest {
     ),
   })
   clientType!: auth.ClientType;
+
+  // "Oturumu hatırla". Gönderilmezse false sayılır (refresh token 12 saat).
+  @IsOptional()
+  @IsBoolean({
+    message: getValidationMessage(
+      DtoPrefix.REMEMBER_ME,
+      ValidationType.WRONG_DATA_TYPE,
+    ),
+  })
+  rememberMe!: boolean;
 }

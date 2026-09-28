@@ -3,7 +3,7 @@ import * as winston from 'winston';
 import { getCorrelationId } from '../storage';
 
 const addCorrelationId = winston.format((info) => {
-  info.correlationId = getCorrelationId();
+  info['correlationId'] = getCorrelationId();
   return info;
 });
 

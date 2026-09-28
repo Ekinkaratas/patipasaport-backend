@@ -32,14 +32,15 @@ export class GrantConsentRequestDto implements access.GrantConsentRequest {
   })
   petId!: string;
 
-  @IsArray({
+  @IsIn(CONSENT_SCOPES, {
+    each: true,
+    message: getValidationMessage(DtoPrefix.SCOPES, ValidationType.NOT_VALID),
+  })
+  @ArrayUnique({
     message: getValidationMessage(
       DtoPrefix.SCOPES,
-      ValidationType.MUST_BE_ARRAY,
+      ValidationType.MUST_BE_UNIQUE,
     ),
-  })
-  @ArrayMinSize(1, {
-    message: getValidationMessage(DtoPrefix.SCOPES, ValidationType.MIN, 1),
   })
   @ArrayMaxSize(CONSENT_SCOPES.length, {
     message: getValidationMessage(
@@ -48,15 +49,14 @@ export class GrantConsentRequestDto implements access.GrantConsentRequest {
       CONSENT_SCOPES.length,
     ),
   })
-  @ArrayUnique({
+  @ArrayMinSize(1, {
+    message: getValidationMessage(DtoPrefix.SCOPES, ValidationType.MIN, 1),
+  })
+  @IsArray({
     message: getValidationMessage(
       DtoPrefix.SCOPES,
-      ValidationType.MUST_BE_UNIQUE,
+      ValidationType.MUST_BE_ARRAY,
     ),
-  })
-  @IsIn(CONSENT_SCOPES, {
-    each: true,
-    message: getValidationMessage(DtoPrefix.SCOPES, ValidationType.NOT_VALID),
   })
   scopes!: string[];
 

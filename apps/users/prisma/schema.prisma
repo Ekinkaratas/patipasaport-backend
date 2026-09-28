@@ -1,0 +1,32 @@
+//   npx nx run users:prisma-migrate --name=<degisiklik_adi>
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  PET_OWNER
+  VETERINARIAN
+  STAFF
+}
+
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique @db.VarChar(254) // kopya — source of truth auth_db.credentials
+  fullName  String   @map("full_name") @db.VarChar(64)
+  phone     String   @unique @map("tel_no") @db.VarChar(16)
+  role      UserRole @default(PET_OWNER) // CreateUser yalnızca PET_OWNER üretebilir, 
+  clinicId  String?  @map("clinic_id") @db.Uuid // hasta sahibi ise null
+  isActive  Boolean  @default(true) @map("is_active") // hesap durumu (devre dışı bırakma bilgisini içerir)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([clinicId, role]) // ListUsersByClinic
+  @@map("users")
+}

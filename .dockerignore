@@ -41,3 +41,6 @@ opencode.json
 *.md
 LICENSE
 **/*.log
+
+# --- prisma generate ciktisi (build asamasinda yeniden uretilir) ---
+apps/*/src/generated

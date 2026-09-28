@@ -7,8 +7,7 @@ service AuthService {
   rpc Login (LoginRequest) returns (TokenResponse);
   rpc RefreshToken (RefreshTokenRequest) returns (TokenResponse);
   rpc Logout (LogoutRequest) returns (LogoutResponse);
-
-  
+  rpc DeleteInCredential (DeleteInCredentialRequest) returns (DeleteInCredentialResponse);
 }
 
 enum ClientType {
@@ -31,6 +30,7 @@ message LoginRequest {
   string email = 1;
   string password = 2;
   ClientType client_type = 3;
+  bool remember_me = 4;           
 }
 
 message RefreshTokenRequest {
@@ -43,6 +43,14 @@ message LogoutRequest {
 
 message LogoutResponse {
   bool success = 1;
+}
+
+message DeleteInCredentialRequest {
+  string user_id = 1;
+}
+
+message DeleteInCredentialResponse {
+  bool deleted = 1;
 }
 
 // Register, Login ve Refresh aynı şekli döndüğü için tek mesaj.

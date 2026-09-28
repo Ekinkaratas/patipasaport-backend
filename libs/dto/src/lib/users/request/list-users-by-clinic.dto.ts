@@ -44,6 +44,9 @@ export class ListUsersByClinicRequestDto
   role?: users.UserRole | undefined;
 
   @Type(() => Number)
+  @Min(1, {
+    message: getValidationMessage(DtoPrefix.PAGE, ValidationType.MIN, 1),
+  })
   @IsNumber(
     {
       allowNaN: false,
@@ -57,12 +60,15 @@ export class ListUsersByClinicRequestDto
       ),
     },
   )
-  @Min(1, {
-    message: getValidationMessage(DtoPrefix.PAGE, ValidationType.MIN, 1),
-  })
   page!: number;
 
   @Type(() => Number)
+  @IsIn([8, 16, 32, 64, 128], {
+    message: getValidationMessage(
+      DtoPrefix.PAGE_SIZE,
+      ValidationType.NOT_VALID,
+    ),
+  })
   @IsNumber(
     {
       allowNaN: false,
@@ -76,11 +82,5 @@ export class ListUsersByClinicRequestDto
       ),
     },
   )
-  @IsIn([8, 16, 32, 64, 128], {
-    message: getValidationMessage(
-      DtoPrefix.PAGE_SIZE,
-      ValidationType.NOT_VALID,
-    ),
-  })
   pageSize!: number;
 }

@@ -6,6 +6,7 @@ import { CLINICS_PACKAGE_NAME } from '@libs/proto';
 import { join } from 'path';
 import {
   RpcExceptionFilter,
+  createGrpcValidationPipe,
   LoggingInterceptor,
   createWinstonLogger,
   GrpcCorrelationInterceptor,
@@ -26,6 +27,7 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new RpcExceptionFilter());
+  app.useGlobalPipes(createGrpcValidationPipe());
   app.useGlobalInterceptors(
     new GrpcCorrelationInterceptor(),
     new LoggingInterceptor('clinics'),

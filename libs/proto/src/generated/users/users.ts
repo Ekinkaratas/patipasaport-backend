@@ -18,13 +18,7 @@ export enum UserRole {
   UNRECOGNIZED = -1,
 }
 
-/**
- * Liste ve genel yanıtlarda kullanılan YALIN kullanıcı görünümü.
- *
- * ADRES ALANLARI BİLİNÇLİ OLARAK YOK. adres buraya eklenirse klinik personel
- * listesinde herkesin adresi sızar.
- * Adres yalnızca GetMeResponse ve GetUserContactResponse'ta bulunur.
- */
+/** Liste ve genel yanıtlarda kullanılan YALIN kullanıcı görünümü. */
 export interface User {
   userId: string;
   email: string;
@@ -57,11 +51,24 @@ export interface CreateUserRequest {
   phone: string;
 }
 
+export interface DeleteUserRequest {
+  userId: string;
+}
+
+export interface DeleteUserResponse {
+  deleted: boolean;
+}
+
 /** Boş mesaj — kimlik JWT'den(JWT metadata içerisindedir) okunur, istemci kendi id'sini SÖYLEMEZ. */
 export interface GetMeRequest {
 }
 
-/** Kendi verisi olduğu için tam profil: adres alanları dahil. */
+/**
+ * Kendi verisi olduğu için tam profil.
+ *
+ * Adres alanları kaldırıldı (kullanıcı adresi tutulmuyor); numaralar ve
+ * adlar başka bir anlamla geri kullanılmasın diye reserved.
+ */
 export interface GetMeResponse {
   userId: string;
   email: string;
@@ -71,10 +78,6 @@ export interface GetMeResponse {
   /** eğer user bir klinik personeli değilse burası boş string döner */
   clinicId: string;
   isActive: boolean;
-  /** girilmediyse boş string */
-  addressLine: string;
-  city: string;
-  district: string;
   /** ISO-8601 */
   createdAt: string;
   /** ISO-8601 */
@@ -90,9 +93,6 @@ export interface GetMeResponse {
 export interface UpdateMeRequest {
   fullName?: string | undefined;
   phone?: string | undefined;
-  addressLine?: string | undefined;
-  city?: string | undefined;
-  district?: string | undefined;
 }
 
 export interface GetUserRoleRequest {
@@ -155,10 +155,6 @@ export interface GetUserContactResponse {
   fullName: string;
   phone: string;
   email: string;
-  /** eğer user bir klinik personeli değilse burası boş string döner */
-  addressLine: string;
-  city: string;
-  district: string;
 }
 
 export interface UserResponse {
@@ -175,13 +171,24 @@ export const USERS_PACKAGE_NAME = "users";
  */
 
 export interface UsersServiceClient {
-  /** Sadece Auth Service çağırır (Register akışının 2. adımı). */
+  /**
+   * Sadece Auth Service çağırır (Register akışının 1. adımı — email ve
+   * telefon çakışmaları credentials yazılmadan önce burada yakalanır).
+   */
 
   createUser(request: CreateUserRequest): Observable<UserResponse>;
 
   /**
+   * Sadece Auth Service çağırır.
+   * Hesap kapatma / devre dışı bırakma için KULLANILMAZ
+   * o is_active ile yapılır.
+   */
+
+  deleteUser(request: DeleteUserRequest): Observable<DeleteUserResponse>;
+
+  /**
    * Kullanıcının KENDİ profili. Kimlik JWT'den okunur, request boş.
-   * Adres dahil tam veri döner — kendi verisi olduğu için scope gerekmez.
+   * Tam profil döner — kendi verisi olduğu için scope gerekmez.
    */
 
   getMe(request: GetMeRequest): Observable<GetMeResponse>;
@@ -228,13 +235,26 @@ export interface UsersServiceClient {
  */
 
 export interface UsersServiceController {
-  /** Sadece Auth Service çağırır (Register akışının 2. adımı). */
+  /**
+   * Sadece Auth Service çağırır (Register akışının 1. adımı — email ve
+   * telefon çakışmaları credentials yazılmadan önce burada yakalanır).
+   */
 
   createUser(request: CreateUserRequest): Promise<UserResponse> | Observable<UserResponse> | UserResponse;
 
   /**
+   * Sadece Auth Service çağırır.
+   * Hesap kapatma / devre dışı bırakma için KULLANILMAZ
+   * o is_active ile yapılır.
+   */
+
+  deleteUser(
+    request: DeleteUserRequest,
+  ): Promise<DeleteUserResponse> | Observable<DeleteUserResponse> | DeleteUserResponse;
+
+  /**
    * Kullanıcının KENDİ profili. Kimlik JWT'den okunur, request boş.
-   * Adres dahil tam veri döner — kendi verisi olduğu için scope gerekmez.
+   * Tam profil döner — kendi verisi olduğu için scope gerekmez.
    */
 
   getMe(request: GetMeRequest): Promise<GetMeResponse> | Observable<GetMeResponse> | GetMeResponse;
@@ -285,6 +305,7 @@ export function UsersServiceControllerMethods() {
   return function (constructor: Function) {
     const grpcMethods: string[] = [
       "createUser",
+      "deleteUser",
       "getMe",
       "updateMe",
       "getUserRole",

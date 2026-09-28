@@ -6,6 +6,7 @@ import { join } from 'path';
 import { MEDICAL_RECORD_PACKAGE_NAME } from '@libs/proto';
 import {
   RpcExceptionFilter,
+  createGrpcValidationPipe,
   LoggingInterceptor,
   createWinstonLogger,
   GrpcCorrelationInterceptor,
@@ -26,6 +27,7 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new RpcExceptionFilter());
+  app.useGlobalPipes(createGrpcValidationPipe());
   app.useGlobalInterceptors(
     new GrpcCorrelationInterceptor(),
     new LoggingInterceptor('medical-record'),

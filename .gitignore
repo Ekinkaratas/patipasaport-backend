@@ -53,3 +53,6 @@ Thumbs.db
 
 *.pem
 !access_jwt_public.pem
+
+# prisma generate ciktisi
+apps/*/src/generated/prisma

@@ -9,6 +9,7 @@ import {
   GrpcCorrelationInterceptor,
   LoggingInterceptor,
   RpcExceptionFilter,
+  createGrpcValidationPipe,
 } from '@libs/common';
 
 async function bootstrap() {
@@ -26,6 +27,7 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new RpcExceptionFilter());
+  app.useGlobalPipes(createGrpcValidationPipe());
   app.useGlobalInterceptors(
     new GrpcCorrelationInterceptor(),
     new LoggingInterceptor('access'),

@@ -2,12 +2,15 @@ import { access } from '@libs/proto';
 import { Injectable } from '@nestjs/common';
 import { OpaqueTokenRecord, RedisService } from './redis/redis.service';
 import {
+  CONSENT_SCOPES,
+  ConsentScope,
   getCorrelationId,
   rejectRpc,
   ResponseMessages,
   TOKEN_ROLES,
   TokenRole,
 } from '@libs/common';
+import { isUUID } from 'class-validator';
 import { JwtService } from '@nestjs/jwt';
 import { ACCESS_JWT_TTL_SECONDS } from './access.constants';
 import { randomBytes } from 'crypto';
@@ -125,8 +128,8 @@ export class AccessService {
 
   // ------------sadece auth servisi çarabilecek-------------
 
-  // - Amaç: token oluşumu ve redis'e kayıt -
-  async createToken(
+  // - Amaç: Opaque token oluşumu ve redis'e kayıt -
+  async createOpaqueToken(
     request: access.CreateTokenRequest,
   ): Promise<access.CreateTokenResponse> {
     if (request.ttlSeconds < 0) {
@@ -148,8 +151,12 @@ export class AccessService {
       );
     }
 
-    if (!request.userId?.trim()) {
-      rejectRpc(this.logger, ResponseMessages.VALIDATION_ERROR, 'userId boş');
+    if (!isUUID(request.userId, '4')) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.VALIDATION_ERROR,
+        'userId UUID v4 değil',
+      );
     }
 
     if (!TOKEN_ROLES.includes(request.role as TokenRole)) {
@@ -176,19 +183,66 @@ export class AccessService {
         'klinik personeli için clinicId zorunlu',
       );
     }
+    if (hasClinic && !isUUID(request.clinicId, '4')) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.VALIDATION_ERROR,
+        'clinicId UUID v4 değil',
+      );
+    }
 
-    const scopes = request.scopes ?? [];
+    const { scopes, ...req } = request;
+
+    const request_scopes = scopes ?? [];
     if (
-      scopes.some((scope) => typeof scope !== 'string' || !scope.trim()) ||
-      new Set(scopes).size !== scopes.length
+      request_scopes.some(
+        (scope) => !CONSENT_SCOPES.includes(scope as ConsentScope),
+      ) ||
+      new Set(request_scopes).size !== request_scopes.length
     ) {
       rejectRpc(
         this.logger,
         ResponseMessages.VALIDATION_ERROR,
-        'scopes boş veya yinelenen değer içeriyor',
+        'scopes CONSENT_SCOPES dışında veya yinelenen değer içeriyor',
       );
     }
 
-    return this.registerUserToken(request);
+    return this.registerUserToken({
+      ...req,
+      scopes: request_scopes,
+    });
+  }
+
+  // - Amaç: Opaque tokenı redis'den silme -
+  async revokeToken(
+    data: access.RevokeTokenRequest,
+  ): Promise<access.RevokeTokenResponse> {
+    if (!data.opaqueToken || data.opaqueToken.trim() === '') {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.BAD_REQUEST,
+        'deleteOpaqueToken: opaqueToken doğru formatta değil veya boş',
+      );
+    }
+
+    try {
+      const deletedCount = await this.redis.deleteTokenRecord(data.opaqueToken);
+
+      if (deletedCount === false) {
+        this.logger.warn(
+          `deleteOpaqueToken: kayıt bulunamadı, silinecek bir şey yok (opaqueToken=${data.opaqueToken})`,
+        );
+        return { revoked: false };
+      }
+
+      return { revoked: true };
+    } catch (error) {
+      this.logger.error(
+        `deleteOpaqueToken: Redis silme işleminde kritik hata (opaqueToken=${data.opaqueToken})`,
+        error instanceof Error ? error.stack : undefined,
+      );
+
+      throw error;
+    }
   }
 }

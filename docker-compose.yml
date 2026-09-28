@@ -137,6 +137,17 @@ services:
       test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
       <<: *db-healthcheck
 
+  redis-auth:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [backend]
+    command: ["redis-server", "--requirepass", "${AUTH_REDIS_PASSWORD:?AUTH_REDIS_PASSWORD}"]
+    volumes:
+      - redis_auth_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${AUTH_REDIS_PASSWORD}", "ping"]
+      <<: *db-healthcheck
+
   rabbitmq:
     image: rabbitmq:3-management-alpine
     restart: unless-stopped
@@ -202,12 +213,16 @@ services:
       DB_USER: ${AUTH_DB_USER:-auth_user}
       DB_PASSWORD: ${AUTH_DB_PASSWORD}
       DB_NAME: ${AUTH_DB_NAME:-auth_db}
+      REDIS_HOST: redis-auth
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3002"]
       <<: *grpc-healthcheck
     depends_on:
       postgres-auth: { condition: service_healthy }
+      redis-auth:    { condition: service_healthy }
       rabbitmq:      { condition: service_healthy }
 
   clinics:
@@ -342,6 +357,7 @@ volumes:
   pg_medical_data:
   mongo_pets_data:
   redis_access_data:
+  redis_auth_data:
   rabbitmq_data:
   medical_files:
 

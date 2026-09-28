@@ -1,37 +1,28 @@
-import { DtoPrefix, getValidationMessage, ValidationType } from '@libs/common';
+import {
+  DtoPrefix,
+  getValidationMessage,
+  normalizeEmail,
+  normalizeTrMobilePhone,
+  TR_MOBILE_E164_PATTERN,
+  ValidationType,
+} from '@libs/common';
 import { auth } from '@libs/proto';
+import { Transform } from 'class-transformer';
+import { FullName } from '../../shared/full-name.decorator';
 import {
   IsEmail,
   IsIn,
   IsNotEmpty,
-  IsPhoneNumber,
   IsString,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
 
-/**
- * Yapı: harf bloğu + (ayraç + harf bloğu)*
- * Bu kurgu "Ali  Veli" (çift boşluk), "-Ahmet" (baştan ayraç) ve
- * "Mehmet " (sondan ayraç) durumlarını reddeder.
- * Her tekrar mutlaka bir ayraçla başladığı için belirsizlik yoktur,
- * katastrofik geri izleme (ReDoS) riski taşımaz.
- */
-const FULL_NAME_PATTERN =
-  /^[a-zA-ZçğıöşüÇĞİÖŞÜ]+(?:[ '-][a-zA-ZçğıöşüÇĞİÖŞÜ]+)*$/;
-
 const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])/;
 
-/**
- * Kabul edilen yazımlar: 5551234567 / 05551234567 / +905551234567
- * '5' zorunluluğu sabit hatları eler, sadece cep telefonu bırakır.
- *
- * "0555 123 45 67" aradaki boşluklar yüzünden reddedilir — frontend'de normalize edilmeli.
- */
-const PHONE_PATTERN = /^(?:\+90|0)?5\d{9}$/;
-
 export class RegisterRequestDto implements auth.RegisterRequest {
+  @Transform(({ value }) => normalizeEmail(value))
   @IsEmail(
     {},
     {
@@ -41,32 +32,22 @@ export class RegisterRequestDto implements auth.RegisterRequest {
       ),
     },
   )
-  @IsNotEmpty({
-    message: getValidationMessage(DtoPrefix.EMAIL, ValidationType.NOT_EMPTY),
-  })
-  @MaxLength(255, {
+  @MaxLength(254, {
     message: getValidationMessage(
       DtoPrefix.EMAIL,
       ValidationType.MAX_LENGTH,
-      255,
-    ),
-  })
-  email!: string;
-
-  @IsString({
-    message: getValidationMessage(
-      DtoPrefix.PASSWORD,
-      ValidationType.MUST_BE_STRING,
+      254,
     ),
   })
   @IsNotEmpty({
-    message: getValidationMessage(DtoPrefix.PASSWORD, ValidationType.NOT_EMPTY),
+    message: getValidationMessage(DtoPrefix.EMAIL, ValidationType.NOT_EMPTY),
   })
-  @MinLength(8, {
+  email!: string;
+
+  @Matches(PASSWORD_PATTERN, {
     message: getValidationMessage(
       DtoPrefix.PASSWORD,
-      ValidationType.MIN_LENGTH,
-      8,
+      ValidationType.WEAK_PASSWORD,
     ),
   })
   @MaxLength(72, {
@@ -76,45 +57,31 @@ export class RegisterRequestDto implements auth.RegisterRequest {
       72,
     ),
   })
-  @Matches(PASSWORD_PATTERN, {
+  @MinLength(8, {
     message: getValidationMessage(
       DtoPrefix.PASSWORD,
-      ValidationType.WEAK_PASSWORD,
+      ValidationType.MIN_LENGTH,
+      8,
     ),
   })
-  password!: string;
-
   @IsString({
     message: getValidationMessage(
-      DtoPrefix.NAME,
+      DtoPrefix.PASSWORD,
       ValidationType.MUST_BE_STRING,
     ),
   })
-  @MinLength(4, {
-    message: getValidationMessage(DtoPrefix.NAME, ValidationType.MIN_LENGTH, 4),
+  @IsNotEmpty({
+    message: getValidationMessage(DtoPrefix.PASSWORD, ValidationType.NOT_EMPTY),
   })
-  @MaxLength(64, {
-    message: getValidationMessage(
-      DtoPrefix.NAME,
-      ValidationType.MAX_LENGTH,
-      64,
-    ),
-  })
-  @Matches(FULL_NAME_PATTERN, {
-    message: getValidationMessage(
-      DtoPrefix.NAME,
-      ValidationType.WRONG_DATA_FORMAT,
-    ),
-  })
+  password!: string;
+
+  @FullName()
   fullName!: string;
 
-  @IsPhoneNumber('TR', {
-    message: getValidationMessage(
-      DtoPrefix.PHONE,
-      ValidationType.WRONG_DATA_FORMAT,
-    ),
-  })
-  @Matches(PHONE_PATTERN, {
+  // Girdi: 5551234567 / 05551234567 / +905551234567 / "0555 123 45 67"
+  // Çıktı (DB'ye giden): +905551234567
+  @Transform(({ value }) => normalizeTrMobilePhone(value))
+  @Matches(TR_MOBILE_E164_PATTERN, {
     message: getValidationMessage(
       DtoPrefix.PHONE,
       ValidationType.WRONG_DATA_FORMAT,

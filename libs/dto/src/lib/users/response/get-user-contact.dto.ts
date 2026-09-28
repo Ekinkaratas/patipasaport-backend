@@ -5,7 +5,4 @@ export class GetUserContactResponseDto implements users.GetUserContactResponse {
   fullName!: string;
   phone!: string;
   email!: string;
-  addressLine!: string;
-  city!: string;
-  district!: string;
 }

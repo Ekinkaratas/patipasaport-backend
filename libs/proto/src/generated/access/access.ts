@@ -164,7 +164,7 @@ export interface AccessServiceClient {
    * geri verir.
    */
 
-  createToken(request: CreateTokenRequest): Observable<CreateTokenResponse>;
+  createOpaqueToken(request: CreateTokenRequest): Observable<CreateTokenResponse>;
 
   /** SADECE Auth Service çağırır. Logout ve refresh rotasyonunda eski opaque token'ı geçersiz kılar. */
 
@@ -206,7 +206,7 @@ export interface AccessServiceController {
    * geri verir.
    */
 
-  createToken(
+  createOpaqueToken(
     request: CreateTokenRequest,
   ): Promise<CreateTokenResponse> | Observable<CreateTokenResponse> | CreateTokenResponse;
 
@@ -247,7 +247,7 @@ export interface AccessServiceController {
 export function AccessServiceControllerMethods() {
   return function (constructor: Function) {
     const grpcMethods: string[] = [
-      "createToken",
+      "createOpaqueToken",
       "revokeToken",
       "exchangeToken",
       "checkAccess",

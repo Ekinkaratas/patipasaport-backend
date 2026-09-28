@@ -13,7 +13,7 @@ service AccessService {
   // kimliğini buraya emanet eder; opaque token'ı Access üretir ve kendi
   // store'unda tutar. Auth ürettiği token'ı istemciye access_token olarak
   // geri verir.
-  rpc CreateToken (CreateTokenRequest) returns (CreateTokenResponse);
+  rpc CreateOpaqueToken (CreateTokenRequest) returns (CreateTokenResponse);
 
   // SADECE Auth Service çağırır. Logout ve refresh rotasyonunda eski opaque token'ı geçersiz kılar.
   rpc RevokeToken (RevokeTokenRequest) returns (RevokeTokenResponse);
