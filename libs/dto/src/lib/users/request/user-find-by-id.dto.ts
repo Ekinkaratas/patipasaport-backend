@@ -1,8 +1,8 @@
 import { DtoPrefix, getValidationMessage, ValidationType } from '@libs/common';
-import { IsNotEmpty, IsUUID } from 'class-validator';
 import { users } from '@libs/proto';
+import { IsNotEmpty, IsUUID } from 'class-validator';
 
-export class GetUserRoleRequestDto implements users.GetUserRoleRequest {
+export class userFindByIdRequestDto implements users.UserFindByIdRequest {
   @IsUUID('4', {
     message: getValidationMessage(
       DtoPrefix.USER_ID,

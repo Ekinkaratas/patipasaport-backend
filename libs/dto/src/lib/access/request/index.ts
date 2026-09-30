@@ -4,3 +4,4 @@ export * from './get-consent-status.dto';
 export * from './grant-consent.dto';
 export * from './revoke-consent.dto';
 export * from './revoke-token.dto';
+export * from './create-token.dto';

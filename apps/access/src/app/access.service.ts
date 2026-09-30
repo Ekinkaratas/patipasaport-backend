@@ -2,8 +2,6 @@ import { access } from '@libs/proto';
 import { Injectable } from '@nestjs/common';
 import { OpaqueTokenRecord, RedisService } from './redis/redis.service';
 import {
-  CONSENT_SCOPES,
-  ConsentScope,
   getCorrelationId,
   rejectRpc,
   ResponseMessages,
@@ -83,7 +81,6 @@ export class AccessService {
         role: dto.role,
         clinicId: dto.clinicId,
         clientType: dto.clientType,
-        scopes: dto.scopes,
       },
       dto.ttlSeconds === 0 ? undefined : dto.ttlSeconds,
     );
@@ -112,7 +109,6 @@ export class AccessService {
       role: record.role,
       clinicId: record.clinicId,
       clientType: record.clientType,
-      scopes: record.scopes,
     });
 
     return {
@@ -191,25 +187,8 @@ export class AccessService {
       );
     }
 
-    const { scopes, ...req } = request;
-
-    const request_scopes = scopes ?? [];
-    if (
-      request_scopes.some(
-        (scope) => !CONSENT_SCOPES.includes(scope as ConsentScope),
-      ) ||
-      new Set(request_scopes).size !== request_scopes.length
-    ) {
-      rejectRpc(
-        this.logger,
-        ResponseMessages.VALIDATION_ERROR,
-        'scopes CONSENT_SCOPES dışında veya yinelenen değer içeriyor',
-      );
-    }
-
     return this.registerUserToken({
-      ...req,
-      scopes: request_scopes,
+      ...request,
     });
   }
 
@@ -230,7 +209,7 @@ export class AccessService {
 
       if (deletedCount === false) {
         this.logger.warn(
-          `deleteOpaqueToken: kayıt bulunamadı, silinecek bir şey yok (opaqueToken=${data.opaqueToken})`,
+          `deleteOpaqueToken: kayıt bulunamadı, silinecek bir şey yok.`,
         );
         return { revoked: false };
       }
@@ -238,7 +217,7 @@ export class AccessService {
       return { revoked: true };
     } catch (error) {
       this.logger.error(
-        `deleteOpaqueToken: Redis silme işleminde kritik hata (opaqueToken=${data.opaqueToken})`,
+        `deleteOpaqueToken: Redis silme işleminde kritik hata `,
         error instanceof Error ? error.stack : undefined,
       );
 

@@ -2,7 +2,11 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { MEDICAL_RECORD_PACKAGE_NAME } from '@libs/proto';
 import { join } from 'path';
-import { grpcCorrelationClientInterceptor } from '@libs/common';
+import {
+  createGrpcDeadlineInterceptor,
+  GRPC_GATEWAY_TIMEOUT_MS,
+  grpcCorrelationClientInterceptor,
+} from '@libs/common';
 import { ApiMedicalRecordService } from './medical-record.service';
 import { ApiMedicalRecordController } from './medical-record.controller';
 
@@ -15,7 +19,12 @@ import { ApiMedicalRecordController } from './medical-record.controller';
         options: {
           url: process.env.MEDICAL_RECORD_GRPC_URL ?? '0.0.0.0:3004',
           package: MEDICAL_RECORD_PACKAGE_NAME,
-          channelOptions: { interceptors: [grpcCorrelationClientInterceptor] },
+          channelOptions: {
+            interceptors: [
+              grpcCorrelationClientInterceptor,
+              createGrpcDeadlineInterceptor(GRPC_GATEWAY_TIMEOUT_MS),
+            ],
+          },
           protoPath: join(
             __dirname,
             'proto/medical_record/medical_record.proto',

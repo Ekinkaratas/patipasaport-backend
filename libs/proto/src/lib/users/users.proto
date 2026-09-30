@@ -15,7 +15,7 @@ service UsersService {
   // Sadece Auth Service çağırır. 
   // Hesap kapatma / devre dışı bırakma için KULLANILMAZ
   // o is_active ile yapılır.
-  rpc DeleteUser (DeleteUserRequest) returns (DeleteUserResponse);
+  rpc DeleteUser (UserFindByIdRequest) returns (DeleteUserResponse);
 
   // Kullanıcının KENDİ profili. Kimlik JWT'den okunur, request boş.
   // Tam profil döner — kendi verisi olduğu için scope gerekmez.
@@ -25,7 +25,12 @@ service UsersService {
   rpc UpdateMe (UpdateMeRequest) returns (UserResponse);
 
   // Diğer servisler çağırır: "bu kullanıcı kim, hangi rolde?"
-  rpc GetUserRole (GetUserRoleRequest) returns (GetUserRoleResponse);
+  rpc GetUserRole (UserFindByIdRequest) returns (GetUserRoleResponse);
+
+  // Sadece Auth Service çağırır (Login).
+  // Token üretimi için gereken rol/klinik bilgisini ve hesabın aktif olup olmadığını tek çağrıda döner.
+  // Kullanıcı yoksa NOT_FOUND.
+  rpc GetUserAuthInfo (UserFindByIdRequest) returns (GetUserAuthInfoResponse);
 
   // Kliniğin kendi personel listesi.
   rpc ListUsersByClinic (ListUsersByClinicRequest) returns (ListUsersByClinicResponse);
@@ -66,6 +71,11 @@ message User {
   string updated_at = 9;     // ISO-8601
 }
 
+
+message UserFindByIdRequest {
+  string user_id = 1;
+}
+
 // Sadece Auth Service çağırır.
 // Auth Service'in ürettiği id ile birebir aynı olmalı.
 //
@@ -82,11 +92,6 @@ message CreateUserRequest {
 
   reserved 5, 6;
 }
-
-message DeleteUserRequest {
-  string user_id = 1;
-}
-
 
 message DeleteUserResponse {
   bool deleted = 1;
@@ -126,14 +131,18 @@ message UpdateMeRequest {
   reserved "address_line", "city", "district";
 }
 
-message GetUserRoleRequest {
-  string user_id = 1;
-}
-
 message GetUserRoleResponse {
   string user_id = 1;
   UserRole role = 2;
   string clinic_id = 3;      // eğer user bir klinik personeli değilse burası boş string döner
+}
+
+// Yalnızca token üretimi ve giriş kararı için gereken alanlar.
+message GetUserAuthInfoResponse {
+  string user_id = 1;
+  UserRole role = 2;
+  string clinic_id = 3;      // eğer user bir klinik personeli değilse burası boş string döner
+  bool is_active = 4;        // false ise Login reddedilir
 }
 
 message ListUsersByClinicRequest {

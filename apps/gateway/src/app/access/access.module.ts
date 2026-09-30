@@ -2,7 +2,11 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ACCESS_PACKAGE_NAME } from '@libs/proto';
 import { join } from 'path';
-import { grpcCorrelationClientInterceptor } from '@libs/common';
+import {
+  createGrpcDeadlineInterceptor,
+  GRPC_GATEWAY_TIMEOUT_MS,
+  grpcCorrelationClientInterceptor,
+} from '@libs/common';
 import { ApiAccessController } from './access.controller';
 import { ApiAccessService } from './access.service';
 
@@ -15,7 +19,12 @@ import { ApiAccessService } from './access.service';
         options: {
           url: process.env.ACCESS_GRPC_URL ?? '0.0.0.0:3001',
           package: ACCESS_PACKAGE_NAME,
-          channelOptions: { interceptors: [grpcCorrelationClientInterceptor] },
+          channelOptions: {
+            interceptors: [
+              grpcCorrelationClientInterceptor,
+              createGrpcDeadlineInterceptor(GRPC_GATEWAY_TIMEOUT_MS),
+            ],
+          },
           protoPath: join(__dirname, 'proto/access/access.proto'),
         },
       },

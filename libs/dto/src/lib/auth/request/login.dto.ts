@@ -66,7 +66,6 @@ export class LoginRequestDto implements auth.LoginRequest {
   })
   clientType!: auth.ClientType;
 
-  // "Oturumu hatırla". Gönderilmezse false sayılır (refresh token 12 saat).
   @IsOptional()
   @IsBoolean({
     message: getValidationMessage(

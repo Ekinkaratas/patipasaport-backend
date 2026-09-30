@@ -24,6 +24,7 @@ export enum DtoPrefix {
   SCOPES = 'SCOPES',
   EXPIRES_AT = 'EXPIRES_AT',
   REMEMBER_ME = 'REMEMBER_ME',
+  TTL_SECONDS = 'TTL_SECONDS ',
 }
 export enum ValidationType {
   NOT_EMPTY = 'NOT_EMPTY',

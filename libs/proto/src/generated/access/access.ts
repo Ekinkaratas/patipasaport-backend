@@ -46,10 +46,8 @@ export interface CreateTokenRequest {
   role: string;
   /** role PET_OWNER ise boş string */
   clinicId: string;
-  /** token'a bağlanır: ExchangeToken'da */
+  /** token'a bağlanır: ExchangeToken'da gelen client_type ile karşılaştırılır */
   clientType: ClientType;
-  /** gelen client_type ile karşılaştırılır */
-  scopes: string[];
   /** 0 ise Access'in varsayılan TTL'i uygulanır */
   ttlSeconds: number;
 }

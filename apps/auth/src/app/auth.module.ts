@@ -7,7 +7,11 @@ import { RedisModule } from './redis/redis.module';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'path';
 import { ACCESS_PACKAGE_NAME, USERS_PACKAGE_NAME } from '@libs/proto';
-import { grpcCorrelationClientInterceptor } from '@libs/common';
+import {
+  createGrpcDeadlineInterceptor,
+  GRPC_INTERNAL_TIMEOUT_MS,
+  grpcCorrelationClientInterceptor,
+} from '@libs/common';
 
 @Module({
   imports: [
@@ -21,7 +25,12 @@ import { grpcCorrelationClientInterceptor } from '@libs/common';
         options: {
           url: process.env.ACCESS_GRPC_URL ?? '0.0.0.0:3001',
           package: ACCESS_PACKAGE_NAME,
-          channelOptions: { interceptors: [grpcCorrelationClientInterceptor] },
+          channelOptions: {
+            interceptors: [
+              grpcCorrelationClientInterceptor,
+              createGrpcDeadlineInterceptor(GRPC_INTERNAL_TIMEOUT_MS),
+            ],
+          },
           protoPath: join(__dirname, 'proto/access/access.proto'),
         },
       },
@@ -31,7 +40,12 @@ import { grpcCorrelationClientInterceptor } from '@libs/common';
         options: {
           url: process.env.USERS_GRPC_URL ?? '0.0.0.0:3006',
           package: USERS_PACKAGE_NAME,
-          channelOptions: { interceptors: [grpcCorrelationClientInterceptor] },
+          channelOptions: {
+            interceptors: [
+              grpcCorrelationClientInterceptor,
+              createGrpcDeadlineInterceptor(GRPC_INTERNAL_TIMEOUT_MS),
+            ],
+          },
           protoPath: join(__dirname, 'proto/users/users.proto'),
         },
       },

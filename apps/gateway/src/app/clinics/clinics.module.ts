@@ -2,7 +2,11 @@ import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CLINICS_PACKAGE_NAME } from '@libs/proto';
 import { join } from 'path';
-import { grpcCorrelationClientInterceptor } from '@libs/common';
+import {
+  createGrpcDeadlineInterceptor,
+  GRPC_GATEWAY_TIMEOUT_MS,
+  grpcCorrelationClientInterceptor,
+} from '@libs/common';
 import { ApiClinicsService } from './clinics.service';
 import { ApiClinicsController } from './clinics.controller';
 
@@ -15,7 +19,12 @@ import { ApiClinicsController } from './clinics.controller';
         options: {
           url: process.env.CLINICS_GRPC_URL ?? '0.0.0.0:3003',
           package: CLINICS_PACKAGE_NAME,
-          channelOptions: { interceptors: [grpcCorrelationClientInterceptor] },
+          channelOptions: {
+            interceptors: [
+              grpcCorrelationClientInterceptor,
+              createGrpcDeadlineInterceptor(GRPC_GATEWAY_TIMEOUT_MS),
+            ],
+          },
           protoPath: join(__dirname, 'proto/clinics/clinics.proto'),
         },
       },

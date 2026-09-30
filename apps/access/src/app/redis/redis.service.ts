@@ -21,8 +21,6 @@ export interface OpaqueTokenRecord {
   clinicId: string;
   /** Token'a bağlanır: ExchangeToken'da gelen client_type ile karşılaştırılır */
   clientType: access.ClientType;
-  /** Token'ın taban scope'ları (rıza DEĞİL) */
-  scopes: string[];
   /** ISO-8601 */
   issuedAt: string;
   /** ISO-8601 */
@@ -298,8 +296,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       typeof r['role'] === 'string' &&
       typeof r['clinicId'] === 'string' &&
       typeof r['clientType'] === 'number' &&
-      Array.isArray(r['scopes']) &&
-      r['scopes'].every((s) => typeof s === 'string') &&
       typeof r['issuedAt'] === 'string' &&
       typeof r['expiresAt'] === 'string'
     );

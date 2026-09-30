@@ -69,11 +69,20 @@ describe('LoginAttemptService', () => {
   });
   afterEach(() => jest.useRealTimers());
 
+  // Login akışındaki sırayı birebir uygular: önce deneme rezerve edilir,
+  // şifre yanlış çıkınca aynı sıra numarasıyla hata kaydedilir.
   const failTimes = async (n: number, email = EMAIL) => {
     const results: FailureResult[] = [];
-    for (let i = 0; i < n; i++)
-      results.push(await service.recordFailure(email));
+    for (let i = 0; i < n; i++) {
+      const attempt = await service.reserveAttempt(email);
+      results.push(await service.recordFailure(email, attempt));
+    }
     return results[results.length - 1];
+  };
+  const expectTooMany = async (promise: Promise<unknown>) => {
+    const error = (await promise.catch((e: unknown) => e)) as Error;
+    expect(error).toBeInstanceOf(RpcException);
+    expect(error.message).toBe(ResponseMessages.TOO_MANY_REQUESTS);
   };
   const expectLocked = async (email = EMAIL) => {
     const error = await service.assertNotLocked(email).catch((e) => e);
@@ -169,5 +178,89 @@ describe('LoginAttemptService', () => {
   it('farklı email kilitten etkilenmez', async () => {
     await failTimes(5);
     await expectUnlocked('veli@example.com');
+  });
+
+  describe('reserveAttempt', () => {
+    it('sıra numarasını 1den başlayarak döner', async () => {
+      await expect(service.reserveAttempt(EMAIL)).resolves.toBe(1);
+      await expect(service.reserveAttempt(EMAIL)).resolves.toBe(2);
+    });
+
+    it('deneme şifre kontrolünden önce sayılır: sonucu bekleyen 5 denemeden sonra 6. reddedilir', async () => {
+      for (let i = 1; i <= 5; i++) {
+        await expect(service.reserveAttempt(EMAIL)).resolves.toBe(i);
+      }
+      await expectTooMany(service.reserveAttempt(EMAIL));
+    });
+
+    it('eşzamanlı 20 istekten yalnızca 5i sıra numarası alır, kalanı reddedilir', async () => {
+      const results = await Promise.allSettled(
+        Array.from({ length: 20 }, () => service.reserveAttempt(EMAIL)),
+      );
+
+      const granted = results
+        .filter((r) => r.status === 'fulfilled')
+        .map((r) => (r as PromiseFulfilledResult<number>).value)
+        .sort((a, b) => a - b);
+      const rejected = results.filter((r) => r.status === 'rejected');
+
+      expect(granted).toEqual([1, 2, 3, 4, 5]);
+      expect(rejected).toHaveLength(15);
+      for (const r of rejected) {
+        expect((r as PromiseRejectedResult).reason.message).toBe(
+          ResponseMessages.TOO_MANY_REQUESTS,
+        );
+      }
+    });
+
+    it('hesap kilitliyken reddeder ve sayacı artırmaz', async () => {
+      await failTimes(5);
+      for (let i = 0; i < 3; i++) {
+        await expectTooMany(service.reserveAttempt(EMAIL));
+      }
+
+      jest.advanceTimersByTime(5 * MIN);
+      await expect(service.reserveAttempt(EMAIL)).resolves.toBe(1);
+    });
+
+    it('reset rezerve edilmiş denemeleri de siler', async () => {
+      await service.reserveAttempt(EMAIL);
+      await service.reserveAttempt(EMAIL);
+      await service.reset(EMAIL);
+
+      await expect(service.reserveAttempt(EMAIL)).resolves.toBe(1);
+    });
+  });
+
+  describe('recordFailure', () => {
+    it('5 numaralı olmayan deneme kilitlemez ve kalan hakkı sıra numarasından hesaplar', async () => {
+      await expect(service.recordFailure(EMAIL, 3)).resolves.toEqual({
+        locked: false,
+        lockSeconds: 0,
+        remainingAttempts: 2,
+      });
+      await expectUnlocked();
+    });
+
+    it('sonuçlar sırasız gelse de kilidi yalnızca 5 numaralı deneme koyar', async () => {
+      const attempts: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        attempts.push(await service.reserveAttempt(EMAIL));
+      }
+
+      // 5. deneme diğerlerinden önce bitti
+      expect((await service.recordFailure(EMAIL, attempts[4])).locked).toBe(
+        true,
+      );
+      for (const attempt of attempts.slice(0, 4)) {
+        expect((await service.recordFailure(EMAIL, attempt)).locked).toBe(
+          false,
+        );
+      }
+
+      // kademe iki kez artmadı: sonraki kilit hâlâ 15 dk (kademe 2)
+      jest.advanceTimersByTime(5 * MIN);
+      expect((await failTimes(5)).lockSeconds).toBe(900);
+    });
   });
 });

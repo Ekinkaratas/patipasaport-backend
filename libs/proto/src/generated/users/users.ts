@@ -34,6 +34,10 @@ export interface User {
   updatedAt: string;
 }
 
+export interface UserFindByIdRequest {
+  userId: string;
+}
+
 /**
  * Sadece Auth Service çağırır.
  * Auth Service'in ürettiği id ile birebir aynı olmalı.
@@ -49,10 +53,6 @@ export interface CreateUserRequest {
   email: string;
   fullName: string;
   phone: string;
-}
-
-export interface DeleteUserRequest {
-  userId: string;
 }
 
 export interface DeleteUserResponse {
@@ -95,15 +95,21 @@ export interface UpdateMeRequest {
   phone?: string | undefined;
 }
 
-export interface GetUserRoleRequest {
-  userId: string;
-}
-
 export interface GetUserRoleResponse {
   userId: string;
   role: UserRole;
   /** eğer user bir klinik personeli değilse burası boş string döner */
   clinicId: string;
+}
+
+/** Yalnızca token üretimi ve giriş kararı için gereken alanlar. */
+export interface GetUserAuthInfoResponse {
+  userId: string;
+  role: UserRole;
+  /** eğer user bir klinik personeli değilse burası boş string döner */
+  clinicId: string;
+  /** false ise Login reddedilir */
+  isActive: boolean;
 }
 
 export interface ListUsersByClinicRequest {
@@ -184,7 +190,7 @@ export interface UsersServiceClient {
    * o is_active ile yapılır.
    */
 
-  deleteUser(request: DeleteUserRequest): Observable<DeleteUserResponse>;
+  deleteUser(request: UserFindByIdRequest): Observable<DeleteUserResponse>;
 
   /**
    * Kullanıcının KENDİ profili. Kimlik JWT'den okunur, request boş.
@@ -199,7 +205,15 @@ export interface UsersServiceClient {
 
   /** Diğer servisler çağırır: "bu kullanıcı kim, hangi rolde?" */
 
-  getUserRole(request: GetUserRoleRequest): Observable<GetUserRoleResponse>;
+  getUserRole(request: UserFindByIdRequest): Observable<GetUserRoleResponse>;
+
+  /**
+   * Sadece Auth Service çağırır (Login).
+   * Token üretimi için gereken rol/klinik bilgisini ve hesabın aktif olup olmadığını tek çağrıda döner.
+   * Kullanıcı yoksa NOT_FOUND.
+   */
+
+  getUserAuthInfo(request: UserFindByIdRequest): Observable<GetUserAuthInfoResponse>;
 
   /** Kliniğin kendi personel listesi. */
 
@@ -249,7 +263,7 @@ export interface UsersServiceController {
    */
 
   deleteUser(
-    request: DeleteUserRequest,
+    request: UserFindByIdRequest,
   ): Promise<DeleteUserResponse> | Observable<DeleteUserResponse> | DeleteUserResponse;
 
   /**
@@ -266,8 +280,18 @@ export interface UsersServiceController {
   /** Diğer servisler çağırır: "bu kullanıcı kim, hangi rolde?" */
 
   getUserRole(
-    request: GetUserRoleRequest,
+    request: UserFindByIdRequest,
   ): Promise<GetUserRoleResponse> | Observable<GetUserRoleResponse> | GetUserRoleResponse;
+
+  /**
+   * Sadece Auth Service çağırır (Login).
+   * Token üretimi için gereken rol/klinik bilgisini ve hesabın aktif olup olmadığını tek çağrıda döner.
+   * Kullanıcı yoksa NOT_FOUND.
+   */
+
+  getUserAuthInfo(
+    request: UserFindByIdRequest,
+  ): Promise<GetUserAuthInfoResponse> | Observable<GetUserAuthInfoResponse> | GetUserAuthInfoResponse;
 
   /** Kliniğin kendi personel listesi. */
 
@@ -309,6 +333,7 @@ export function UsersServiceControllerMethods() {
       "getMe",
       "updateMe",
       "getUserRole",
+      "getUserAuthInfo",
       "listUsersByClinic",
       "getUserDisplayNames",
       "getUserContact",

@@ -4,12 +4,7 @@ import { ClientGrpc, RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import * as argon from 'argon2';
 import { firstValueFrom, Observable } from 'rxjs';
-import {
-  DtoPrefix,
-  rejectRpc,
-  ResponseMessages,
-  TokenRole,
-} from '@libs/common';
+import { rejectRpc, ResponseMessages, TokenRole } from '@libs/common';
 import { PrismaService } from './prisma/prisma.service';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -17,20 +12,30 @@ import {
 } from './auth.constants';
 import { ClientType, Prisma } from '../generated/prisma/client';
 import { createHash, randomBytes, randomUUID } from 'crypto';
+import {
+  CreateTokenRequestDto,
+  CreateTokenResponseDto,
+  DeleteInCredentialRequestDto,
+  GetUserAuthInfoResponseDto,
+  UserResponseDto,
+} from '@libs/dto';
+import { LoginAttemptService } from './redis/login-attempt.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private accessClient!: access.AccessServiceClient;
   private usersClient!: users.UsersServiceClient;
+  private dummyPasswordHash: string;
 
   constructor(
     @Inject('USERS_SERVICE') private readonly users_client: ClientGrpc,
     @Inject('ACCESS_SERVICE') private readonly access_client: ClientGrpc,
     private readonly prisma: PrismaService,
+    private readonly loginAttempts: LoginAttemptService,
   ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
     this.accessClient =
       this.access_client.getService<access.AccessServiceClient>(
         access.ACCESS_SERVICE_NAME,
@@ -38,9 +43,50 @@ export class AuthService {
     this.usersClient = this.users_client.getService<users.UsersServiceClient>(
       users.USERS_SERVICE_NAME,
     );
+    this.dummyPasswordHash = await argon.hash(randomBytes(32).toString('hex'));
   }
 
   // servis içi içinde kullanılacak yardımcı metotlar
+
+  // --- Amaç: Credential tablosundaki ilgili satırı silmek ---
+  private async deleteInCredential(
+    data: DeleteInCredentialRequestDto,
+  ): Promise<{ deleted: boolean }> {
+    if (!data.userId) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.BAD_REQUEST,
+        'deleteInCredential: userId boş',
+      );
+    }
+
+    try {
+      await this.prisma.credential.delete({
+        where: {
+          userId: data.userId,
+        },
+      });
+
+      return { deleted: true };
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        if (e.code === 'P2025') {
+          this.logger.warn(
+            `deleteInCredential: kayıt bulunamadı, silinecek bir şey yok (userId=${data.userId})`,
+          );
+          return { deleted: false };
+        }
+        if (e.code === 'P2007') {
+          rejectRpc(
+            this.logger,
+            ResponseMessages.BAD_REQUEST,
+            'deleteInCredential: userId uuid formatında değil',
+          );
+        }
+      }
+      throw e;
+    }
+  }
 
   // --- amaç: dinamik rollback sistemi (dış servisler kullanımına uygun ) ---
   private async rollback<T, K extends keyof T>(
@@ -86,7 +132,12 @@ export class AuthService {
     }
   }
 
-  private forwardGrpcError(error: unknown, service: string): never {
+  // --- Amaç: dış servisden gelen hatayı istemciye güvenli şekilde aktarmak ---
+  private forwardGrpcError(
+    error: unknown,
+    context: string,
+    allowed: readonly ResponseMessages[] = [],
+  ): never {
     const { code, details } = (error ?? {}) as {
       code?: unknown;
       details?: unknown;
@@ -94,8 +145,7 @@ export class AuthService {
 
     if (
       typeof details === 'string' &&
-      (Object.values(ResponseMessages).includes(details as ResponseMessages) ||
-        Object.values(DtoPrefix).some((prefix) => details.startsWith(prefix)))
+      allowed.includes(details as ResponseMessages)
     ) {
       throw new RpcException(details);
     }
@@ -104,13 +154,18 @@ export class AuthService {
       rejectRpc(
         this.logger,
         ResponseMessages.SERVICE_UNAVAILABLE,
-        `register: ${service} servisine ulaşılamadı (code=${String(code)})`,
+        `${context}: servise ulaşılamadı (code=${String(code)})`,
       );
     }
 
-    throw error;
+    rejectRpc(
+      this.logger,
+      ResponseMessages.INTERNAL_SERVER_ERROR,
+      `${context}: beklenmeyen yanıt (code=${String(code)}, details=${String(details)})`,
+    );
   }
 
+  // --- Amaç: Client tipini DB için ygun dile çevirmek ---
   private toDbClientType(clientType: auth.ClientType): ClientType {
     switch (clientType) {
       case auth.ClientType.WEB:
@@ -126,7 +181,7 @@ export class AuthService {
     }
   }
 
-  // Yeni bir refresh token üretir ve oturumunu sessions tablosuna yazar.
+  // --- Amaç: Yeni bir refresh token üretir ve oturumunu sessions tablosuna yazar. ---
   private async createRefreshToken(
     userId: string,
     clientType: auth.ClientType,
@@ -160,14 +215,6 @@ export class AuthService {
             `createRefreshToken: userId FK ihlali (userId=${userId})`,
           );
         }
-
-        if (e.code === 'P2002') {
-          rejectRpc(
-            this.logger,
-            ResponseMessages.CONFLICT,
-            `createRefreshToken: bu clientType icin zaten aktif oturum var (userId=${userId}, clientType=${clientType})`,
-          );
-        }
       }
 
       this.logger.error(
@@ -181,6 +228,7 @@ export class AuthService {
     return { refreshToken, expiresAt };
   }
 
+  // --- Amaç: Refresh token ı hashlemek ---
   private static hashRefreshToken(refreshToken: string): string {
     return createHash('sha256').update(refreshToken).digest('hex');
   }
@@ -198,7 +246,9 @@ export class AuthService {
     }
   }
 
-  // servis içi içinde kullanılacaklar
+  //  --------------------------------------------servis içi içinde kullanılacaklar-------------------------------------------------
+
+  // --- Amaç: user kaydı oluşturmak ---
   async register(dto: auth.RegisterRequest): Promise<auth.TokenResponse> {
     this.logger.log(`register çağrılıyor (clientType=${dto.clientType})`);
     // ----Separation of Concerns----
@@ -206,12 +256,12 @@ export class AuthService {
 
     const passwordHash = await argon.hash(password);
 
-    // ---user servisi çağrılıyor---
+    //#region ---user servisi çağrılıyor---
     this.logger.log(
       `user servisine  çağrılıyor (clientType=${dto.clientType})`,
     );
 
-    let user_data: users.UserResponse;
+    let user_data: UserResponseDto;
     const userId = randomUUID();
 
     try {
@@ -225,7 +275,7 @@ export class AuthService {
       );
     } catch (e) {
       const code = (e as { code?: unknown } | null)?.code;
-      if (code !== status.UNAVAILABLE) {
+      if (code !== status.UNAVAILABLE && code !== status.ALREADY_EXISTS) {
         await this.rollback(
           this.usersClient,
           'deleteUser',
@@ -235,7 +285,9 @@ export class AuthService {
           `register: userCreate sırasında hata meydana geldi bundan dolayı rollback çağrıldı: userId = ${userId}`,
         );
       }
-      this.forwardGrpcError(e, 'users');
+      this.forwardGrpcError(e, 'register: users.createUser', [
+        ResponseMessages.EMAIL_ALREADY_EXISTS,
+      ]);
     }
 
     const createdUser = user_data.user;
@@ -257,6 +309,7 @@ export class AuthService {
         `register: users yanıtı geçersiz (role=${String(createdUser?.role)})`,
       );
     }
+    //#endregion
 
     let refresh_token: {
       refreshToken: string;
@@ -312,19 +365,18 @@ export class AuthService {
       throw e;
     }
 
-    // --- access servis çağrılıyor ---
+    //#region ---access servis çağrılıyor---
     this.logger.log(
       `access servisi  çağrılıyor (clientType=${dto.clientType})`,
     );
 
-    let opaque_token: access.CreateTokenResponse;
+    let opaque_token: CreateTokenResponseDto;
 
-    const payload: access.CreateTokenRequest = {
+    const payload: CreateTokenRequestDto = {
       userId: userId,
       role,
       clinicId: createdUser.clinicId,
       clientType: req.clientType,
-      scopes: [],
       ttlSeconds: ACCESS_TOKEN_TTL_SECONDS,
     };
 
@@ -345,8 +397,9 @@ export class AuthService {
         `register: access token alinamadi, users kaydi geri aliniyor (userId=${userId})`,
       );
 
-      this.forwardGrpcError(e, 'access');
+      this.forwardGrpcError(e, 'register: access.createOpaqueToken');
     }
+    //#endregion
 
     // ---response hazırlığı---
     const response: auth.TokenResponse = {
@@ -360,43 +413,135 @@ export class AuthService {
     return response;
   }
 
-  // --- Amaç: Credential tablosundaki ilgili satırı silmek ---
-  async deleteInCredential(
-    data: auth.DeleteInCredentialRequest,
-  ): Promise<auth.DeleteInCredentialResponse> {
-    if (!data.userId) {
+  // --- Amaç: user girişini sağlamak ---
+  async login(req: auth.LoginRequest): Promise<auth.TokenResponse> {
+    this.logger.log('login servisi başlatılıyor');
+
+    // Deneme şifre kontrolü yapılması sağlanır. 5'i aşan istek burada reddedilir.
+    const attempt = await this.loginAttempts.reserveAttempt(req.email);
+
+    this.logger.log('login: client doğrulama işlemi başladı');
+    //#region -- login: client doğrulama işlemi --
+
+    this.logger.log('login: credential veritabanına istek atıldı');
+
+    const auth_db_data = await this.prisma.credential.findUnique({
+      where: {
+        email: req.email,
+      },
+
+      select: {
+        userId: true,
+        passwordHash: true,
+      },
+    });
+
+    const is_verify_password: boolean = await argon.verify(
+      auth_db_data?.passwordHash ?? this.dummyPasswordHash,
+      req.password,
+    );
+
+    if (!auth_db_data || !is_verify_password) {
+      await this.loginAttempts.recordFailure(req.email, attempt);
       rejectRpc(
         this.logger,
-        ResponseMessages.BAD_REQUEST,
-        'deleteInCredential: userId boş',
+        ResponseMessages.PASSWORD_OR_EMAIL_WRONG,
+        'doğrulama başarısız',
       );
     }
 
-    try {
-      await this.prisma.credential.delete({
-        where: {
-          userId: data.userId,
-        },
-      });
+    await this.loginAttempts.reset(req.email);
 
-      return { deleted: true };
+    this.logger.log(
+      `login: client doğrulama işlemi başarılı. (userId: ${auth_db_data.userId})`,
+    );
+    //#endregion
+
+    this.logger.log(
+      'login: user servisi çağrıldı kullanıcı bilgileri alınacak',
+    );
+
+    //#region -- login: users servisi çağrısı --
+    let user_db_data: GetUserAuthInfoResponseDto;
+    try {
+      user_db_data = await firstValueFrom(
+        this.usersClient.getUserAuthInfo({ userId: auth_db_data.userId }),
+      );
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError) {
-        if (e.code === 'P2025') {
-          this.logger.warn(
-            `deleteInCredential: kayıt bulunamadı, silinecek bir şey yok (userId=${data.userId})`,
-          );
-          return { deleted: false };
-        }
-        if (e.code === 'P2007') {
-          rejectRpc(
-            this.logger,
-            ResponseMessages.BAD_REQUEST,
-            'deleteInCredential: userId uuid formatında değil',
-          );
-        }
-      }
+      // NOT_FOUND bilerek listede yok: credential var ama users satırı yoksa
+      // bu bir veri tutarsızlığıdır, istemciye INTERNAL döner.
+      this.forwardGrpcError(e, 'login: users.getUserAuthInfo', [
+        ResponseMessages.ACCOUNT_DISABLED,
+      ]);
+    }
+    this.logger.log('login: user servisi başarıyla tamamlandı');
+    //#endregion
+
+    this.logger.log(
+      'login: opaque token üretimi için access servis çağrılıyor',
+    );
+    //#region -- login: access  servisi çağrısı --
+    const payload: CreateTokenRequestDto = {
+      userId: auth_db_data.userId,
+      role: AuthService.toTokenRole(user_db_data.role),
+      clinicId: user_db_data.clinicId,
+      clientType: req.clientType,
+      ttlSeconds: ACCESS_TOKEN_TTL_SECONDS,
+    };
+
+    let access_response_data: CreateTokenResponseDto;
+    try {
+      access_response_data = await firstValueFrom(
+        this.accessClient.createOpaqueToken(payload),
+      );
+    } catch (e) {
+      this.forwardGrpcError(e, 'login: access.createOpaqueToken');
+    }
+
+    this.logger.log(
+      'login: opaque token üretimi için access servis çağrısı başarıyla tamamlandı',
+    );
+    //#endregion
+
+    this.logger.log('login: refresh token üretimi başladı');
+    //#region -- login: refresh token üretimi ---
+    let refresh_token_data: {
+      refreshToken: string;
+      expiresAt: Date;
+    };
+
+    this.logger.log('refresh_token oluşturuluyor');
+    try {
+      refresh_token_data = await this.createRefreshToken(
+        auth_db_data.userId,
+        req.clientType,
+        refreshTokenTtlSeconds(req.rememberMe),
+      );
+    } catch (e) {
+      this.logger.error(
+        `refresh_token üretimi sırasında hata meydana geldi: (hata mesajı: ${e})`,
+      );
+      await this.rollback(
+        this.accessClient,
+        'revokeToken',
+        { opaqueToken: access_response_data.opaqueToken },
+        'refresh_token üretimi sırasında meydana gelen hatadan dolayı access client revoke metodu çalıştırıldı',
+      );
       throw e;
     }
+
+    this.logger.log('refresh_token başarıyla oluşturuldu');
+    //#endregion
+
+    const response: auth.TokenResponse = {
+      accessToken: access_response_data.opaqueToken,
+      refreshToken: refresh_token_data.refreshToken,
+      tokenType: 'Bearer',
+      expiresIn: access_response_data.expiresIn,
+      userId: auth_db_data.userId,
+    };
+
+    this.logger.log('login: metodu başarıyla tamamlandı');
+    return response;
   }
 }

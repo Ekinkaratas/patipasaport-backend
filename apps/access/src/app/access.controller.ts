@@ -1,13 +1,15 @@
-import { Controller, Logger } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { AccessService } from './access.service';
 import { GrpcMethod, Payload } from '@nestjs/microservices';
 import { access } from '@libs/proto';
-import { ExchangeTokenRequestDto } from '@libs/dto';
+import {
+  CreateTokenRequestDto,
+  ExchangeTokenRequestDto,
+  RevokeTokenRequestDto,
+} from '@libs/dto';
 
 @Controller()
 export class AccessController {
-  private readonly logger = new Logger(AccessController.name);
-
   constructor(private readonly accessService: AccessService) {}
 
   @GrpcMethod('AccessService', 'ExchangeToken')
@@ -19,14 +21,14 @@ export class AccessController {
 
   @GrpcMethod('AccessService', 'CreateOpaqueToken')
   createOpaqueToken(
-    request: access.CreateTokenRequest,
+    @Payload() request: CreateTokenRequestDto,
   ): Promise<access.CreateTokenResponse> {
     return this.accessService.createOpaqueToken(request);
   }
 
   @GrpcMethod('AccessService', 'RevokeToken')
   revokeToken(
-    request: access.RevokeTokenRequest,
+    @Payload() request: RevokeTokenRequestDto,
   ): Promise<access.RevokeTokenResponse> {
     return this.accessService.revokeToken(request);
   }

@@ -24,15 +24,16 @@ export interface FailureResult {
 /**
  * Email bazlı hatalı giriş kilidi. Redis anahtarları:
  *
- *   auth:login-fail:<email>        pencere içindeki hatalı deneme sayacı (TTL 15 dk,
- *                                  ilk hatada başlar, sonraki hatalar uzatmaz)
+ *   auth:login-fail:<email>        pencere içindeki deneme sayacı (TTL 15 dk, ilk
+ *                                  denemede başlar, sonrakiler uzatmaz). Deneme şifre
+ *                                  kontrolünden ÖNCE sayılır; başarılı giriş siler.
  *   auth:login-lock:<email>        varsa hesap kilitli; TTL = kilit süresi
  *   auth:login-lock-level:<email>  bugüne kadarki kilit sayısı (kademe);
  *                                  her hatalı denemede TTL 24 saate yenilenir
  *
  * Login akışında kullanım:
- *   1. assertNotLocked(email)      — şifre kontrolünden ÖNCE
- *   2. şifre yanlışsa recordFailure(email)
+ *   1. const attempt = reserveAttempt(email)  — şifre kontrolünden ÖNCE
+ *   2. şifre yanlışsa recordFailure(email, attempt)
  *   3. giriş başarılıysa reset(email)
  */
 @Injectable()
@@ -54,22 +55,34 @@ export class LoginAttemptService {
     }
   }
 
-  async recordFailure(email: string): Promise<FailureResult> {
-    const levelKey = this.levelKey(email);
-    const count = await this.redis.incrementWithTtl(
+  //  Şifre denenmeden önce çağrılır: denemeyi sayar ve sıra numarasını döner.
+  async reserveAttempt(email: string): Promise<number> {
+    await this.assertNotLocked(email);
+
+    const attempt = await this.redis.incrementWithTtl(
       this.failKey(email),
       FAILURE_WINDOW_SECONDS,
     );
-    // Kademe "24 saat hatasızlık" ile sıfırlanır: her hata süreyi baştan başlatır.
+    if (attempt > MAX_FAILED_ATTEMPTS) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.TOO_MANY_REQUESTS,
+        `deneme sınırı aşıldı (deneme=${attempt})`,
+      );
+    }
+    return attempt;
+  }
+
+  /** `attempt`: aynı istekte reserveAttempt'in döndürdüğü sıra numarası. */
+  async recordFailure(email: string, attempt: number): Promise<FailureResult> {
+    const levelKey = this.levelKey(email);
     await this.redis.expire(levelKey, LOCK_LEVEL_RESET_SECONDS);
 
-    // INCR atomik: eşzamanlı isteklerden yalnızca biri tam 5'i görür, böylece
-    // aynı pencere için kademe iki kez artmaz.
-    if (count !== MAX_FAILED_ATTEMPTS) {
+    if (attempt !== MAX_FAILED_ATTEMPTS) {
       return {
         locked: false,
         lockSeconds: 0,
-        remainingAttempts: Math.max(MAX_FAILED_ATTEMPTS - count, 0),
+        remainingAttempts: Math.max(MAX_FAILED_ATTEMPTS - attempt, 0),
       };
     }
 
@@ -103,8 +116,6 @@ export class LoginAttemptService {
     );
   }
 
-  // Login DTO email'i normalize etmiyor; aynı adresin farklı yazımları
-  // ayrı sayaç açıp kilidi atlatmasın diye anahtar burada normalize edilir.
   private static normalize(email: string): string {
     return email.trim().toLowerCase();
   }

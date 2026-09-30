@@ -94,7 +94,7 @@ export class UsersService {
   }
 
   async deleteUser(
-    dto: users.DeleteUserRequest,
+    dto: users.UserFindByIdRequest,
   ): Promise<users.DeleteUserResponse> {
     if (!dto.userId) {
       rejectRpc(
@@ -130,5 +130,55 @@ export class UsersService {
       }
       throw e;
     }
+  }
+
+  async getUserAuthInfo(
+    req: users.UserFindByIdRequest,
+  ): Promise<users.GetUserAuthInfoResponse> {
+    this.logger.log('getUserAuthInfo servisi çalıştırıldı');
+
+    let user_db_data: Pick<User, 'id' | 'role' | 'clinicId' | 'isActive'>;
+    try {
+      this.logger.log('getUserAuthInfo: user db ye istek atıldı');
+      user_db_data = await this.prisma.user.findUniqueOrThrow({
+        where: {
+          id: req.userId,
+        },
+        select: {
+          id: true,
+          role: true,
+          clinicId: true,
+          isActive: true,
+        },
+      });
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2025'
+      ) {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.NOT_FOUND,
+          `getUserAuthInfo: kullanıcı bulunamadı (userId: ${req.userId})`,
+        );
+      }
+      throw e;
+    }
+
+    if (!user_db_data.isActive) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.ACCOUNT_DISABLED,
+        `getUserAuthInfo: hesap pasif (userId: ${user_db_data.id})`,
+      );
+    }
+
+    this.logger.log('getUserAuthInfo: başarılı şekilde dönüş sağlandı');
+    return {
+      userId: user_db_data.id,
+      role: UsersService.toProtoRole(user_db_data.role),
+      clinicId: user_db_data.clinicId ?? '',
+      isActive: user_db_data.isActive,
+    };
   }
 }

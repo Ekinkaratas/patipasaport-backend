@@ -59,10 +59,11 @@ message CreateTokenRequest {
   string user_id = 1;
   string role = 2;              // VETERINARIAN | PET_OWNER | STAFF
   string clinic_id = 3;         // role PET_OWNER ise boş string
-  ClientType client_type = 4;   // token'a bağlanır: ExchangeToken'da
-                                // gelen client_type ile karşılaştırılır
-  repeated string scopes = 5;   // token'ın taban scope'ları (rıza DEĞİL)
+  ClientType client_type = 4;   // token'a bağlanır: ExchangeToken'da gelen client_type ile karşılaştırılır   
   int32 ttl_seconds = 6;        // 0 ise Access'in varsayılan TTL'i uygulanır
+
+  reserved 5;
+  reserved "scopes";
 }
 
 message CreateTokenResponse {

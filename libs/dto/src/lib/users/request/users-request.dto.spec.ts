@@ -5,7 +5,6 @@ import { firstErrors, msg, UUID_A, UUID_B } from '../../../testing/first-error';
 import { CreateUserRequestDto } from './create-user.dto';
 import { GetUserContactRequestDto } from './get-user-contact.dto';
 import { GetUserDisplayNamesRequesDto } from './get-user-display-names.dto';
-import { GetUserRoleRequestDto } from './get-user-role.dto';
 import { ListUsersByClinicRequestDto } from './list-users-by-clinic.dto';
 import { UpdateUserRequestDto } from './update-me.dto';
 
@@ -112,23 +111,23 @@ describe('CreateUserRequestDto normalizasyon', () => {
   );
 });
 
-describe.each([
-  ['GetUserContactRequestDto', GetUserContactRequestDto],
-  ['GetUserRoleRequestDto', GetUserRoleRequestDto],
-])('%s', (_name, cls) => {
-  it.each([
-    ['geçerli', { userId: UUID_A }, {}],
-    ['yok', {}, { userId: msg(P.USER_ID, V.NOT_EMPTY) }],
-    ['boş', { userId: '' }, { userId: msg(P.USER_ID, V.NOT_EMPTY) }],
-    [
-      'bozuk',
-      { userId: 'abc' },
-      { userId: msg(P.USER_ID, V.WRONG_DATA_FORMAT) },
-    ],
-  ])('userId %s', (_n, plain, expected) => {
-    expect(firstErrors(cls, plain)).toEqual(expected);
-  });
-});
+describe.each([['GetUserContactRequestDto', GetUserContactRequestDto]])(
+  '%s',
+  (_name, cls) => {
+    it.each([
+      ['geçerli', { userId: UUID_A }, {}],
+      ['yok', {}, { userId: msg(P.USER_ID, V.NOT_EMPTY) }],
+      ['boş', { userId: '' }, { userId: msg(P.USER_ID, V.NOT_EMPTY) }],
+      [
+        'bozuk',
+        { userId: 'abc' },
+        { userId: msg(P.USER_ID, V.WRONG_DATA_FORMAT) },
+      ],
+    ])('userId %s', (_n, plain, expected) => {
+      expect(firstErrors(cls, plain)).toEqual(expected);
+    });
+  },
+);
 
 describe('GetUserDisplayNamesRequesDto', () => {
   const check = (userIds: unknown) =>
