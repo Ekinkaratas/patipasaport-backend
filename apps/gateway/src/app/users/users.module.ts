@@ -5,6 +5,7 @@ import { join } from 'path';
 import {
   createGrpcDeadlineInterceptor,
   GRPC_GATEWAY_TIMEOUT_MS,
+  grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
 } from '@libs/common';
 import { ApiUserService } from './users.service';
@@ -22,6 +23,7 @@ import { ApiUserController } from './users.controller';
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,
+              grpcAuthClientInterceptor,
               createGrpcDeadlineInterceptor(GRPC_GATEWAY_TIMEOUT_MS),
             ],
           },

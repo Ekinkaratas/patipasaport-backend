@@ -5,6 +5,7 @@ import { join } from 'path';
 import {
   createGrpcDeadlineInterceptor,
   GRPC_GATEWAY_TIMEOUT_MS,
+  grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
 } from '@libs/common';
 import { ApiMedicalRecordService } from './medical-record.service';
@@ -22,6 +23,7 @@ import { ApiMedicalRecordController } from './medical-record.controller';
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,
+              grpcAuthClientInterceptor,
               createGrpcDeadlineInterceptor(GRPC_GATEWAY_TIMEOUT_MS),
             ],
           },

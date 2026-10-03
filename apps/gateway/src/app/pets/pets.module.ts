@@ -5,6 +5,7 @@ import { join } from 'path';
 import {
   createGrpcDeadlineInterceptor,
   GRPC_GATEWAY_TIMEOUT_MS,
+  grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
 } from '@libs/common';
 import { ApiPetsService } from './pets.service';
@@ -22,6 +23,7 @@ import { ApiPetsController } from './pets.controller';
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,
+              grpcAuthClientInterceptor,
               createGrpcDeadlineInterceptor(GRPC_GATEWAY_TIMEOUT_MS),
             ],
           },

@@ -207,6 +207,8 @@ services:
       dockerfile: Dockerfile
       args: { APP: auth }
     image: patipasaport/auth:${IMAGE_TAG:-latest}
+    secrets:
+      - access_jwt_public
     environment:
       DB_HOST: postgres-auth
       DB_PORT: "5432"
@@ -217,6 +219,7 @@ services:
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3002"]
       <<: *grpc-healthcheck
@@ -232,6 +235,8 @@ services:
       dockerfile: Dockerfile
       args: { APP: clinics }
     image: patipasaport/clinics:${IMAGE_TAG:-latest}
+    secrets:
+      - access_jwt_public
     environment:
       DB_HOST: postgres-clinics
       DB_PORT: "5432"
@@ -239,6 +244,7 @@ services:
       DB_PASSWORD: ${CLINICS_DB_PASSWORD}
       DB_NAME: ${CLINICS_DB_NAME:-clinics_db}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3003"]
       <<: *grpc-healthcheck
@@ -253,6 +259,8 @@ services:
       dockerfile: Dockerfile
       args: { APP: medical_record }
     image: patipasaport/medical-record:${IMAGE_TAG:-latest}
+    secrets:
+      - access_jwt_public
     environment:
       DB_HOST: postgres-medical-record
       DB_PORT: "5432"
@@ -261,6 +269,7 @@ services:
       DB_NAME: ${MEDICAL_DB_NAME:-medical_db}
       RAW_FILES_PATH: /var/medical-files
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     volumes:
       - medical_files:/var/medical-files
     healthcheck:
@@ -277,9 +286,12 @@ services:
       dockerfile: Dockerfile
       args: { APP: pets }
     image: patipasaport/pets:${IMAGE_TAG:-latest}
+    secrets:
+      - access_jwt_public
     environment:
       MONGO_URI: mongodb://${PETS_DB_USER:-pets_user}:${PETS_DB_PASSWORD}@mongo-pets:27017/${PETS_DB_NAME:-pets_db}?authSource=admin
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3005"]
       <<: *grpc-healthcheck
@@ -294,6 +306,8 @@ services:
       dockerfile: Dockerfile
       args: { APP: users }
     image: patipasaport/users:${IMAGE_TAG:-latest}
+    secrets:
+      - access_jwt_public
     environment:
       DB_HOST: postgres-users
       DB_PORT: "5432"
@@ -301,6 +315,7 @@ services:
       DB_PASSWORD: ${USERS_DB_PASSWORD}
       DB_NAME: ${USERS_DB_NAME:-users_db}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3006"]
       <<: *grpc-healthcheck

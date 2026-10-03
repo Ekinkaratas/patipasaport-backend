@@ -2,12 +2,14 @@ import { Controller } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { GrpcMethod, Payload } from '@nestjs/microservices';
 import { users } from '@libs/proto';
+import { Public } from '@libs/common';
 import { CreateUserRequestDto, userFindByIdRequestDto } from '@libs/dto';
 
 @Controller()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Public()
   @GrpcMethod('UsersService', 'CreateUser')
   createUser(
     @Payload() dto: CreateUserRequestDto,
@@ -15,6 +17,7 @@ export class UsersController {
     return this.usersService.createUser(dto);
   }
 
+  @Public()
   @GrpcMethod('UsersService', 'DeleteUser')
   deleteUser(
     @Payload() dto: userFindByIdRequestDto,
@@ -22,6 +25,7 @@ export class UsersController {
     return this.usersService.deleteUser(dto);
   }
 
+  @Public()
   @GrpcMethod('UsersService', 'GetUserAuthInfo')
   getUserAuthInfo(
     @Payload() dto: userFindByIdRequestDto,

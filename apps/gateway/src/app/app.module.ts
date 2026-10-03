@@ -1,4 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { TokenExchangeGuard } from '@libs/common';
 import { AppController } from './app.controller';
 import { ApiAccessModule } from './access/access.module';
 import { ApiAuthModule } from './auth/auth.module';
@@ -18,6 +20,7 @@ import { CorrelationMiddleware } from './middleware/correlation.middleware';
     ApiUsersModule,
   ],
   controllers: [AppController],
+  providers: [{ provide: APP_GUARD, useClass: TokenExchangeGuard }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

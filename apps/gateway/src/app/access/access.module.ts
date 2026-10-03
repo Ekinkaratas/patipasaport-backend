@@ -5,6 +5,7 @@ import { join } from 'path';
 import {
   createGrpcDeadlineInterceptor,
   GRPC_GATEWAY_TIMEOUT_MS,
+  grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
 } from '@libs/common';
 import { ApiAccessController } from './access.controller';
@@ -22,6 +23,7 @@ import { ApiAccessService } from './access.service';
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,
+              grpcAuthClientInterceptor,
               createGrpcDeadlineInterceptor(GRPC_GATEWAY_TIMEOUT_MS),
             ],
           },
@@ -32,5 +34,6 @@ import { ApiAccessService } from './access.service';
   ],
   controllers: [ApiAccessController],
   providers: [ApiAccessService],
+  exports: [ClientsModule],
 })
 export class ApiAccessModule {}

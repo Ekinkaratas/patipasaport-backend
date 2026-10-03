@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { GrpcJwtGuard } from '@libs/common';
 import { AccessController } from './access.controller';
 import { AccessService } from './access.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -37,6 +39,6 @@ import { ACCESS_JWT_TTL_SECONDS } from './access.constants';
     }),
   ],
   controllers: [AccessController],
-  providers: [AccessService],
+  providers: [AccessService, { provide: APP_GUARD, useClass: GrpcJwtGuard }],
 })
 export class AccessModule {}

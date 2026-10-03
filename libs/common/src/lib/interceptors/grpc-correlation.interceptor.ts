@@ -6,9 +6,11 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import {
+  AUTHORIZATION_METADATA_KEY,
   CORRELATION_ID_HEADER,
   CORRELATION_ID_UNKNOWN,
   runWithCorrelationId,
+  setRequestJwt,
 } from '../storage';
 
 @Injectable()
@@ -19,11 +21,19 @@ export class GrpcCorrelationInterceptor implements NestInterceptor {
     const correlationId =
       metadata?.get?.(CORRELATION_ID_HEADER)?.[0]?.toString() ||
       CORRELATION_ID_UNKNOWN;
+    const jwt = GrpcCorrelationInterceptor.extractBearer(
+      metadata?.get?.(AUTHORIZATION_METADATA_KEY)?.[0]?.toString(),
+    );
 
     return new Observable((subscriber) =>
-      runWithCorrelationId(correlationId, () =>
-        next.handle().subscribe(subscriber),
-      ),
+      runWithCorrelationId(correlationId, () => {
+        if (jwt) setRequestJwt(jwt);
+        return next.handle().subscribe(subscriber);
+      }),
     );
+  }
+
+  private static extractBearer(value: string | undefined): string | undefined {
+    return value ? /^Bearer\s+(\S+)\s*$/i.exec(value)?.[1] : undefined;
   }
 }

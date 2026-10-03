@@ -4,6 +4,7 @@
     "outDir": "../../dist/out-tsc",
     "module": "commonjs",
     "moduleResolution": "bundler",
+    "esModuleInterop": true,
     "types": ["jest", "node"]
   },
   "include": [

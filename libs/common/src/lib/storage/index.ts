@@ -7,3 +7,8 @@ export {
   getCorrelationId,
   runWithCorrelationId,
 } from './correlation.storage';
+export {
+  AUTHORIZATION_METADATA_KEY,
+  getRequestJwt,
+  setRequestJwt,
+} from './auth-context.storage';

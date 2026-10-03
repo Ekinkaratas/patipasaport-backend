@@ -30,7 +30,8 @@ export class AuthService {
 
   constructor(
     @Inject('USERS_SERVICE') private readonly users_client: ClientGrpc,
-    @Inject('ACCESS_SERVICE') private readonly access_client: ClientGrpc,
+    @Inject('ACCESS_SERVICE')
+    private readonly access_client: ClientGrpc,
     private readonly prisma: PrismaService,
     private readonly loginAttempts: LoginAttemptService,
   ) {}

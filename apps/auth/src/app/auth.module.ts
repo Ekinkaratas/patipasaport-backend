@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { ConfigModule } from '@nestjs/config';
@@ -10,7 +11,9 @@ import { ACCESS_PACKAGE_NAME, USERS_PACKAGE_NAME } from '@libs/proto';
 import {
   createGrpcDeadlineInterceptor,
   GRPC_INTERNAL_TIMEOUT_MS,
+  grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
+  GrpcJwtGuard,
 } from '@libs/common';
 
 @Module({
@@ -28,6 +31,7 @@ import {
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,
+              grpcAuthClientInterceptor,
               createGrpcDeadlineInterceptor(GRPC_INTERNAL_TIMEOUT_MS),
             ],
           },
@@ -43,6 +47,7 @@ import {
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,
+              grpcAuthClientInterceptor,
               createGrpcDeadlineInterceptor(GRPC_INTERNAL_TIMEOUT_MS),
             ],
           },
@@ -52,6 +57,6 @@ import {
     ]),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, { provide: APP_GUARD, useClass: GrpcJwtGuard }],
 })
 export class AuthModule {}
