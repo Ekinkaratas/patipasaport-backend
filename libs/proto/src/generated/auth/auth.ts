@@ -36,10 +36,12 @@ export interface LoginRequest {
 
 export interface RefreshTokenRequest {
   refreshToken: string;
+  clientType: ClientType;
 }
 
 export interface LogoutRequest {
   refreshToken: string;
+  opaqueToken?: string | undefined;
 }
 
 export interface LogoutResponse {

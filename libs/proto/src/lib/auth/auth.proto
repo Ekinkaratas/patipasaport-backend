@@ -34,10 +34,12 @@ message LoginRequest {
 
 message RefreshTokenRequest {
   string refresh_token = 1;
+  ClientType client_type = 2;
 }
 
 message LogoutRequest {
   string refresh_token = 1;
+  optional string opaque_token = 2;
 }
 
 message LogoutResponse {

@@ -8,6 +8,7 @@ import { rejectRpc, ResponseMessages, TokenRole } from '@libs/common';
 import { PrismaService } from './prisma/prisma.service';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
+  REFRESH_REUSE_TOLERANCE_SECONDS,
   refreshTokenTtlSeconds,
 } from './auth.constants';
 import { ClientType, Prisma } from '../generated/prisma/client';
@@ -20,6 +21,13 @@ import {
   UserResponseDto,
 } from '@libs/dto';
 import { LoginAttemptService } from './redis/login-attempt.service';
+
+interface SessionSpec {
+  userId: string;
+  clientType: auth.ClientType;
+  rememberMe: boolean;
+  familyId: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -47,7 +55,7 @@ export class AuthService {
     this.dummyPasswordHash = await argon.hash(randomBytes(32).toString('hex'));
   }
 
-  // servis içi içinde kullanılacak yardımcı metotlar
+  //#region  -------------------------------------------servis içi içinde kullanılacak yardımcı metotlar------------------------------------------------------------
 
   // --- Amaç: Credential tablosundaki ilgili satırı silmek ---
   private async deleteInCredential(
@@ -184,49 +192,142 @@ export class AuthService {
 
   // --- Amaç: Yeni bir refresh token üretir ve oturumunu sessions tablosuna yazar. ---
   private async createRefreshToken(
-    userId: string,
-    clientType: auth.ClientType,
-    ttlSeconds: number,
+    spec: SessionSpec,
     tx: Prisma.TransactionClient = this.prisma,
-  ): Promise<{ refreshToken: string; expiresAt: Date }> {
-    if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
-      throw new Error(
-        `createRefreshToken: geçersiz ttlSeconds (${ttlSeconds})`,
-      );
-    }
-
+  ) {
     const refreshToken = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+    const expiresAt = AuthService.refreshExpiresAt(spec.rememberMe);
+    await tx.session.create({
+      data: {
+        userId: spec.userId,
+        familyId: spec.familyId,
+        refreshTokenHash: AuthService.hashRefreshToken(refreshToken),
+        clientType: this.toDbClientType(spec.clientType),
+        rememberMe: spec.rememberMe,
+        expiresAt,
+      },
+    });
+    return { refreshToken, expiresAt };
+  }
 
-    try {
-      await tx.session.create({
-        data: {
-          userId,
-          refreshTokenHash: AuthService.hashRefreshToken(refreshToken),
-          clientType: this.toDbClientType(clientType),
-          expiresAt,
+  // --- Amaç: refresh token bitiş zamanını "oturumu hatırla" seçimine göre hesaplamak ---
+  private static refreshExpiresAt(rememberMe: boolean): Date {
+    return new Date(Date.now() + refreshTokenTtlSeconds(rememberMe) * 1000);
+  }
+
+  // --- Amaç: eskiyi atomik iptal + yenisini yaz, tek transaction. ---
+  private async rotateRefreshToken(oldHash: string, spec: SessionSpec) {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.session.updateMany({
+        where: {
+          refreshTokenHash: oldHash,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
         },
+        data: { revokedAt: new Date() },
       });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError) {
-        if (e.code === 'P2003') {
-          rejectRpc(
-            this.logger,
-            ResponseMessages.INTERNAL_SERVER_ERROR,
-            `createRefreshToken: userId FK ihlali (userId=${userId})`,
-          );
-        }
+      if (count !== 1) {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.UNAUTH,
+          'refreshToken: iptal edilmiş, süresi dolmuş ya da yarışı kaybetti',
+        );
       }
 
-      this.logger.error(
-        `createRefreshToken: Oturum kaydedilirken veritabanı hatası oluştu (userId=${userId})`,
-        e instanceof Error ? e.stack : undefined,
-      );
+      await tx.session.deleteMany({
+        where: {
+          familyId: spec.familyId,
+          refreshTokenHash: { not: oldHash },
+          revokedAt: { not: null },
+        },
+      });
 
+      return this.createRefreshToken(spec, tx);
+    });
+  }
+
+  // --- Amaç: tokenlar için gerekli bilgileri almak için users servisine çağrı yapar. ---
+  private async GetUserAuthInfoForAuth(userId: string, service_name: string) {
+    try {
+      return await firstValueFrom(
+        this.usersClient.getUserAuthInfo({ userId: userId }),
+      );
+    } catch (e) {
+      this.forwardGrpcError(e, `${service_name}: users.getUserAuthInfo`, [
+        ResponseMessages.ACCOUNT_DISABLED,
+      ]);
+    }
+  }
+
+  // --- Amaç: token üretimini ve refresh token db kaydını yapar (replacesHash varsa rotation). ---
+  private async createTokens(
+    payload: CreateTokenRequestDto,
+    service_name: string,
+    session: { rememberMe: boolean; familyId?: string; replacesHash?: string },
+  ): Promise<{
+    access_response_data: CreateTokenResponseDto;
+    refresh_token_data: {
+      refreshToken: string;
+      expiresAt: Date;
+    };
+  }> {
+    this.logger.log(
+      `${service_name}: opaque token üretimi için access servis çağrılıyor`,
+    );
+    //#region -- access  servisi çağrısı --
+
+    let access_response_data: CreateTokenResponseDto;
+    try {
+      access_response_data = await firstValueFrom(
+        this.accessClient.createOpaqueToken(payload),
+      );
+    } catch (e) {
+      this.forwardGrpcError(e, `${service_name}: access.createOpaqueToken`);
+    }
+
+    this.logger.log(
+      `${service_name}: opaque token üretimi için access servis çağrısı başarıyla tamamlandı`,
+    );
+    //#endregion
+
+    this.logger.log(`${service_name}: refresh token üretimi başladı`);
+
+    //#region -- refresh token üretimi ---
+    let refresh_token_data: {
+      refreshToken: string;
+      expiresAt: Date;
+    };
+
+    const spec: SessionSpec = {
+      userId: payload.userId,
+      clientType: payload.clientType,
+      rememberMe: session.rememberMe,
+      familyId: session.familyId ?? randomUUID(),
+    };
+
+    try {
+      refresh_token_data = session.replacesHash
+        ? await this.rotateRefreshToken(session.replacesHash, spec)
+        : await this.createRefreshToken(spec);
+    } catch (e) {
+      this.logger.error(
+        `refresh_token üretimi sırasında hata meydana geldi: (hata mesajı: ${e})`,
+      );
+      await this.rollback(
+        this.accessClient,
+        'revokeToken',
+        { opaqueToken: access_response_data.opaqueToken },
+        'refresh_token üretimi sırasında meydana gelen hatadan dolayı access client revoke metodu çalıştırıldı',
+      );
       throw e;
     }
 
-    return { refreshToken, expiresAt };
+    this.logger.log('refresh_token başarıyla oluşturuldu');
+    return {
+      access_response_data,
+      refresh_token_data,
+    };
+    //#endregion
   }
 
   // --- Amaç: Refresh token ı hashlemek ---
@@ -246,8 +347,9 @@ export class AuthService {
         return undefined;
     }
   }
+  //#endregion
 
-  //  --------------------------------------------servis içi içinde kullanılacaklar-------------------------------------------------
+  //#region  --------------------------------------------servis içi içinde kullanılacaklar-------------------------------------------------
 
   // --- Amaç: user kaydı oluşturmak ---
   async register(dto: auth.RegisterRequest): Promise<auth.TokenResponse> {
@@ -337,9 +439,12 @@ export class AuthService {
 
         // --- 2. auth servis de refresh_token oluşturuluyor ---
         refresh_token = await this.createRefreshToken(
-          userId,
-          req.clientType,
-          refreshTokenTtlSeconds(false),
+          {
+            userId,
+            clientType: req.clientType,
+            rememberMe: false,
+            familyId: randomUUID(),
+          },
           tx,
         );
 
@@ -463,25 +568,13 @@ export class AuthService {
     );
 
     //#region -- login: users servisi çağrısı --
-    let user_db_data: GetUserAuthInfoResponseDto;
-    try {
-      user_db_data = await firstValueFrom(
-        this.usersClient.getUserAuthInfo({ userId: auth_db_data.userId }),
-      );
-    } catch (e) {
-      // NOT_FOUND bilerek listede yok: credential var ama users satırı yoksa
-      // bu bir veri tutarsızlığıdır, istemciye INTERNAL döner.
-      this.forwardGrpcError(e, 'login: users.getUserAuthInfo', [
-        ResponseMessages.ACCOUNT_DISABLED,
-      ]);
-    }
+    const user_db_data: GetUserAuthInfoResponseDto =
+      await this.GetUserAuthInfoForAuth(auth_db_data.userId, 'login');
+
     this.logger.log('login: user servisi başarıyla tamamlandı');
     //#endregion
 
-    this.logger.log(
-      'login: opaque token üretimi için access servis çağrılıyor',
-    );
-    //#region -- login: access  servisi çağrısı --
+    //#region -- login: tokens metot çağrısı --
     const payload: CreateTokenRequestDto = {
       userId: auth_db_data.userId,
       role: AuthService.toTokenRole(user_db_data.role),
@@ -490,48 +583,11 @@ export class AuthService {
       ttlSeconds: ACCESS_TOKEN_TTL_SECONDS,
     };
 
-    let access_response_data: CreateTokenResponseDto;
-    try {
-      access_response_data = await firstValueFrom(
-        this.accessClient.createOpaqueToken(payload),
-      );
-    } catch (e) {
-      this.forwardGrpcError(e, 'login: access.createOpaqueToken');
-    }
+    const { access_response_data, refresh_token_data } =
+      await this.createTokens(payload, 'login', {
+        rememberMe: req.rememberMe,
+      });
 
-    this.logger.log(
-      'login: opaque token üretimi için access servis çağrısı başarıyla tamamlandı',
-    );
-    //#endregion
-
-    this.logger.log('login: refresh token üretimi başladı');
-    //#region -- login: refresh token üretimi ---
-    let refresh_token_data: {
-      refreshToken: string;
-      expiresAt: Date;
-    };
-
-    this.logger.log('refresh_token oluşturuluyor');
-    try {
-      refresh_token_data = await this.createRefreshToken(
-        auth_db_data.userId,
-        req.clientType,
-        refreshTokenTtlSeconds(req.rememberMe),
-      );
-    } catch (e) {
-      this.logger.error(
-        `refresh_token üretimi sırasında hata meydana geldi: (hata mesajı: ${e})`,
-      );
-      await this.rollback(
-        this.accessClient,
-        'revokeToken',
-        { opaqueToken: access_response_data.opaqueToken },
-        'refresh_token üretimi sırasında meydana gelen hatadan dolayı access client revoke metodu çalıştırıldı',
-      );
-      throw e;
-    }
-
-    this.logger.log('refresh_token başarıyla oluşturuldu');
     //#endregion
 
     const response: auth.TokenResponse = {
@@ -545,4 +601,194 @@ export class AuthService {
     this.logger.log('login: metodu başarıyla tamamlandı');
     return response;
   }
+
+  // --- Amaç: token verilerini güncellemek ---
+  async refreshToken(
+    req: auth.RefreshTokenRequest,
+  ): Promise<auth.TokenResponse> {
+    this.logger.log('istek refreshToken metoduna geldi');
+
+    const refreshToken_hash = AuthService.hashRefreshToken(req.refreshToken);
+
+    this.logger.log('refreshToken: session schemasında arama başlatıldı');
+
+    //#region -- refreshToken: session schemasında araması ve kontroller --
+    const session = await this.prisma.session.findUnique({
+      where: {
+        refreshTokenHash: refreshToken_hash,
+      },
+      select: {
+        userId: true,
+        familyId: true,
+        clientType: true,
+        rememberMe: true,
+        expiresAt: true,
+        revokedAt: true,
+      },
+    });
+
+    // Geçersiz token'ın her nedeni istemciye aynı 401 ile döner; ayrım yalnızca logda.
+    if (!session) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.UNAUTH,
+        'refreshToken: oturum bulunamadı',
+      );
+    }
+
+    if (session.revokedAt) {
+      const isRace =
+        Date.now() - session.revokedAt.getTime() <=
+        REFRESH_REUSE_TOLERANCE_SECONDS * 1000;
+
+      if (!isRace) {
+        await this.prisma.session.updateMany({
+          where: { familyId: session.familyId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+
+      rejectRpc(
+        this.logger,
+        ResponseMessages.UNAUTH,
+        isRace
+          ? 'refreshToken: eşzamanlı yenileme (tolerans içinde)'
+          : `refreshToken: iptal edilmiş token tekrar kullanıldı, aile iptal edildi (familyId=${session.familyId})`,
+        isRace ? undefined : 'warn',
+      );
+    }
+
+    if (session.expiresAt <= new Date()) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.UNAUTH,
+        'refreshToken: Oturum süresi dolmuş',
+      );
+    }
+
+    if (session.clientType !== this.toDbClientType(req.clientType)) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.UNAUTH,
+        `refreshToken: clientType uyuşmazlığı (oturum=${session.clientType})`,
+        'warn',
+      );
+    }
+    //#endregion
+
+    this.logger.log(
+      'refreshToken: user servisi çağrıldı kullanıcı bilgileri alınacak',
+    );
+
+    //#region -- refreshToken: users servisi çağrısı --
+    const user_db_data: GetUserAuthInfoResponseDto =
+      await this.GetUserAuthInfoForAuth(session.userId, 'refreshToken');
+
+    this.logger.log('refreshToken: user servisi başarıyla tamamlandı');
+    //#endregion
+
+    //#region -- refreshToken: CreateTokens metot çağrısı (rotation) --
+
+    // clientType yukarıda oturumdakiyle eşleştirildi; yeni token'lar oturumun türüne bağlanır.
+    const payload: CreateTokenRequestDto = {
+      userId: session.userId,
+      role: AuthService.toTokenRole(user_db_data.role),
+      clinicId: user_db_data.clinicId,
+      clientType: req.clientType,
+      ttlSeconds: ACCESS_TOKEN_TTL_SECONDS,
+    };
+
+    const { access_response_data, refresh_token_data } =
+      await this.createTokens(payload, 'refreshToken', {
+        rememberMe: session.rememberMe,
+        familyId: session.familyId,
+        replacesHash: refreshToken_hash,
+      });
+    //#endregion
+
+    const response: auth.TokenResponse = {
+      accessToken: access_response_data.opaqueToken,
+      refreshToken: refresh_token_data.refreshToken,
+      tokenType: 'Bearer',
+      expiresIn: access_response_data.expiresIn,
+      userId: session.userId,
+    };
+
+    this.logger.log('refreshToken: metodu başarıyla tamamlandı');
+    return response;
+  }
+
+  async logout(request: auth.LogoutRequest): Promise<auth.LogoutResponse> {
+    this.logger.log('istek logout metoduna geldi');
+
+    const refreshToken_hash = AuthService.hashRefreshToken(
+      request.refreshToken,
+    );
+
+    //#region -- logout: session schemasında araması ve familyId seçilmesi --
+
+    this.logger.log('logout: session schemasında istek atıldı');
+
+    const session = await this.prisma.$transaction(async (tx) => {
+      const db_familyId_res = await tx.session.findUnique({
+        where: {
+          refreshTokenHash: refreshToken_hash,
+        },
+        select: {
+          familyId: true,
+        },
+      });
+
+      if (!db_familyId_res) {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.UNAUTH,
+          'logout: oturum bulunamadı',
+        );
+      }
+
+      const db_deleteMany_res = await tx.session.deleteMany({
+        where: {
+          familyId: db_familyId_res.familyId,
+        },
+      });
+
+      return { count: db_deleteMany_res.count };
+    });
+
+    if (session.count === 0) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.UNAUTH,
+        'Silinecek oturum bulunamadı',
+      );
+    } else {
+      this.logger.log(
+        `logout: cihaz oturumu kapatıldı (silinen session satırı: ${session.count})`,
+      );
+    }
+
+    //#endregion
+
+    //#region --- access servisine itek atılıyor ---
+
+    if (request.opaqueToken) {
+      await this.rollback(
+        this.accessClient,
+        'revokeToken',
+        {
+          opaqueToken: request.opaqueToken,
+        },
+        `logout: oturum kapatıldı ama access token iptal edilemedi; süresi dolana kadar (en fazla 15 dk) geçerli kalacak`,
+      );
+    }
+    //#endregion
+
+    this.logger.log('logout: başarıyla tamamlandı');
+    return {
+      success: true,
+    };
+  }
+
+  //#endregion
 }

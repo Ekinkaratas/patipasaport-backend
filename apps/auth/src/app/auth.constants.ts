@@ -4,6 +4,7 @@ export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 /** Refresh token ömrü: "Oturumu hatırla" işaretli değilse 12 saat, işaretliyse 30 gün. */
 export const REFRESH_TOKEN_TTL_SECONDS = 12 * 60 * 60;
 export const REMEMBER_ME_REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+export const REFRESH_REUSE_TOLERANCE_SECONDS = 10;
 
 /** proto3'te gönderilmeyen bool undefined gelir; yalnızca açıkça true "hatırla" demektir. */
 export function refreshTokenTtlSeconds(

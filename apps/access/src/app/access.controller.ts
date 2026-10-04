@@ -14,7 +14,7 @@ export class AccessController {
   constructor(private readonly accessService: AccessService) {}
 
   @Public()
-  @GrpcMethod('AccessService', 'ExchangeToken')
+  @GrpcMethod(access.ACCESS_SERVICE_NAME, 'ExchangeToken')
   exchangeToken(
     @Payload() request: ExchangeTokenRequestDto,
   ): Promise<access.ExchangeTokenResponse> {
@@ -22,7 +22,7 @@ export class AccessController {
   }
 
   @Public()
-  @GrpcMethod('AccessService', 'CreateOpaqueToken')
+  @GrpcMethod(access.ACCESS_SERVICE_NAME, 'CreateOpaqueToken')
   createOpaqueToken(
     @Payload() request: CreateTokenRequestDto,
   ): Promise<access.CreateTokenResponse> {
@@ -30,7 +30,7 @@ export class AccessController {
   }
 
   @Public()
-  @GrpcMethod('AccessService', 'RevokeToken')
+  @GrpcMethod(access.ACCESS_SERVICE_NAME, 'RevokeToken')
   revokeToken(
     @Payload() request: RevokeTokenRequestDto,
   ): Promise<access.RevokeTokenResponse> {

@@ -23,7 +23,7 @@ export class AccessService {
     private readonly accessJwt: JwtService,
   ) {}
 
-  // ------------sadece access service methodları çağırıcak-------------
+  //#region ------------sadece access service methodları çağırıcak-------------
 
   // - Amaç: opaque token'ı üretmek -
   private generateOpaqueToken(): string {
@@ -92,9 +92,9 @@ export class AccessService {
       expiresAt: created.expiresAt,
     };
   }
+  //#endregion
 
   // ------------sadece gateway çağırıcak-------------
-
   //- Amaç: opaque token'ı kısa ömürlü(1 dk) JWT ye çeviricek -
   async exchangeToken(
     request: access.ExchangeTokenRequest,
