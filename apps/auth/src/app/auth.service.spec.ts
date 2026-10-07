@@ -342,7 +342,7 @@ describe('AuthService', () => {
       usersClient.createUser.mockReturnValue(
         of(
           usersResponse({
-            role: users.UserRole.VETERINARIAN,
+            role: users.UserRole.CLINIC,
             clinicId: CLINIC_ID,
           }),
         ),
@@ -351,7 +351,7 @@ describe('AuthService', () => {
       await service.register(dto);
 
       const [payload] = accessClient.createOpaqueToken.mock.calls[0];
-      expect(payload.role).toBe('VETERINARIAN');
+      expect(payload.role).toBe('CLINIC');
       expect(payload.clinicId).toBe(CLINIC_ID);
     });
 
@@ -636,7 +636,7 @@ describe('AuthService', () => {
       usersClient.getUserAuthInfo.mockReturnValue(
         of(
           authInfoResponse({
-            role: users.UserRole.VETERINARIAN,
+            role: users.UserRole.CLINIC,
             clinicId: CLINIC_ID,
           }),
         ),
@@ -646,7 +646,7 @@ describe('AuthService', () => {
 
       expect(accessClient.createOpaqueToken).toHaveBeenCalledWith({
         userId: CREDENTIAL_USER_ID,
-        role: 'VETERINARIAN',
+        role: 'CLINIC',
         clinicId: CLINIC_ID,
         clientType: auth.ClientType.WEB,
         ttlSeconds: ACCESS_TOKEN_TTL_SECONDS,
@@ -917,7 +917,10 @@ describe('AuthService', () => {
     it('users bilgisi oturumdaki userId ile taze alinir', async () => {
       usersClient.getUserAuthInfo.mockReturnValue(
         of(
-          authInfoResponse({ role: users.UserRole.STAFF, clinicId: CLINIC_ID }),
+          authInfoResponse({
+            role: users.UserRole.CLINIC,
+            clinicId: CLINIC_ID,
+          }),
         ),
       );
 
@@ -928,7 +931,7 @@ describe('AuthService', () => {
       });
       expect(accessClient.createOpaqueToken).toHaveBeenCalledWith({
         userId: CREDENTIAL_USER_ID,
-        role: 'STAFF',
+        role: 'CLINIC',
         clinicId: CLINIC_ID,
         clientType: auth.ClientType.WEB,
         ttlSeconds: ACCESS_TOKEN_TTL_SECONDS,

@@ -12,6 +12,7 @@ import {
   IsArray,
   IsDateString,
   IsIn,
+  IsRFC3339,
   IsUUID,
 } from 'class-validator';
 
@@ -60,6 +61,12 @@ export class GrantConsentRequestDto implements access.GrantConsentRequest {
   })
   scopes!: string[];
 
+  @IsRFC3339({
+    message: getValidationMessage(
+      DtoPrefix.EXPIRES_AT,
+      ValidationType.MUST_BE_DATE,
+    ),
+  })
   @IsDateString(
     { strict: true },
     {

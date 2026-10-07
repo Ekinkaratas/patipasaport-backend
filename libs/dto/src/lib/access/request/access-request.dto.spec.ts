@@ -56,9 +56,30 @@ describe('GrantConsentRequestDto', () => {
       'expiresAt',
       msg(P.EXPIRES_AT, V.MUST_BE_DATE),
     ],
+    [
+      'expiresAt saat dilimi yok',
+      { expiresAt: '2027-01-01T00:00:00' },
+      'expiresAt',
+      msg(P.EXPIRES_AT, V.MUST_BE_DATE),
+    ],
+    [
+      'expiresAt yalnızca tarih',
+      { expiresAt: '2027-01-01' },
+      'expiresAt',
+      msg(P.EXPIRES_AT, V.MUST_BE_DATE),
+    ],
+    [
+      'expiresAt takvimde olmayan gün',
+      { expiresAt: '2027-02-30T00:00:00Z' },
+      'expiresAt',
+      msg(P.EXPIRES_AT, V.MUST_BE_DATE),
+    ],
   ])('%s', (_n, override, field, expected) => {
     expect(check(override)).toEqual({ [field]: expected });
   });
+
+  it('saat dilimi ofsetli expiresAt kabul edilir', () =>
+    expect(check({ expiresAt: '2027-01-01T03:00:00+03:00' })).toEqual({}));
 });
 
 describe('CheckAccessRequestDto', () => {

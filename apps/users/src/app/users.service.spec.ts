@@ -47,7 +47,11 @@ const uniqueViolationMeta = (index: string) => ({
 describe('UsersService', () => {
   let service: UsersService;
   let prisma: {
-    user: { create: jest.Mock; delete: jest.Mock };
+    user: {
+      create: jest.Mock;
+      delete: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
+    };
   };
 
   const createRequest: users.CreateUserRequest = {
@@ -59,7 +63,11 @@ describe('UsersService', () => {
 
   beforeEach(async () => {
     prisma = {
-      user: { create: jest.fn(), delete: jest.fn() },
+      user: {
+        create: jest.fn(),
+        delete: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
+      },
     };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -69,6 +77,7 @@ describe('UsersService', () => {
     service = moduleRef.get(UsersService);
   });
 
+  // ---Amaç: kullanıcı satırının oluşturulup proto User'a eksiksiz çevrildiğini doğrulamak ---
   describe('createUser - basarili akis', () => {
     it('proto User sozlesmesindeki tum alanlari doldurur', async () => {
       prisma.user.create.mockResolvedValue(dbUser());
@@ -113,21 +122,20 @@ describe('UsersService', () => {
       expect(data).not.toHaveProperty('clinicId');
     });
 
-    it('clinicId dolu olan personel kaydini oldugu gibi doner', async () => {
+    it('clinicId dolu olan klinik hesabi kaydini oldugu gibi doner', async () => {
       prisma.user.create.mockResolvedValue(
-        dbUser({ role: UserRole.VETERINARIAN, clinicId: CLINIC_ID }),
+        dbUser({ role: UserRole.CLINIC, clinicId: CLINIC_ID }),
       );
 
       const response = await service.createUser(createRequest);
 
-      expect(response.user?.role).toBe(users.UserRole.VETERINARIAN);
+      expect(response.user?.role).toBe(users.UserRole.CLINIC);
       expect(response.user?.clinicId).toBe(CLINIC_ID);
     });
 
     it.each([
       [UserRole.PET_OWNER, users.UserRole.PET_OWNER],
-      [UserRole.VETERINARIAN, users.UserRole.VETERINARIAN],
-      [UserRole.STAFF, users.UserRole.STAFF],
+      [UserRole.CLINIC, users.UserRole.CLINIC],
     ])('%s rolunu proto karsiligina cevirir', async (dbRole, protoRole) => {
       prisma.user.create.mockResolvedValue(dbUser({ role: dbRole }));
 
@@ -146,6 +154,7 @@ describe('UsersService', () => {
     });
   });
 
+  // ---Amaç: unique ihlallerinin constraint adına göre doğru hata koduna eşlendiğini doğrulamak ---
   describe('createUser - unique ihlalleri', () => {
     it('email cakismasinda EMAIL_ALREADY_EXISTS atar', async () => {
       prisma.user.create.mockRejectedValue(
@@ -206,6 +215,7 @@ describe('UsersService', () => {
     });
   });
 
+  // ---Amaç: tanınmayan hataların yutulmadan yukarı taşındığını doğrulamak ---
   describe('createUser - diger hatalar', () => {
     it('P2002 disindaki Prisma hatasini oldugu gibi yukari tasir', async () => {
       const original = prismaError('P2021');
@@ -222,6 +232,7 @@ describe('UsersService', () => {
     });
   });
 
+  // ---Amaç: register telafisi için kullanıcı silmenin güvenli ve tekrarlanabilir olduğunu doğrulamak ---
   describe('deleteUser', () => {
     it('kaydi siler ve deleted true doner', async () => {
       prisma.user.delete.mockResolvedValue(dbUser());
@@ -259,7 +270,7 @@ describe('UsersService', () => {
       'userId %p ise BAD_REQUEST atar ve veritabanina gitmez',
       async (userId) => {
         const error = await service
-          .deleteUser({ userId } as users.DeleteUserRequest)
+          .deleteUser({ userId } as users.UserFindByIdRequest)
           .catch((e) => e);
 
         expect(error).toBeInstanceOf(RpcException);
@@ -284,6 +295,86 @@ describe('UsersService', () => {
       prisma.user.delete.mockRejectedValue(original);
 
       await expect(service.deleteUser({ userId: USER_ID })).rejects.toBe(
+        original,
+      );
+    });
+  });
+
+  // ---Amaç: login ve refresh için gereken yetki bilgisinin doğru döndüğünü ve pasif hesabın reddedildiğini doğrulamak ---
+  describe('getUserAuthInfo', () => {
+    const authRow = (over: Partial<User> = {}) => {
+      const { id, role, clinicId, isActive } = dbUser(over);
+      return { id, role, clinicId, isActive };
+    };
+
+    it('yalnizca yetki icin gereken alanlari secer', async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(authRow());
+
+      await service.getUserAuthInfo({ userId: USER_ID });
+
+      expect(prisma.user.findUniqueOrThrow).toHaveBeenCalledWith({
+        where: { id: USER_ID },
+        select: { id: true, role: true, clinicId: true, isActive: true },
+      });
+    });
+
+    it('PET_OWNER icin clinicId bos string doner', async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(authRow());
+
+      await expect(
+        service.getUserAuthInfo({ userId: USER_ID }),
+      ).resolves.toEqual({
+        userId: USER_ID,
+        role: users.UserRole.PET_OWNER,
+        clinicId: '',
+        isActive: true,
+      });
+    });
+
+    it('klinik hesabi icin rol ve clinicId doner', async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(
+        authRow({ role: UserRole.CLINIC, clinicId: CLINIC_ID }),
+      );
+
+      await expect(
+        service.getUserAuthInfo({ userId: USER_ID }),
+      ).resolves.toEqual({
+        userId: USER_ID,
+        role: users.UserRole.CLINIC,
+        clinicId: CLINIC_ID,
+        isActive: true,
+      });
+    });
+
+    it('kullanici yoksa NOT_FOUND atar', async () => {
+      prisma.user.findUniqueOrThrow.mockRejectedValue(prismaError('P2025'));
+
+      const error = await service
+        .getUserAuthInfo({ userId: USER_ID })
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(RpcException);
+      expect(error.message).toBe(ResponseMessages.NOT_FOUND);
+    });
+
+    it('pasif hesapta ACCOUNT_DISABLED atar', async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(
+        authRow({ isActive: false }),
+      );
+
+      const error = await service
+        .getUserAuthInfo({ userId: USER_ID })
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(RpcException);
+      expect(error.message).toBe(ResponseMessages.ACCOUNT_DISABLED);
+    });
+
+    it('P2025 disindaki hatayi oldugu gibi yukari tasir', async () => {
+      const original = prismaError('P2021');
+      prisma.user.findUniqueOrThrow.mockRejectedValue(original);
+
+      await expect(service.getUserAuthInfo({ userId: USER_ID })).rejects.toBe(
         original,
       );
     });

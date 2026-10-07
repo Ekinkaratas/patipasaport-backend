@@ -6,7 +6,7 @@ export class GetMeResponseDto implements users.GetMeResponse {
   fullName!: string;
   phone!: string;
   role!: users.UserRole;
-  clinicId!: string; /** eğer user bir klinik personeli değilse burası boş string döner */
+  clinicId!: string; /** eğer user bir klinik hesabı değilse burası boş string döner */
   isActive!: boolean;
   createdAt!: string;
   updatedAt!: string;

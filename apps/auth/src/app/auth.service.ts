@@ -1,10 +1,17 @@
 import { access, auth, users } from '@libs/proto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ClientGrpc, RpcException } from '@nestjs/microservices';
+import { ClientGrpc } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import * as argon from 'argon2';
-import { firstValueFrom, Observable } from 'rxjs';
-import { rejectRpc, ResponseMessages, TokenRole } from '@libs/common';
+import { firstValueFrom } from 'rxjs';
+import {
+  forwardGrpcError,
+  rejectRpc,
+  ResponseMessages,
+  rollback,
+  rollbackLocal,
+  TokenRole,
+} from '@libs/common';
 import { PrismaService } from './prisma/prisma.service';
 import {
   ACCESS_TOKEN_TTL_SECONDS,
@@ -34,7 +41,7 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private accessClient!: access.AccessServiceClient;
   private usersClient!: users.UsersServiceClient;
-  private dummyPasswordHash: string;
+  private dummyPasswordHash!: string;
 
   constructor(
     @Inject('USERS_SERVICE') private readonly users_client: ClientGrpc,
@@ -95,83 +102,6 @@ export class AuthService {
       }
       throw e;
     }
-  }
-
-  // --- amaç: dinamik rollback sistemi (dış servisler kullanımına uygun ) ---
-  private async rollback<T, K extends keyof T>(
-    client: T,
-    methodName: K,
-    payload: T[K] extends (data: infer P) => unknown ? P : never,
-    logContext: string,
-  ): Promise<void> {
-    try {
-      const grpcMethod = client[methodName] as unknown as (
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        data: any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ) => Observable<any>;
-
-      await firstValueFrom(grpcMethod.call(client, payload));
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : JSON.stringify(error);
-
-      this.logger.error(
-        `Rollback Başarısız! Metot: ${String(methodName)} | İşlem: ${logContext} | Nedeni: ${errorMessage}`,
-        error instanceof Error ? error.stack : undefined,
-      );
-    }
-  }
-
-  // --- amaç: dinamik rollback sistemi (iç servisler kullanımına uygun ) ---
-  private async rollbackLocal(
-    operation: () => Promise<unknown>,
-    logContext: string,
-  ): Promise<void> {
-    try {
-      await operation();
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : JSON.stringify(error);
-
-      this.logger.error(
-        `Rollback Başarısız! İşlem: ${logContext} | Nedeni: ${errorMessage}`,
-        error instanceof Error ? error.stack : undefined,
-      );
-    }
-  }
-
-  // --- Amaç: dış servisden gelen hatayı istemciye güvenli şekilde aktarmak ---
-  private forwardGrpcError(
-    error: unknown,
-    context: string,
-    allowed: readonly ResponseMessages[] = [],
-  ): never {
-    const { code, details } = (error ?? {}) as {
-      code?: unknown;
-      details?: unknown;
-    };
-
-    if (
-      typeof details === 'string' &&
-      allowed.includes(details as ResponseMessages)
-    ) {
-      throw new RpcException(details);
-    }
-
-    if (code === status.UNAVAILABLE || code === status.DEADLINE_EXCEEDED) {
-      rejectRpc(
-        this.logger,
-        ResponseMessages.SERVICE_UNAVAILABLE,
-        `${context}: servise ulaşılamadı (code=${String(code)})`,
-      );
-    }
-
-    rejectRpc(
-      this.logger,
-      ResponseMessages.INTERNAL_SERVER_ERROR,
-      `${context}: beklenmeyen yanıt (code=${String(code)}, details=${String(details)})`,
-    );
   }
 
   // --- Amaç: Client tipini DB için ygun dile çevirmek ---
@@ -253,9 +183,12 @@ export class AuthService {
         this.usersClient.getUserAuthInfo({ userId: userId }),
       );
     } catch (e) {
-      this.forwardGrpcError(e, `${service_name}: users.getUserAuthInfo`, [
-        ResponseMessages.ACCOUNT_DISABLED,
-      ]);
+      forwardGrpcError(
+        this.logger,
+        e,
+        `${service_name}: users.getUserAuthInfo`,
+        [ResponseMessages.ACCOUNT_DISABLED],
+      );
     }
   }
 
@@ -282,7 +215,11 @@ export class AuthService {
         this.accessClient.createOpaqueToken(payload),
       );
     } catch (e) {
-      this.forwardGrpcError(e, `${service_name}: access.createOpaqueToken`);
+      forwardGrpcError(
+        this.logger,
+        e,
+        `${service_name}: access.createOpaqueToken`,
+      );
     }
 
     this.logger.log(
@@ -313,7 +250,8 @@ export class AuthService {
       this.logger.error(
         `refresh_token üretimi sırasında hata meydana geldi: (hata mesajı: ${e})`,
       );
-      await this.rollback(
+      await rollback(
+        this.logger,
         this.accessClient,
         'revokeToken',
         { opaqueToken: access_response_data.opaqueToken },
@@ -339,10 +277,8 @@ export class AuthService {
     switch (role) {
       case users.UserRole.PET_OWNER:
         return 'PET_OWNER';
-      case users.UserRole.VETERINARIAN:
-        return 'VETERINARIAN';
-      case users.UserRole.STAFF:
-        return 'STAFF';
+      case users.UserRole.CLINIC:
+        return 'CLINIC';
       default:
         return undefined;
     }
@@ -379,7 +315,8 @@ export class AuthService {
     } catch (e) {
       const code = (e as { code?: unknown } | null)?.code;
       if (code !== status.UNAVAILABLE && code !== status.ALREADY_EXISTS) {
-        await this.rollback(
+        await rollback(
+          this.logger,
           this.usersClient,
           'deleteUser',
           {
@@ -388,7 +325,7 @@ export class AuthService {
           `register: userCreate sırasında hata meydana geldi bundan dolayı rollback çağrıldı: userId = ${userId}`,
         );
       }
-      this.forwardGrpcError(e, 'register: users.createUser', [
+      forwardGrpcError(this.logger, e, 'register: users.createUser', [
         ResponseMessages.EMAIL_ALREADY_EXISTS,
       ]);
     }
@@ -398,7 +335,8 @@ export class AuthService {
       ? AuthService.toTokenRole(createdUser.role)
       : undefined;
     if (!createdUser || !role) {
-      await this.rollback(
+      await rollback(
+        this.logger,
         this.usersClient,
         'deleteUser',
         {
@@ -414,13 +352,17 @@ export class AuthService {
     }
     //#endregion
 
-    let refresh_token: {
+    let token: {
       refreshToken: string;
       expiresAt: Date;
     };
+    let refresh: {
+      credential: { userId: string; email: string };
+      token: { refreshToken: string; expiresAt: Date };
+    };
 
     try {
-      await this.prisma.$transaction(async (tx) => {
+      refresh = await this.prisma.$transaction(async (tx) => {
         // --- 1. auth db veri oluşturuluyor ---
         this.logger.log(
           `auth db veri oluşturuluyor (clientType=${req.clientType})`,
@@ -438,7 +380,7 @@ export class AuthService {
         });
 
         // --- 2. auth servis de refresh_token oluşturuluyor ---
-        refresh_token = await this.createRefreshToken(
+        token = await this.createRefreshToken(
           {
             userId,
             clientType: req.clientType,
@@ -448,10 +390,11 @@ export class AuthService {
           tx,
         );
 
-        return { credential, refresh_token };
+        return { credential, token };
       });
     } catch (e) {
-      await this.rollback(
+      await rollback(
+        this.logger,
         this.usersClient,
         'deleteUser',
         { userId: userId },
@@ -491,26 +434,29 @@ export class AuthService {
         this.accessClient.createOpaqueToken(payload),
       );
     } catch (e) {
-      await this.rollbackLocal(
+      await rollbackLocal(
+        this.logger,
         () => this.deleteInCredential({ userId }),
         `register: access token alınamadı, credential ve bağlı oturumlar siliniyor (userId=${userId})`,
       );
 
-      await this.rollback(
+      await rollback(
+        this.logger,
         this.usersClient,
         'deleteUser',
         { userId },
         `register: access token alinamadi, users kaydi geri aliniyor (userId=${userId})`,
       );
 
-      this.forwardGrpcError(e, 'register: access.createOpaqueToken');
+      forwardGrpcError(this.logger, e, 'register: access.createOpaqueToken');
     }
+
     //#endregion
 
     // ---response hazırlığı---
     const response: auth.TokenResponse = {
       accessToken: opaque_token.opaqueToken,
-      refreshToken: refresh_token.refreshToken,
+      refreshToken: refresh.token.refreshToken,
       tokenType: 'Bearer',
       expiresIn: opaque_token.expiresIn,
       userId,
@@ -574,10 +520,21 @@ export class AuthService {
     this.logger.log('login: user servisi başarıyla tamamlandı');
     //#endregion
 
+    const role_res = AuthService.toTokenRole(user_db_data.role);
+
+    if (!role_res) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.FORBIDDEN,
+        `login: Yetkisiz erişim (IDOR) girişimi! Kullanıcı kendisine ait olmayan bir kayıt üzerinde işlem yapmaya çalıştı`,
+        'warn',
+      );
+    }
+
     //#region -- login: tokens metot çağrısı --
     const payload: CreateTokenRequestDto = {
       userId: auth_db_data.userId,
-      role: AuthService.toTokenRole(user_db_data.role),
+      role: role_res,
       clinicId: user_db_data.clinicId,
       clientType: req.clientType,
       ttlSeconds: ACCESS_TOKEN_TTL_SECONDS,
@@ -627,7 +584,6 @@ export class AuthService {
       },
     });
 
-    // Geçersiz token'ın her nedeni istemciye aynı 401 ile döner; ayrım yalnızca logda.
     if (!session) {
       rejectRpc(
         this.logger,
@@ -689,10 +645,21 @@ export class AuthService {
 
     //#region -- refreshToken: CreateTokens metot çağrısı (rotation) --
 
+    const role_res = AuthService.toTokenRole(user_db_data.role);
+
+    if (!role_res) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.FORBIDDEN,
+        `refreshToken: Yetkisiz erişim (IDOR) girişimi! Kullanıcı kendisine ait olmayan bir kayıt üzerinde işlem yapmaya çalıştı`,
+        'warn',
+      );
+    }
+
     // clientType yukarıda oturumdakiyle eşleştirildi; yeni token'lar oturumun türüne bağlanır.
     const payload: CreateTokenRequestDto = {
       userId: session.userId,
-      role: AuthService.toTokenRole(user_db_data.role),
+      role: role_res,
       clinicId: user_db_data.clinicId,
       clientType: req.clientType,
       ttlSeconds: ACCESS_TOKEN_TTL_SECONDS,
@@ -773,7 +740,8 @@ export class AuthService {
     //#region --- access servisine itek atılıyor ---
 
     if (request.opaqueToken) {
-      await this.rollback(
+      await rollback(
+        this.logger,
         this.accessClient,
         'revokeToken',
         {

@@ -321,11 +321,17 @@ describe('LoginRequestDto normalizasyon', () => {
   });
 });
 
+// ---Amaç: Logout ve RefreshToken'ın ortak refreshToken kurallarını doğrulamak ---
 describe.each([
-  ['LogoutRequestDto', LogoutRequestDto],
-  ['RefreshTokenRequestDto', RefreshTokenRequestDto],
-])('%s', (_name, cls) => {
-  const check = (o: object) => firstErrors(cls, { refreshToken: 'tok', ...o });
+  ['LogoutRequestDto', LogoutRequestDto, {}],
+  [
+    'RefreshTokenRequestDto',
+    RefreshTokenRequestDto,
+    { clientType: auth.ClientType.WEB },
+  ],
+])('%s', (_name, cls, required) => {
+  const check = (o: object) =>
+    firstErrors(cls, { refreshToken: 'tok', ...required, ...o });
 
   it('geçerli istek hata vermez', () => expect(check({})).toEqual({}));
 
@@ -341,4 +347,43 @@ describe.each([
   ])('refreshToken %s', (_n, override, expected) => {
     expect(check(override)).toEqual({ refreshToken: expected });
   });
+});
+
+// ---Amaç: yenilemenin oturumun açıldığı istemci türüne bağlı istendiğini doğrulamak ---
+describe('RefreshTokenRequestDto clientType', () => {
+  const check = (o: object) =>
+    firstErrors(RefreshTokenRequestDto, {
+      refreshToken: 'tok',
+      clientType: auth.ClientType.WEB,
+      ...o,
+    });
+
+  it('MOBILE clientType da kabul edilir', () =>
+    expect(check({ clientType: auth.ClientType.MOBILE })).toEqual({}));
+
+  it.each([
+    ['yok', { clientType: undefined }],
+    ['UNSPECIFIED', { clientType: auth.ClientType.CLIENT_TYPE_UNSPECIFIED }],
+    ['UNRECOGNIZED', { clientType: auth.ClientType.UNRECOGNIZED }],
+    ['tanımsız sayı', { clientType: 3 }],
+    ['string', { clientType: '1' }],
+  ])('clientType %s', (_n, override) => {
+    expect(check(override)).toEqual({
+      clientType: msg(P.CLIENT_TYPE, V.WRONG_DATA_FORMAT),
+    });
+  });
+});
+
+// ---Amaç: logout'ta opaque token'ın isteğe bağlı olduğunu, gönderilirse boş olamayacağını doğrulamak ---
+describe('LogoutRequestDto opaqueToken', () => {
+  const check = (o: object) =>
+    firstErrors(LogoutRequestDto, { refreshToken: 'tok', ...o });
+
+  it('gönderilen opaque token kabul edilir', () =>
+    expect(check({ opaqueToken: 'opaque-abc' })).toEqual({}));
+
+  it('boş opaque token reddedilir', () =>
+    expect(check({ opaqueToken: '' })).toEqual({
+      opaqueToken: msg(P.OPAQUE_TOKEN, V.NOT_EMPTY),
+    }));
 });

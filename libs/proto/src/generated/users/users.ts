@@ -12,9 +12,8 @@ export const protobufPackage = "users";
 
 export enum UserRole {
   USER_ROLE_UNSPECIFIED = 0,
-  VETERINARIAN = 1,
+  CLINIC = 1,
   PET_OWNER = 2,
-  STAFF = 3,
   UNRECOGNIZED = -1,
 }
 
@@ -25,7 +24,7 @@ export interface User {
   fullName: string;
   phone: string;
   role: UserRole;
-  /** eğer user bir klinik personeli değilse burası boş string döner */
+  /** eğer user bir klinik hesabı değilse burası boş string döner */
   clinicId: string;
   isActive: boolean;
   /** ISO-8601 */
@@ -43,7 +42,7 @@ export interface UserFindByIdRequest {
  * Auth Service'in ürettiği id ile birebir aynı olmalı.
  *
  * role ve clinic_id KASITLI OLARAK YOK — bu RPC yalnızca PET_OWNER
- * üretir, rolü servis kendi atar. Veteriner/personel hesapları davet
+ * üretir, rolü servis kendi atar. Klinik hesapları davet
  * akışında AYRI bir RPC ile açılacak; role'ü buraya geri eklemek davet
  * doğrulamasını atlatılabilir hale getirir. reserved satırı numaraların
  * başka bir anlamla geri kullanılmasını engeller.
@@ -75,7 +74,7 @@ export interface GetMeResponse {
   fullName: string;
   phone: string;
   role: UserRole;
-  /** eğer user bir klinik personeli değilse burası boş string döner */
+  /** eğer user bir klinik hesabı değilse burası boş string döner */
   clinicId: string;
   isActive: boolean;
   /** ISO-8601 */
@@ -98,7 +97,7 @@ export interface UpdateMeRequest {
 export interface GetUserRoleResponse {
   userId: string;
   role: UserRole;
-  /** eğer user bir klinik personeli değilse burası boş string döner */
+  /** eğer user bir klinik hesabı değilse burası boş string döner */
   clinicId: string;
 }
 
@@ -106,7 +105,7 @@ export interface GetUserRoleResponse {
 export interface GetUserAuthInfoResponse {
   userId: string;
   role: UserRole;
-  /** eğer user bir klinik personeli değilse burası boş string döner */
+  /** eğer user bir klinik hesabı değilse burası boş string döner */
   clinicId: string;
   /** false ise Login reddedilir */
   isActive: boolean;

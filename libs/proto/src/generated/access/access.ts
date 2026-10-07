@@ -42,7 +42,7 @@ export enum DeniedReason {
 
 export interface CreateTokenRequest {
   userId: string;
-  /** VETERINARIAN | PET_OWNER | STAFF */
+  /** CLINIC | PET_OWNER */
   role: string;
   /** role PET_OWNER ise boş string */
   clinicId: string;
@@ -144,6 +144,18 @@ export interface ConsentResponse {
   revokedAt: string;
 }
 
+export interface ListMyConsentsRequest {
+  page: number;
+  pageSize: number;
+}
+
+export interface ListMyConsentsResponse {
+  consents: ConsentResponse[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export const ACCESS_PACKAGE_NAME = "access";
 
 /**
@@ -186,6 +198,8 @@ export interface AccessServiceClient {
   revokeConsent(request: RevokeConsentRequest): Observable<ConsentResponse>;
 
   getConsentStatus(request: GetConsentStatusRequest): Observable<ConsentResponse>;
+
+  listMyConsents(request: ListMyConsentsRequest): Observable<ListMyConsentsResponse>;
 }
 
 /**
@@ -240,6 +254,10 @@ export interface AccessServiceController {
   getConsentStatus(
     request: GetConsentStatusRequest,
   ): Promise<ConsentResponse> | Observable<ConsentResponse> | ConsentResponse;
+
+  listMyConsents(
+    request: ListMyConsentsRequest,
+  ): Promise<ListMyConsentsResponse> | Observable<ListMyConsentsResponse> | ListMyConsentsResponse;
 }
 
 export function AccessServiceControllerMethods() {
@@ -252,6 +270,7 @@ export function AccessServiceControllerMethods() {
       "grantConsent",
       "revokeConsent",
       "getConsentStatus",
+      "listMyConsents",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

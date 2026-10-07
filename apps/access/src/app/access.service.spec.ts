@@ -2,15 +2,30 @@ jest.mock('./redis/redis.service', () => ({
   RedisService: class RedisServiceMock {},
 }));
 
+jest.mock('./prisma/prisma.service', () => ({
+  PrismaService: class PrismaServiceMock {},
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { RpcException } from '@nestjs/microservices';
 import { generateKeyPairSync } from 'crypto';
 import { access } from '@libs/proto';
-import { ResponseMessages, runWithCorrelationId } from '@libs/common';
+import {
+  AuthUser,
+  CONSENT_SCOPES,
+  ConsentScope,
+  ResponseMessages,
+  runWithCorrelationId,
+} from '@libs/common';
 import { AccessService } from './access.service';
 import { RedisService } from './redis/redis.service';
+import { PrismaService } from './prisma/prisma.service';
 import { ACCESS_JWT_TTL_SECONDS } from './access.constants';
+import {
+  Consent,
+  ConsentStatus as DbConsentStatus,
+} from '../generated/prisma/client';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
@@ -23,9 +38,72 @@ const VALID_RECORD = {
   role: 'PET_OWNER',
   clinicId: '',
   clientType: access.ClientType.WEB,
-  scopes: ['medical_read'],
   issuedAt: new Date(Date.now() - 60_000).toISOString(),
   expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const CLINIC_ID = '6e2d4c1b-7a3f-4e8d-a1b2-c3d4e5f60718';
+const OTHER_CLINIC_ID = '2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d';
+const PET_ID = '1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b';
+const PET_OWNER_ID = '8f9e0d1c-2b3a-4c5d-8e6f-7a8b9c0d1e2f';
+const CONSENT_ID = '7c8d9e0f-1a2b-4c3d-9e4f-5a6b7c8d9e0f';
+
+const COLUMN_OF: Record<ConsentScope, keyof Consent> = {
+  medical_read: 'medicalRead',
+  medical_write: 'medicalWrite',
+  vaccination_read: 'vaccinationRead',
+  prescription_read: 'prescriptionRead',
+  chip_number_read: 'chipNumberRead',
+  owner_contact_read: 'ownerContactRead',
+};
+
+const ALL_SCOPES_CLOSED = {
+  medicalRead: false,
+  medicalWrite: false,
+  vaccinationRead: false,
+  prescriptionRead: false,
+  chipNumberRead: false,
+  ownerContactRead: false,
+};
+
+const ALL_SCOPES_OPEN = {
+  medicalRead: true,
+  medicalWrite: true,
+  vaccinationRead: true,
+  prescriptionRead: true,
+  chipNumberRead: true,
+  ownerContactRead: true,
+};
+
+// ---Amaç: veritabanından dönen rıza satırını üretmek ---
+const consentRow = (overrides: Partial<Consent> = {}): Consent => ({
+  id: CONSENT_ID,
+  clinicId: CLINIC_ID,
+  petId: PET_ID,
+  petOwnerId: PET_OWNER_ID,
+  ...ALL_SCOPES_CLOSED,
+  medicalRead: true,
+  vaccinationRead: true,
+  status: DbConsentStatus.ACTIVE,
+  expiresAt: new Date(Date.now() + DAY_MS),
+  revokedAt: null,
+  createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  ...overrides,
+});
+
+// ---Amaç: CheckAccess isteğini üretmek ---
+const checkRequest = (
+  requiredScopes: string[],
+  clinicId = CLINIC_ID,
+): access.CheckAccessRequest => ({ clinicId, petId: PET_ID, requiredScopes });
+
+const CLINIC_USER: AuthUser = {
+  userId: '3f1c2b4a-8d6e-4f7a-9b0c-1d2e3f4a5b6c',
+  role: 'CLINIC',
+  clinicId: CLINIC_ID,
+  clientType: access.ClientType.WEB,
 };
 
 describe('AccessService', () => {
@@ -35,6 +113,11 @@ describe('AccessService', () => {
     getTokenRecord: jest.Mock;
     deleteTokenRecord: jest.Mock;
     createTokenRecord: jest.Mock;
+  };
+  let prisma: {
+    consent: { findUnique: jest.Mock };
+    $transaction: jest.Mock;
+    $executeRaw: jest.Mock;
   };
 
   const request: access.ExchangeTokenRequest = {
@@ -52,11 +135,19 @@ describe('AccessService', () => {
         expiresAt: '2026-01-01T01:00:00.000Z',
       }),
     };
+    prisma = {
+      consent: { findUnique: jest.fn() },
+      $transaction: jest.fn(),
+      $executeRaw: jest.fn(),
+    };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
         AccessService,
         { provide: RedisService, useValue: redis },
+        { provide: PrismaService, useValue: prisma },
+        { provide: 'PETS_SERVICE', useValue: {} },
+        { provide: 'CLINIC_SERVİCE', useValue: {} },
         {
           provide: JwtService,
           useValue: new JwtService({
@@ -77,6 +168,7 @@ describe('AccessService', () => {
     jwtService = moduleRef.get(JwtService);
   });
 
+  // ---Amaç: geçerli opaque token'ın imzalı JWT'ye çevrildiğini doğrulamak ---
   describe('exchangeToken - basarili akis', () => {
     beforeEach(() => redis.getTokenRecord.mockResolvedValue(VALID_RECORD));
 
@@ -106,7 +198,8 @@ describe('AccessService', () => {
       });
       expect(payload.sub).toBe(VALID_RECORD.userId);
       expect(payload.role).toBe(VALID_RECORD.role);
-      expect(payload.scopes).toEqual(VALID_RECORD.scopes);
+      expect(payload.clinicId).toBe(VALID_RECORD.clinicId);
+      expect(payload.clientType).toBe(VALID_RECORD.clientType);
       expect(payload.exp - payload.iat).toBe(ACCESS_JWT_TTL_SECONDS);
     });
 
@@ -117,6 +210,7 @@ describe('AccessService', () => {
       expect(payload.issuedAt).toBeUndefined();
       expect(payload.expiresAt).toBeUndefined();
       expect(payload.userId).toBeUndefined();
+      expect(payload.scopes).toBeUndefined();
     });
 
     it('traceId, istegin correlationId degerini tasir', async () => {
@@ -138,6 +232,7 @@ describe('AccessService', () => {
     });
   });
 
+  // ---Amaç: geçersiz, süresi dolmuş veya başka istemciye bağlı token'ın reddedildiğini doğrulamak ---
   describe('exchangeToken - reddetme akislari', () => {
     it('kayit yoksa INVALID_TOKEN atar', async () => {
       redis.getTokenRecord.mockResolvedValue(null);
@@ -199,21 +294,20 @@ describe('AccessService', () => {
     });
   });
 
+  // ---Amaç: geçerli kullanıcı bilgisiyle opaque token kaydının oluşturulduğunu doğrulamak ---
   describe('createOpaqueToken - basarili akis', () => {
     const USER_ID = '3f1c2b4a-8d6e-4f7a-9b0c-1d2e3f4a5b6c';
-    const CLINIC_ID = '6e2d4c1b-7a3f-4e8d-a1b2-c3d4e5f60718';
 
     const petOwner: access.CreateTokenRequest = {
       userId: USER_ID,
       role: 'PET_OWNER',
       clinicId: '',
       clientType: access.ClientType.WEB,
-      scopes: ['medical_read'],
       ttlSeconds: 0,
     };
-    const staff: access.CreateTokenRequest = {
+    const clinic: access.CreateTokenRequest = {
       ...petOwner,
-      role: 'STAFF',
+      role: 'CLINIC',
       clinicId: CLINIC_ID,
     };
 
@@ -227,7 +321,6 @@ describe('AccessService', () => {
         role: 'PET_OWNER',
         clinicId: '',
         clientType: access.ClientType.WEB,
-        scopes: ['medical_read'],
       });
       expect(ttl).toBeUndefined();
       expect(response).toEqual({
@@ -263,65 +356,31 @@ describe('AccessService', () => {
       expect(record).not.toHaveProperty('ttlSeconds');
     });
 
-    it('klinik personeli UUID v4 clinicId ile kabul edilir, ttlSeconds iletilir', async () => {
-      await service.createOpaqueToken({ ...staff, ttlSeconds: 300 });
+    it('klinik hesabi UUID v4 clinicId ile kabul edilir, ttlSeconds iletilir', async () => {
+      await service.createOpaqueToken({ ...clinic, ttlSeconds: 300 });
       expect(redis.createTokenRecord.mock.calls[0][2]).toBe(300);
     });
 
-    it('VETERINARIAN rolu de klinikle kabul edilir', async () => {
-      await expect(
-        service.createOpaqueToken({ ...staff, role: 'VETERINARIAN' }),
-      ).resolves.toBeDefined();
-    });
-
-    it('bos scopes listesi kabul edilir ve kayda dizi olarak yazilir', async () => {
-      await service.createOpaqueToken({ ...petOwner, scopes: [] });
-
-      const [, record] = redis.createTokenRecord.mock.calls[0];
-      expect(record.scopes).toEqual([]);
-    });
-
-    it('scopes gonderilmezse kayda bos dizi yazilir', async () => {
+    it('istekte olmayan alanlar kayda yazilmaz', async () => {
       await service.createOpaqueToken({
         ...petOwner,
-        scopes: undefined as unknown as string[],
-      });
+        scopes: ['medical_read'],
+      } as access.CreateTokenRequest);
 
       const [, record] = redis.createTokenRecord.mock.calls[0];
-      expect(Array.isArray(record.scopes)).toBe(true);
-      expect(record.scopes).toEqual([]);
-    });
-
-    it('scopes undefined iken dogrulama cokmez', async () => {
-      await expect(
-        service.createOpaqueToken({
-          ...petOwner,
-          scopes: undefined as unknown as string[],
-        }),
-      ).resolves.toBeDefined();
-    });
-
-    it('birden fazla gecerli scope kabul edilir', async () => {
-      await service.createOpaqueToken({
-        ...petOwner,
-        scopes: ['medical_read', 'vaccination_read'],
-      });
-
-      const [, record] = redis.createTokenRecord.mock.calls[0];
-      expect(record.scopes).toEqual(['medical_read', 'vaccination_read']);
+      expect(record).not.toHaveProperty('scopes');
     });
   });
 
+  // ---Amaç: kurala uymayan isteklerin Redis'e yazılmadan reddedildiğini doğrulamak ---
   describe('createOpaqueToken - reddetme akislari', () => {
     const USER_ID = '3f1c2b4a-8d6e-4f7a-9b0c-1d2e3f4a5b6c';
-    const CLINIC_ID = '6e2d4c1b-7a3f-4e8d-a1b2-c3d4e5f60718';
 
     const petOwner: access.CreateTokenRequest = {
       userId: USER_ID,
       role: 'PET_OWNER',
       clinicId: '',
       clientType: access.ClientType.WEB,
-      scopes: ['medical_read'],
       ttlSeconds: 0,
     };
 
@@ -359,29 +418,28 @@ describe('AccessService', () => {
         ResponseMessages.VALIDATION_ERROR,
       ],
       [
-        'personel clinicId olmadan',
-        { role: 'STAFF' },
+        'kaldirilan STAFF rolu',
+        { role: 'STAFF', clinicId: CLINIC_ID },
         ResponseMessages.VALIDATION_ERROR,
       ],
       [
-        'personel clinicId bosluktan ibaret',
-        { role: 'STAFF', clinicId: '   ' },
+        'eski VETERINARIAN rolu',
+        { role: 'VETERINARIAN', clinicId: CLINIC_ID },
         ResponseMessages.VALIDATION_ERROR,
       ],
       [
-        'personel clinicId UUID degil',
-        { role: 'VETERINARIAN', clinicId: 'clinic-1' },
+        'klinik hesabi clinicId olmadan',
+        { role: 'CLINIC' },
         ResponseMessages.VALIDATION_ERROR,
       ],
       [
-        'scope CONSENT_SCOPES disinda',
-        { scopes: ['admin'] },
+        'klinik hesabi clinicId bosluktan ibaret',
+        { role: 'CLINIC', clinicId: '   ' },
         ResponseMessages.VALIDATION_ERROR,
       ],
-      ['scope bos string', { scopes: [''] }, ResponseMessages.VALIDATION_ERROR],
       [
-        'scope tekrarli',
-        { scopes: ['medical_read', 'medical_read'] },
+        'klinik hesabi clinicId UUID degil',
+        { role: 'CLINIC', clinicId: 'clinic-1' },
         ResponseMessages.VALIDATION_ERROR,
       ],
     ])('%s -> reddedilir ve kayit olusturulmaz', async (_n, override, code) => {
@@ -398,6 +456,7 @@ describe('AccessService', () => {
     });
   });
 
+  // ---Amaç: opaque token'ın Redis'ten silinmesini ve hatalı girdilerin reddini doğrulamak ---
   describe('revokeToken', () => {
     it('kaydi siler ve revoked true doner', async () => {
       redis.deleteTokenRecord.mockResolvedValue(true);
@@ -449,6 +508,267 @@ describe('AccessService', () => {
       await expect(
         service.revokeToken({ opaqueToken: 'opaque-abc' }),
       ).rejects.toBe(original);
+    });
+  });
+
+  // ---Amaç: rıza satırının durumuna ve scope sütunlarına göre verilen kararı doğrulamak ---
+  describe('checkAccess - karar', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('aktif riza istenen tum scope-lari kapsiyorsa izin verir, yanit alanlari eksiksizdir', async () => {
+      const row = consentRow();
+      prisma.consent.findUnique.mockResolvedValue(row);
+
+      await expect(
+        service.checkAccess(
+          checkRequest(['medical_read', 'vaccination_read']),
+          CLINIC_USER,
+        ),
+      ).resolves.toEqual({
+        allowed: true,
+        grantedScopes: ['medical_read', 'vaccination_read'],
+        missingScopes: [],
+        consentId: CONSENT_ID,
+        status: access.ConsentStatus.ACTIVE,
+        expiresAt: row.expiresAt.toISOString(),
+        deniedReason: access.DeniedReason.DENIED_REASON_UNSPECIFIED,
+      });
+    });
+
+    it('riza istekteki clinicId ve petId ile tekil anahtardan aranir', async () => {
+      prisma.consent.findUnique.mockResolvedValue(consentRow());
+
+      await service.checkAccess(checkRequest(['medical_read']), CLINIC_USER);
+
+      expect(prisma.consent.findUnique).toHaveBeenCalledWith({
+        where: { clinicId_petId: { clinicId: CLINIC_ID, petId: PET_ID } },
+      });
+    });
+
+    it('istenen scope-lardan biri eksikse izin vermez ve INSUFFICIENT_SCOPE doner', async () => {
+      prisma.consent.findUnique.mockResolvedValue(consentRow());
+
+      await expect(
+        service.checkAccess(
+          checkRequest(['medical_read', 'medical_write']),
+          CLINIC_USER,
+        ),
+      ).resolves.toMatchObject({
+        allowed: false,
+        grantedScopes: ['medical_read'],
+        missingScopes: ['medical_write'],
+        status: access.ConsentStatus.ACTIVE,
+        deniedReason: access.DeniedReason.DENIED_REASON_INSUFFICIENT_SCOPE,
+      });
+    });
+
+    it.each(Object.entries(COLUMN_OF))(
+      '%s yalnizca %s sutunu acikken verilmis sayilir',
+      async (scope, column) => {
+        prisma.consent.findUnique.mockResolvedValue(
+          consentRow({ ...ALL_SCOPES_CLOSED, [column]: true }),
+        );
+
+        const response = await service.checkAccess(
+          checkRequest([...CONSENT_SCOPES]),
+          CLINIC_USER,
+        );
+
+        expect(response.grantedScopes).toEqual([scope]);
+        expect(response.missingScopes).toEqual(
+          CONSENT_SCOPES.filter((s) => s !== scope),
+        );
+        expect(response.allowed).toBe(false);
+      },
+    );
+
+    it('bilinmeyen scope eksik sayilir ve izin verilmez', async () => {
+      prisma.consent.findUnique.mockResolvedValue(consentRow(ALL_SCOPES_OPEN));
+
+      await expect(
+        service.checkAccess(
+          checkRequest(['medical_read', 'admin']),
+          CLINIC_USER,
+        ),
+      ).resolves.toMatchObject({
+        allowed: false,
+        grantedScopes: ['medical_read'],
+        missingScopes: ['admin'],
+        deniedReason: access.DeniedReason.DENIED_REASON_INSUFFICIENT_SCOPE,
+      });
+    });
+
+    it('iptal edilmis riza scope-lari acik olsa da reddedilir ve hicbir scope verilmis sayilmaz', async () => {
+      const row = consentRow({
+        ...ALL_SCOPES_OPEN,
+        status: DbConsentStatus.REVOKED,
+        revokedAt: new Date(),
+      });
+      prisma.consent.findUnique.mockResolvedValue(row);
+
+      await expect(
+        service.checkAccess(checkRequest(['medical_read']), CLINIC_USER),
+      ).resolves.toEqual({
+        allowed: false,
+        grantedScopes: [],
+        missingScopes: [],
+        consentId: CONSENT_ID,
+        status: access.ConsentStatus.REVOKED,
+        expiresAt: row.expiresAt.toISOString(),
+        deniedReason: access.DeniedReason.DENIED_REASON_REVOKED,
+      });
+    });
+
+    it('suresi dolmus riza reddedilir ve EXPIRED doner', async () => {
+      prisma.consent.findUnique.mockResolvedValue(
+        consentRow({ expiresAt: new Date(Date.now() - 60_000) }),
+      );
+
+      await expect(
+        service.checkAccess(checkRequest(['medical_read']), CLINIC_USER),
+      ).resolves.toMatchObject({
+        allowed: false,
+        grantedScopes: [],
+        status: access.ConsentStatus.EXPIRED,
+        deniedReason: access.DeniedReason.DENIED_REASON_EXPIRED,
+      });
+    });
+
+    it('bitis ani tam simdiyse riza suresi dolmus sayilir', async () => {
+      const now = Date.parse('2026-06-01T12:00:00.000Z');
+      jest.spyOn(Date, 'now').mockReturnValue(now);
+      prisma.consent.findUnique.mockResolvedValue(
+        consentRow({ expiresAt: new Date(now) }),
+      );
+
+      await expect(
+        service.checkAccess(checkRequest(['medical_read']), CLINIC_USER),
+      ).resolves.toMatchObject({
+        allowed: false,
+        status: access.ConsentStatus.EXPIRED,
+      });
+    });
+
+    it('hem iptal edilmis hem suresi dolmus rizada REVOKED onceliklidir', async () => {
+      prisma.consent.findUnique.mockResolvedValue(
+        consentRow({
+          status: DbConsentStatus.REVOKED,
+          revokedAt: new Date(),
+          expiresAt: new Date(Date.now() - 60_000),
+        }),
+      );
+
+      await expect(
+        service.checkAccess(checkRequest(['medical_read']), CLINIC_USER),
+      ).resolves.toMatchObject({
+        allowed: false,
+        status: access.ConsentStatus.REVOKED,
+        deniedReason: access.DeniedReason.DENIED_REASON_REVOKED,
+      });
+    });
+
+    it.each([
+      [
+        'status REVOKED, revokedAt bos',
+        DbConsentStatus.REVOKED,
+        null,
+        false,
+        access.ConsentStatus.REVOKED,
+      ],
+      [
+        'status ACTIVE, revokedAt dolu',
+        DbConsentStatus.ACTIVE,
+        new Date(),
+        true,
+        access.ConsentStatus.ACTIVE,
+      ],
+    ])(
+      'karar revokedAt-e degil status-e dayanir (%s)',
+      async (_n, status, revokedAt, allowed, expectedStatus) => {
+        prisma.consent.findUnique.mockResolvedValue(
+          consentRow({ status, revokedAt }),
+        );
+
+        await expect(
+          service.checkAccess(checkRequest(['medical_read']), CLINIC_USER),
+        ).resolves.toMatchObject({ allowed, status: expectedStatus });
+      },
+    );
+
+    it('riza kaydi yoksa NO_CONSENT ve NOT_FOUND doner', async () => {
+      prisma.consent.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.checkAccess(checkRequest(['medical_read']), CLINIC_USER),
+      ).resolves.toEqual({
+        allowed: false,
+        grantedScopes: [],
+        missingScopes: [],
+        consentId: '',
+        status: access.ConsentStatus.NOT_FOUND,
+        expiresAt: '',
+        deniedReason: access.DeniedReason.DENIED_REASON_NO_CONSENT,
+      });
+    });
+
+    it('salt okumadir: transaction ve set_config calistirmaz', async () => {
+      prisma.consent.findUnique.mockResolvedValue(consentRow());
+
+      await service.checkAccess(checkRequest(['medical_read']), CLINIC_USER);
+
+      expect(prisma.consent.findUnique).toHaveBeenCalledTimes(1);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
+    });
+
+    it('veritabani hatasini yutmaz', async () => {
+      const original = new Error('veritabani kapali');
+      prisma.consent.findUnique.mockRejectedValue(original);
+
+      await expect(
+        service.checkAccess(checkRequest(['medical_read']), CLINIC_USER),
+      ).rejects.toBe(original);
+    });
+  });
+
+  // ---Amaç: kullanıcının yalnızca kendi kliniğinin rızasını sorgulayabildiğini doğrulamak ---
+  describe('checkAccess - klinik yetkisi', () => {
+    it.each([
+      ['riza var', consentRow({ clinicId: OTHER_CLINIC_ID })],
+      ['riza yok', null],
+    ])(
+      'baska klinigin clinicId-si ile FORBIDDEN atar ve veritabanina gitmez (%s)',
+      async (_n, row) => {
+        prisma.consent.findUnique.mockResolvedValue(row);
+
+        const error = await service
+          .checkAccess(
+            checkRequest(['medical_read'], OTHER_CLINIC_ID),
+            CLINIC_USER,
+          )
+          .catch((e) => e);
+
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.message).toBe(ResponseMessages.FORBIDDEN);
+        expect(prisma.consent.findUnique).not.toHaveBeenCalled();
+      },
+    );
+
+    it('PET_OWNER (clinicId bos) FORBIDDEN alir', async () => {
+      const owner: AuthUser = {
+        userId: PET_OWNER_ID,
+        role: 'PET_OWNER',
+        clinicId: '',
+        clientType: access.ClientType.WEB,
+      };
+
+      const error = await service
+        .checkAccess(checkRequest(['medical_read']), owner)
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(RpcException);
+      expect(error.message).toBe(ResponseMessages.FORBIDDEN);
+      expect(prisma.consent.findUnique).not.toHaveBeenCalled();
     });
   });
 });

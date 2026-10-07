@@ -28,19 +28,12 @@ export class ListUsersByClinicRequestDto
   clinicId!: string;
 
   @IsOptional()
-  @IsIn(
-    [
-      users.UserRole.PET_OWNER,
-      users.UserRole.STAFF,
-      users.UserRole.VETERINARIAN,
-    ],
-    {
-      message: getValidationMessage(
-        DtoPrefix.USER_ROLE,
-        ValidationType.WRONG_DATA_FORMAT,
-      ),
-    },
-  )
+  @IsIn([users.UserRole.PET_OWNER, users.UserRole.CLINIC], {
+    message: getValidationMessage(
+      DtoPrefix.USER_ROLE,
+      ValidationType.WRONG_DATA_FORMAT,
+    ),
+  })
   role?: users.UserRole | undefined;
 
   @Type(() => Number)

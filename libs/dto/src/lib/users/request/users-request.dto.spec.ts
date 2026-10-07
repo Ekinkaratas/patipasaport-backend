@@ -155,7 +155,7 @@ describe('ListUsersByClinicRequestDto', () => {
 
   it('geçerli istek hata vermez', () => expect(check({})).toEqual({}));
   it('role opsiyonel ve geçerli değer kabul edilir', () =>
-    expect(check({ role: users.UserRole.STAFF })).toEqual({}));
+    expect(check({ role: users.UserRole.CLINIC })).toEqual({}));
 
   it.each([
     [
@@ -173,6 +173,12 @@ describe('ListUsersByClinicRequestDto', () => {
     [
       'role UNSPECIFIED',
       { role: 0 },
+      'role',
+      msg(P.USER_ROLE, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'kaldırılan STAFF değeri (3)',
+      { role: 3 },
       'role',
       msg(P.USER_ROLE, V.WRONG_DATA_FORMAT),
     ],

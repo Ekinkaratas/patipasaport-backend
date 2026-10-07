@@ -7,10 +7,15 @@ const addCorrelationId = winston.format((info) => {
   return info;
 });
 
+const LOG_LEVELS = ['error', 'warn', 'info', 'verbose', 'debug'] as const;
+
 export function createWinstonLogger(serviceName: string) {
   const isProduction = process.env['NODE_ENV'] === 'production';
+  const requestedLevel = process.env['LOG_LEVEL'];
+  const level = LOG_LEVELS.find((l) => l === requestedLevel) ?? 'info';
 
   return WinstonModule.createLogger({
+    level,
     transports: [
       new winston.transports.Console({
         format: isProduction

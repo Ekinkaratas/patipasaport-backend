@@ -15,7 +15,7 @@ import { rejectRpc, ResponseMessages } from '@libs/common';
  */
 export interface OpaqueTokenRecord {
   userId: string;
-  /** VETERINARIAN | PET_OWNER | STAFF */
+  /** CLINIC | PET_OWNER */
   role: string;
   /** role PET_OWNER ise boş string */
   clinicId: string;
@@ -87,6 +87,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     record: NewOpaqueTokenRecord,
     ttlSeconds?: number,
   ): Promise<CreatedTokenInfo> {
+    this.logger.log('istek createTokenRecord metoduna geldi');
     const requested = RedisService.isPositiveTtl(ttlSeconds)
       ? ttlSeconds
       : this.defaultTtl;
@@ -95,12 +96,16 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     const issuedAt = new Date();
     const expiresAt = new Date(issuedAt.getTime() + ttl * 1000);
 
+    this.logger.log(
+      'createTokenRecord: OpaqueTokenRecord değişkeni tanımlandı',
+    );
     const stored: OpaqueTokenRecord = {
       ...record,
       issuedAt: issuedAt.toISOString(),
       expiresAt: expiresAt.toISOString(),
     };
 
+    this.logger.log('createTokenRecord: redis yazma işlemi başladı');
     await this.execute('createTokenRecord', () =>
       this.client.set(
         this.tokenKey(opaqueToken),
@@ -110,6 +115,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       ),
     );
 
+    this.logger.log('createTokenRecord: başarıyla tanımlandı');
     return {
       ttlSeconds: ttl,
       issuedAt: stored.issuedAt,
@@ -119,7 +125,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   // ---------- READ ----------
   async getTokenRecord(opaqueToken: string): Promise<OpaqueTokenRecord | null> {
+    this.logger.log('istek getTokenRecord metoduna geldi');
+
     const key = this.tokenKey(opaqueToken);
+
     const raw = await this.execute('getTokenRecord', () =>
       this.client.get(key),
     );
@@ -140,6 +149,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return null;
     }
 
+    this.logger.log('getTokenRecord: başarıyla tanımlandı');
     return parsed;
   }
 
@@ -171,9 +181,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     opaqueToken: string,
     patch: Partial<NewOpaqueTokenRecord>,
   ): Promise<OpaqueTokenRecord | null> {
+    this.logger.log('istek updateTokenRecord metoduna geldi');
     const current = await this.getTokenRecord(opaqueToken);
     if (current === null) return null;
 
+    this.logger.log('updateTokenRecord: güncelleme işlemi başladı');
     const updated: OpaqueTokenRecord = { ...current, ...patch };
     await this.execute('updateTokenRecord', () =>
       this.client.set(
@@ -182,6 +194,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         'KEEPTTL',
       ),
     );
+
+    this.logger.log('updateTokenRecord: başarıyla tanımlandı');
     return updated;
   }
 
@@ -195,6 +209,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     opaqueToken: string,
     ttlSeconds: number,
   ): Promise<CreatedTokenInfo | null> {
+    this.logger.log('istek refreshTokenTtl metoduna geldi');
     if (!RedisService.isPositiveTtl(ttlSeconds)) return null;
 
     const current = await this.getTokenRecord(opaqueToken);
@@ -213,6 +228,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       ),
     );
 
+    this.logger.log('updateTokenRecord: başarıyla tanımlandı');
     return { ttlSeconds: ttl, issuedAt: updated.issuedAt, expiresAt };
   }
 

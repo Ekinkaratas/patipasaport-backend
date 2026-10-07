@@ -54,7 +54,7 @@ class TestController {
     return 'protected';
   }
 
-  @Roles(['VETERINARIAN'])
+  @Roles(['CLINIC'])
   vetOnly() {
     return 'vetOnly';
   }
@@ -133,10 +133,10 @@ describe('GrpcJwtGuard', () => {
       ).toBe(true);
     });
 
-    it('klinik personelinin rolu ve klinigi tasinir', () => {
+    it('klinik hesabinin rolu ve klinigi tasinir', () => {
       const token = signer(accessKeys.privateKey).sign({
         ...validClaims,
-        role: 'VETERINARIAN',
+        role: 'CLINIC',
         clinicId: CLINIC_ID,
         clientType: access.ClientType.MOBILE,
       });
@@ -145,7 +145,7 @@ describe('GrpcJwtGuard', () => {
       guard.canActivate(contextFor(metadata));
 
       expect(getAuthUser(metadata)).toMatchObject({
-        role: 'VETERINARIAN',
+        role: 'CLINIC',
         clinicId: CLINIC_ID,
         clientType: access.ClientType.MOBILE,
       });
@@ -204,7 +204,7 @@ describe('GrpcJwtGuard', () => {
       const [header, , signature] = signer(accessKeys.privateKey)
         .sign(validClaims)
         .split('.');
-      const tampered = `${header}.${base64url({ ...validClaims, role: 'VETERINARIAN', iss: 'access' })}.${signature}`;
+      const tampered = `${header}.${base64url({ ...validClaims, role: 'CLINIC', iss: 'access' })}.${signature}`;
 
       expect(
         rejectionOf(() =>
@@ -300,7 +300,7 @@ describe('GrpcJwtGuard', () => {
     it('@Roles icindeki rol gecer', () => {
       const token = signer(accessKeys.privateKey).sign({
         ...validClaims,
-        role: 'VETERINARIAN',
+        role: 'CLINIC',
         clinicId: CLINIC_ID,
       });
 

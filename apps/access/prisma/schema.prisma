@@ -1,0 +1,64 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ConsentStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum ConsentAction {
+  GRANTED
+  UPDATED
+  REVOKED
+}
+
+model Consent {
+  id               String        @id @default(uuid()) @db.Uuid
+  clinicId         String        @map("clinic_id") @db.Uuid
+  petId            String        @map("pet_id") @db.Uuid
+  petOwnerId       String        @map("pet_owner_id") @db.Uuid
+  medicalRead      Boolean       @default(false) @map("medical_read")
+  medicalWrite     Boolean       @default(false) @map("medical_write")
+  vaccinationRead  Boolean       @default(false) @map("vaccination_read")
+  prescriptionRead Boolean       @default(false) @map("prescription_read")
+  chipNumberRead   Boolean       @default(false) @map("chip_number_read")
+  ownerContactRead Boolean       @default(false) @map("owner_contact_read")
+  status           ConsentStatus @default(ACTIVE)
+  expiresAt        DateTime      @map("expires_at")
+  revokedAt        DateTime?     @map("revoked_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  events ConsentEvent[]
+
+  @@unique([clinicId, petId])
+  @@index([petOwnerId])
+  @@map("consents")
+}
+
+model ConsentEvent {
+  id               String        @id @db.Uuid
+  consentId        String        @map("consent_id") @db.Uuid
+  action           ConsentAction
+  medicalRead      Boolean       @map("medical_read")
+  medicalWrite     Boolean       @map("medical_write")
+  vaccinationRead  Boolean       @map("vaccination_read")
+  prescriptionRead Boolean       @map("prescription_read")
+  chipNumberRead   Boolean       @map("chip_number_read")
+  ownerContactRead Boolean       @map("owner_contact_read")
+  expiresAt        DateTime      @map("expires_at")
+  actorId          String        @map("actor_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  consent Consent @relation(fields: [consentId], references: [id], onDelete: Restrict)
+
+  @@index([consentId, createdAt])
+  @@map("consent_events")
+}

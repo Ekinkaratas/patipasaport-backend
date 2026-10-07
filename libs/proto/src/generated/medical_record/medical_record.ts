@@ -133,7 +133,7 @@ export interface Prescription {
   /** ISO-8601 */
   prescribedAt: string;
   veterinarianUserId: string;
-  /** eğer user bir klinik personeli değilse burası boş string döner */
+  /** eğer user bir klinik hesabı değilse burası boş string döner */
   clinicId: string;
 }
 

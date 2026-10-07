@@ -1,1 +1,2 @@
 export const ACCESS_JWT_TTL_SECONDS = 60;
+export const CONSENT_MAX_DURATION_YEARS = 1;

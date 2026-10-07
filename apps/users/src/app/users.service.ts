@@ -19,10 +19,8 @@ export class UsersService {
     switch (role) {
       case DbUserRole.PET_OWNER:
         return users.UserRole.PET_OWNER;
-      case DbUserRole.VETERINARIAN:
-        return users.UserRole.VETERINARIAN;
-      case DbUserRole.STAFF:
-        return users.UserRole.STAFF;
+      case DbUserRole.CLINIC:
+        return users.UserRole.CLINIC;
     }
   }
 

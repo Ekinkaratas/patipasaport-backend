@@ -53,9 +53,11 @@ service UsersService {
 
 enum UserRole {
   USER_ROLE_UNSPECIFIED = 0;
-  VETERINARIAN = 1;
+  CLINIC = 1;
   PET_OWNER = 2;
-  STAFF = 3;
+
+  reserved 3;
+  reserved "STAFF";
 }
 
 // Liste ve genel yanıtlarda kullanılan YALIN kullanıcı görünümü.
@@ -65,7 +67,7 @@ message User {
   string full_name = 3;
   string phone = 4;
   UserRole role = 5;
-  string clinic_id = 6;  // eğer user bir klinik personeli değilse burası boş string döner
+  string clinic_id = 6;  // eğer user bir klinik hesabı değilse burası boş string döner
   bool is_active = 7;
   string created_at = 8;     // ISO-8601
   string updated_at = 9;     // ISO-8601
@@ -80,7 +82,7 @@ message UserFindByIdRequest {
 // Auth Service'in ürettiği id ile birebir aynı olmalı.
 //
 // role ve clinic_id KASITLI OLARAK YOK — bu RPC yalnızca PET_OWNER
-// üretir, rolü servis kendi atar. Veteriner/personel hesapları davet
+// üretir, rolü servis kendi atar. Klinik hesapları davet
 // akışında AYRI bir RPC ile açılacak; role'ü buraya geri eklemek davet
 // doğrulamasını atlatılabilir hale getirir. reserved satırı numaraların
 // başka bir anlamla geri kullanılmasını engeller.
@@ -110,7 +112,7 @@ message GetMeResponse {
   string full_name = 3;
   string phone = 4;
   UserRole role = 5;
-  string clinic_id = 6;      // eğer user bir klinik personeli değilse burası boş string döner
+  string clinic_id = 6;      // eğer user bir klinik hesabı değilse burası boş string döner
   bool is_active = 7;
   string created_at = 11;    // ISO-8601
   string updated_at = 12;    // ISO-8601
@@ -134,14 +136,14 @@ message UpdateMeRequest {
 message GetUserRoleResponse {
   string user_id = 1;
   UserRole role = 2;
-  string clinic_id = 3;      // eğer user bir klinik personeli değilse burası boş string döner
+  string clinic_id = 3;      // eğer user bir klinik hesabı değilse burası boş string döner
 }
 
 // Yalnızca token üretimi ve giriş kararı için gereken alanlar.
 message GetUserAuthInfoResponse {
   string user_id = 1;
   UserRole role = 2;
-  string clinic_id = 3;      // eğer user bir klinik personeli değilse burası boş string döner
+  string clinic_id = 3;      // eğer user bir klinik hesabı değilse burası boş string döner
   bool is_active = 4;        // false ise Login reddedilir
 }
 

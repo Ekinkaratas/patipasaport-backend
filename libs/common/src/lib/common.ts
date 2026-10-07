@@ -6,5 +6,6 @@ export * from './guards';
 export * from './interceptors';
 export * from './logging';
 export * from './pipes';
+export * from './rollback';
 export * from './storage';
 export * from './transforms';
