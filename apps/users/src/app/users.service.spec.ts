@@ -71,7 +71,11 @@ describe('UsersService', () => {
     };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
-      providers: [UsersService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        UsersService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: 'ACCESS_SERVICE', useValue: {} },
+      ],
     }).compile();
 
     service = moduleRef.get(UsersService);

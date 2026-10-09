@@ -4,7 +4,8 @@ package pets;
 
 service PetsService {
   rpc GetPet (GetPetRequest) returns (PetResponse);
-  rpc GetPetByChipNumber (GetPetByChipNumberRequest) returns (PetResponse);
+  rpc SearchClinicPets (SearchClinicPetsRequest) returns (SearchClinicPetsResponse);
+  rpc ListMyPets (ListMyPetsRequest) returns (ListMyPetsResponse);
   rpc GetPetOwner (GetPetOwnerRequest) returns (GetPetOwnerResponse);
   rpc CreatePet (CreatePetRequest) returns (PetResponse);
   rpc UpdatePet (UpdatePetRequest) returns (PetResponse);
@@ -23,6 +24,7 @@ message Pet {
   string breed = 4;
   PetSex sex = 5;
   string birth_date = 6;          // ISO-8601 (tarih)
+  bool is_birth_date_estimated = 13;
   bool is_neutered = 7;
   string owner_user_id = 8;       // sadece referans — iletişim Users'ta
 
@@ -35,14 +37,45 @@ message Pet {
   string updated_at = 12;         // ISO-8601
 }
 
+message PetSummary {
+  string id = 1;
+  string name = 2;
+  string species = 3;
+  string breed = 4;
+  PetSex sex = 5;
+  string birth_date = 6;
+  bool is_birth_date_estimated = 7;
+  string chip_number_masked = 8;
+}
+
 message GetPetRequest {
   string id = 1;
 }
 
 // AES-256 ile şifrelenmiş kolonda doğrudan arama yapılamaz;
 // sorgu HMAC-SHA256 blind index üzerinden yürür.
-message GetPetByChipNumberRequest {
-  string chip_number = 1;         // düz metin gelir, serviste indekslenir
+message SearchClinicPetsRequest {
+  oneof query {
+    string name = 1;
+    string chip_number = 2;        
+  }
+  optional string species = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+  optional string order_filter = 6;
+}
+
+message SearchClinicPetsResponse {
+  repeated PetSummary pets = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ListMyPetsRequest {}
+
+message ListMyPetsResponse {
+  repeated Pet pets = 1;
 }
 
 message GetPetOwnerRequest {
@@ -60,6 +93,7 @@ message CreatePetRequest {
   string breed = 3;
   PetSex sex = 4;
   string birth_date = 5;
+  bool is_birth_date_estimated = 9;
   bool is_neutered = 6;
   string chip_number = 7;         // düz metin gelir, serviste şifrelenir
   string owner_user_id = 8;       // hasta sahibi kendi adına kaydediyorsa servis bunu JWT ile karşılaştırır
@@ -70,6 +104,7 @@ message UpdatePetRequest {
   optional string name = 2;
   optional string breed = 3;
   optional string birth_date = 4;
+  optional bool is_birth_date_estimated = 7;
   optional bool is_neutered = 5;
   optional string chip_number = 6;
 }

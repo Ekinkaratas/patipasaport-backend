@@ -532,6 +532,7 @@ describe('AccessService', () => {
         status: access.ConsentStatus.ACTIVE,
         expiresAt: row.expiresAt.toISOString(),
         deniedReason: access.DeniedReason.DENIED_REASON_UNSPECIFIED,
+        petOwnerId: PET_OWNER_ID,
       });
     });
 
@@ -559,6 +560,7 @@ describe('AccessService', () => {
         missingScopes: ['medical_write'],
         status: access.ConsentStatus.ACTIVE,
         deniedReason: access.DeniedReason.DENIED_REASON_INSUFFICIENT_SCOPE,
+        petOwnerId: PET_OWNER_ID,
       });
     });
 
@@ -595,6 +597,7 @@ describe('AccessService', () => {
         grantedScopes: ['medical_read'],
         missingScopes: ['admin'],
         deniedReason: access.DeniedReason.DENIED_REASON_INSUFFICIENT_SCOPE,
+        petOwnerId: PET_OWNER_ID,
       });
     });
 
@@ -616,6 +619,7 @@ describe('AccessService', () => {
         status: access.ConsentStatus.REVOKED,
         expiresAt: row.expiresAt.toISOString(),
         deniedReason: access.DeniedReason.DENIED_REASON_REVOKED,
+        petOwnerId: PET_OWNER_ID,
       });
     });
 
@@ -631,6 +635,7 @@ describe('AccessService', () => {
         grantedScopes: [],
         status: access.ConsentStatus.EXPIRED,
         deniedReason: access.DeniedReason.DENIED_REASON_EXPIRED,
+        petOwnerId: PET_OWNER_ID,
       });
     });
 
@@ -664,6 +669,7 @@ describe('AccessService', () => {
         allowed: false,
         status: access.ConsentStatus.REVOKED,
         deniedReason: access.DeniedReason.DENIED_REASON_REVOKED,
+        petOwnerId: PET_OWNER_ID,
       });
     });
 
@@ -708,6 +714,7 @@ describe('AccessService', () => {
         status: access.ConsentStatus.NOT_FOUND,
         expiresAt: '',
         deniedReason: access.DeniedReason.DENIED_REASON_NO_CONSENT,
+        petOwnerId: '',
       });
     });
 

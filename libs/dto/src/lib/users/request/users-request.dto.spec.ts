@@ -115,15 +115,35 @@ describe.each([['GetUserContactRequestDto', GetUserContactRequestDto]])(
   '%s',
   (_name, cls) => {
     it.each([
-      ['geçerli', { userId: UUID_A }, {}],
-      ['yok', {}, { userId: msg(P.USER_ID, V.NOT_EMPTY) }],
-      ['boş', { userId: '' }, { userId: msg(P.USER_ID, V.NOT_EMPTY) }],
+      ['geçerli', { userId: UUID_A, petId: UUID_B }, {}],
+      ['yok', { petId: UUID_B }, { userId: msg(P.USER_ID, V.NOT_EMPTY) }],
+      [
+        'boş',
+        { userId: '', petId: UUID_B },
+        { userId: msg(P.USER_ID, V.NOT_EMPTY) },
+      ],
       [
         'bozuk',
-        { userId: 'abc' },
+        { userId: 'abc', petId: UUID_B },
         { userId: msg(P.USER_ID, V.WRONG_DATA_FORMAT) },
       ],
     ])('userId %s', (_n, plain, expected) => {
+      expect(firstErrors(cls, plain)).toEqual(expected);
+    });
+
+    it.each([
+      ['yok', { userId: UUID_A }, { petId: msg(P.PET_ID, V.NOT_EMPTY) }],
+      [
+        'boş',
+        { userId: UUID_A, petId: '' },
+        { petId: msg(P.PET_ID, V.NOT_EMPTY) },
+      ],
+      [
+        'bozuk',
+        { userId: UUID_A, petId: 'abc' },
+        { petId: msg(P.PET_ID, V.WRONG_DATA_FORMAT) },
+      ],
+    ])('petId %s', (_n, plain, expected) => {
       expect(firstErrors(cls, plain)).toEqual(expected);
     });
   },

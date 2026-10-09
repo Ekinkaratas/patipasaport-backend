@@ -112,18 +112,18 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${MEDICAL_DB_USER:-medical_user} -d ${MEDICAL_DB_NAME:-medical_db}"]
       <<: *db-healthcheck
 
-  mongo-pets:
-    image: mongo:7
+  postgres-pets:
+    image: postgres:16-alpine
     restart: unless-stopped
     networks: [backend]
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${PETS_DB_USER:-pets_user}
-      MONGO_INITDB_ROOT_PASSWORD: ${PETS_DB_PASSWORD:?PETS_DB_PASSWORD}
-      MONGO_INITDB_DATABASE: ${PETS_DB_NAME:-pets_db}
+      POSTGRES_USER: ${PETS_DB_USER:-pets_user}
+      POSTGRES_PASSWORD: ${PETS_DB_PASSWORD:?PETS_DB_PASSWORD}
+      POSTGRES_DB: ${PETS_DB_NAME:-pets_db}
     volumes:
-      - mongo_pets_data:/data/db
+      - pg_pets_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD-SHELL", "pg_isready -U ${PETS_DB_USER:-pets_user} -d ${PETS_DB_NAME:-pets_db}"]
       <<: *db-healthcheck
 
   redis-access:
@@ -190,6 +190,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       AUTH_GRPC_URL: auth:3002
+      CLINICS_GRPC_URL: clinics:3003
+      PETS_GRPC_URL: pets:3005
       JWT_PRIVATE_KEY_PATH: /run/secrets/access_jwt_private
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
@@ -219,6 +221,8 @@ services:
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      ACCESS_GRPC_URL: access:3001
+      USERS_GRPC_URL: users:3006
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3002"]
@@ -244,6 +248,9 @@ services:
       DB_PASSWORD: ${CLINICS_DB_PASSWORD}
       DB_NAME: ${CLINICS_DB_NAME:-clinics_db}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      MEDICAL_RECORD_GRPC_URL: medical-record:3004
+      PETS_GRPC_URL: pets:3005
+      USERS_GRPC_URL: users:3006
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3003"]
@@ -289,15 +296,22 @@ services:
     secrets:
       - access_jwt_public
     environment:
-      MONGO_URI: mongodb://${PETS_DB_USER:-pets_user}:${PETS_DB_PASSWORD}@mongo-pets:27017/${PETS_DB_NAME:-pets_db}?authSource=admin
+      DB_HOST: postgres-pets
+      DB_PORT: "5432"
+      DB_USER: ${PETS_DB_USER:-pets_user}
+      DB_PASSWORD: ${PETS_DB_PASSWORD}
+      DB_NAME: ${PETS_DB_NAME:-pets_db}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      ACCESS_GRPC_URL: access:3001
+      PETS_CHIP_ENCRYPTION_KEY: ${PETS_CHIP_ENCRYPTION_KEY}
+      PETS_CHIP_INDEX_KEY: ${PETS_CHIP_INDEX_KEY}
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3005"]
       <<: *grpc-healthcheck
     depends_on:
-      mongo-pets: { condition: service_healthy }
-      rabbitmq:   { condition: service_healthy }
+      postgres-pets: { condition: service_healthy }
+      rabbitmq:      { condition: service_healthy }
 
   users:
     <<: *app-common
@@ -315,6 +329,7 @@ services:
       DB_PASSWORD: ${USERS_DB_PASSWORD}
       DB_NAME: ${USERS_DB_NAME:-users_db}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      ACCESS_GRPC_URL: access:3001
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3006"]
@@ -370,7 +385,7 @@ volumes:
   pg_clinics_data:
   pg_access_data:
   pg_medical_data:
-  mongo_pets_data:
+  pg_pets_data:
   redis_access_data:
   redis_auth_data:
   rabbitmq_data:

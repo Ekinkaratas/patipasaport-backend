@@ -118,7 +118,8 @@ message CheckAccessResponse {
   string consent_id = 4;
   ConsentStatus status = 5;
   string expires_at = 6;                 // ISO-8601
-  DeniedReason denied_reason = 7;           
+  DeniedReason denied_reason = 7;
+  string pet_owner_id = 8;
 }
 
 // ---------- Rıza yaşam döngüsü ----------

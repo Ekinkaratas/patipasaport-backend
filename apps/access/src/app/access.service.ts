@@ -485,6 +485,7 @@ export class AccessService {
         status: access.ConsentStatus.NOT_FOUND,
         expiresAt: '',
         deniedReason: access.DeniedReason.DENIED_REASON_NO_CONSENT,
+        petOwnerId: '',
       };
     }
 
@@ -509,6 +510,7 @@ export class AccessService {
       status: evaluation.status,
       expiresAt: consent_res.expiresAt.toISOString(),
       deniedReason: evaluation.deniedReason,
+      petOwnerId: consent_res.petOwnerId,
     };
   }
 

@@ -32,9 +32,6 @@ service UsersService {
   // Kullanıcı yoksa NOT_FOUND.
   rpc GetUserAuthInfo (UserFindByIdRequest) returns (GetUserAuthInfoResponse);
 
-  // Kliniğin kendi personel listesi.
-  rpc ListUsersByClinic (ListUsersByClinicRequest) returns (ListUsersByClinicResponse);
-
   // Elde TUTULAN user_id'lerin görünen adını çözer.tam profil döndürmez, yalnızca ad ve rol.
   // Kullanım yeri: bir tıbbi kayıtta author_user_id var, ekranda
   // "Dr. Mehmet Yılmaz girdi" yazması gerekiyor. Sadece isim için
@@ -147,20 +144,6 @@ message GetUserAuthInfoResponse {
   bool is_active = 4;        // false ise Login reddedilir
 }
 
-message ListUsersByClinicRequest {
-  string clinic_id = 1; // Boş olamaz: klinik belirtilmezse sorgu anlamsızdır.
-  optional UserRole role = 2;
-  int32 page = 3;               // 1'den başlar
-  int32 page_size = 4;
-}
-
-message ListUsersByClinicResponse {
-  repeated User users = 1;
-  int32 total = 2;
-  int32 page = 3;
-  int32 page_size = 4;
-}
-
 message GetUserDisplayNamesRequest {
   // Servis tarafında ÜST SINIR uygulanmalı (50 önerilir).
   repeated string user_ids = 1;
@@ -183,6 +166,7 @@ message GetUserDisplayNamesResponse {
 
 message GetUserContactRequest {
   string user_id = 1;
+  string pet_id = 2;
 }
 
 message GetUserContactResponse {

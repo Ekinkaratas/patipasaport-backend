@@ -1,0 +1,45 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PetSpecies {
+  DOG
+  CAT
+  BIRD
+  RABBIT
+  HAMSTER
+  GUINEA_PIG
+  FERRET
+  TURTLE
+}
+
+enum PetSex {
+  MALE
+  FEMALE
+}
+
+model Pet {
+  id                   String     @id @default(uuid()) @db.Uuid
+  name                 String     @db.VarChar(32)
+  species              PetSpecies
+  breed                String     @db.VarChar(32)
+  sex                  PetSex
+  birthDate            DateTime?  @map("birth_date") @db.Date
+  isBirthDateEstimated Boolean    @default(false) @map("is_birth_date_estimated")
+  isNeutered           Boolean    @default(false) @map("is_neutered")
+  ownerUserId          String     @map("owner_user_id") @db.Uuid
+  chipNoEncrypted      String?    @map("chip_no_encrypted")
+  chipNoIndex          String?    @unique @map("chip_no_index") @db.VarChar(64)
+  chipNoLast4          String?    @map("chip_no_last4") @db.Char(4)
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+
+  @@index([ownerUserId])
+  @@map("pets")
+}

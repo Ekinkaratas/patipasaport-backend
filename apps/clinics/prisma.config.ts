@@ -1,0 +1,21 @@
+import { join } from 'node:path';
+import { config } from 'dotenv';
+import { defineConfig } from 'prisma/config';
+
+config({ path: join(__dirname, '../../.env') });
+
+const user = process.env.CLINICS_DB_USER ?? 'clinics_user';
+const password = encodeURIComponent(process.env.CLINICS_DB_PASSWORD ?? '');
+const host = process.env.CLINICS_DB_HOST ?? 'localhost';
+const port = process.env.CLINICS_DB_PORT ?? '5435';
+const name = process.env.CLINICS_DB_NAME ?? 'clinics_db';
+
+export default defineConfig({
+  schema: join(__dirname, 'prisma/schema.prisma'),
+  migrations: {
+    path: join(__dirname, 'prisma/migrations'),
+  },
+  datasource: {
+    url: `postgresql://${user}:${password}@${host}:${port}/${name}`,
+  },
+});

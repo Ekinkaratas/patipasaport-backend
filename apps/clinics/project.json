@@ -20,6 +20,43 @@
             "NODE_ENV": "development"
           }
         }
+      },
+      "dependsOn": [
+        "prisma-generate"
+      ]
+    },
+    "prisma-generate": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/prisma/schema.prisma",
+        "{projectRoot}/prisma.config.ts"
+      ],
+      "outputs": [
+        "{projectRoot}/src/generated/prisma"
+      ],
+      "options": {
+        "command": "prisma generate --config apps/clinics/prisma.config.ts"
+      }
+    },
+    "prisma-migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "prisma migrate dev --config apps/clinics/prisma.config.ts",
+        "forwardAllArgs": true
+      }
+    },
+    "prisma-migrate-deploy": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "prisma migrate deploy --config apps/clinics/prisma.config.ts"
+      }
+    },
+    "prisma-studio": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "prisma studio --config apps/clinics/prisma.config.ts"
       }
     },
     "prune-lockfile": {

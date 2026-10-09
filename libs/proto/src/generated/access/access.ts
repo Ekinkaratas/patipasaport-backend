@@ -109,6 +109,7 @@ export interface CheckAccessResponse {
   /** ISO-8601 */
   expiresAt: string;
   deniedReason: DeniedReason;
+  petOwnerId: string;
 }
 
 export interface GrantConsentRequest {

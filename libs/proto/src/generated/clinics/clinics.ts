@@ -16,11 +16,6 @@ export interface Clinic {
   taxNumber: string;
   phone: string;
   email: string;
-  addressLine: string;
-  city: string;
-  district: string;
-  /** "Pzt-Cum 09:00-18:00" */
-  workingHours: string;
   isActive: boolean;
   /** ISO-8601 */
   createdAt: string;

@@ -1,0 +1,63 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StockCategory {
+  VACCINE
+  MEDICINE
+  SUPPLY
+  FOOD
+  OTHER
+}
+
+enum StockUnit {
+  PIECE
+  BOX
+  BOTTLE
+  AMPOULE
+  TABLET
+  DOSE
+  ML
+  MG
+  G
+}
+
+model Clinic {
+  id           String   @id @default(uuid()) @db.Uuid
+  fullName     String   @map("full_name") @db.VarChar(128)
+  taxNumber    String   @unique @map("tax_number") @db.VarChar(11)
+  contactEmail String   @unique @map("contact_email") @db.VarChar(254)
+  telNo        String   @unique @map("tel_no") @db.VarChar(16)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  stockItems StockItem[]
+
+  @@map("clinics")
+}
+
+model StockItem {
+  id            String        @id @default(uuid()) @db.Uuid
+  clinicId      String        @map("clinic_id") @db.Uuid
+  name          String        @db.VarChar(64)
+  category      StockCategory
+  unit          StockUnit
+  quantity      Int
+  criticalLevel Int           @map("critical_level")
+  expiresAt     DateTime?     @map("expires_at") @db.Date
+  createdBy     String        @map("created_by") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, category])
+  @@map("stock_items")
+}

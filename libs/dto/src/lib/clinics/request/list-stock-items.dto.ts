@@ -1,7 +1,13 @@
-import { DtoPrefix, getValidationMessage, ValidationType } from '@libs/common';
-import { users } from '@libs/proto';
-import { Type } from 'class-transformer';
 import {
+  DtoPrefix,
+  getValidationMessage,
+  STOCK_CATEGORIES,
+  ValidationType,
+} from '@libs/common';
+import { clinics } from '@libs/proto';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsBoolean,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -10,9 +16,7 @@ import {
   Min,
 } from 'class-validator';
 
-export class ListUsersByClinicRequestDto
-  implements users.ListUsersByClinicRequest
-{
+export class ListStockItemsRequestDto implements clinics.ListStockItemsRequest {
   @IsUUID('4', {
     message: getValidationMessage(
       DtoPrefix.CLINIC_ID,
@@ -26,15 +30,6 @@ export class ListUsersByClinicRequestDto
     ),
   })
   clinicId!: string;
-
-  @IsOptional()
-  @IsIn([users.UserRole.PET_OWNER, users.UserRole.CLINIC], {
-    message: getValidationMessage(
-      DtoPrefix.USER_ROLE,
-      ValidationType.WRONG_DATA_FORMAT,
-    ),
-  })
-  role?: users.UserRole | undefined;
 
   @Type(() => Number)
   @Min(1, {
@@ -76,4 +71,20 @@ export class ListUsersByClinicRequestDto
     },
   )
   pageSize!: number;
+
+  @IsIn(STOCK_CATEGORIES, {
+    message: getValidationMessage(DtoPrefix.CATEGORY, ValidationType.NOT_VALID),
+  })
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  category?: string | undefined;
+
+  @IsBoolean({
+    message: getValidationMessage(
+      DtoPrefix.ONLY_BELOW_CRITICAL,
+      ValidationType.MUST_BE_BOOLEAN,
+    ),
+  })
+  @IsOptional()
+  onlyBelowCritical?: boolean | undefined;
 }

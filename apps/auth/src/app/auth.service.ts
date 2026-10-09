@@ -526,7 +526,7 @@ export class AuthService {
       rejectRpc(
         this.logger,
         ResponseMessages.FORBIDDEN,
-        `login: Yetkisiz erişim (IDOR) girişimi! Kullanıcı kendisine ait olmayan bir kayıt üzerinde işlem yapmaya çalıştı`,
+        `login: Yetkisiz erişim girişimi! Kullanıcı kendisine ait olmayan bir kayıt üzerinde işlem yapmaya çalıştı`,
         'warn',
       );
     }
@@ -651,7 +651,7 @@ export class AuthService {
       rejectRpc(
         this.logger,
         ResponseMessages.FORBIDDEN,
-        `refreshToken: Yetkisiz erişim (IDOR) girişimi! Kullanıcı kendisine ait olmayan bir kayıt üzerinde işlem yapmaya çalıştı`,
+        `refreshToken: Yetkisiz erişim  girişimi! Kullanıcı kendisine ait olmayan bir kayıt üzerinde işlem yapmaya çalıştı`,
         'warn',
       );
     }

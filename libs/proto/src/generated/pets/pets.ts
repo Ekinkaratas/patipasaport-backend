@@ -25,6 +25,7 @@ export interface Pet {
   sex: PetSex;
   /** ISO-8601 (tarih) */
   birthDate: string;
+  isBirthDateEstimated: boolean;
   isNeutered: boolean;
   /** sadece referans — iletişim Users'ta */
   ownerUserId: string;
@@ -41,6 +42,17 @@ export interface Pet {
   updatedAt: string;
 }
 
+export interface PetSummary {
+  id: string;
+  name: string;
+  species: string;
+  breed: string;
+  sex: PetSex;
+  birthDate: string;
+  isBirthDateEstimated: boolean;
+  chipNumberMasked: string;
+}
+
 export interface GetPetRequest {
   id: string;
 }
@@ -49,9 +61,27 @@ export interface GetPetRequest {
  * AES-256 ile şifrelenmiş kolonda doğrudan arama yapılamaz;
  * sorgu HMAC-SHA256 blind index üzerinden yürür.
  */
-export interface GetPetByChipNumberRequest {
-  /** düz metin gelir, serviste indekslenir */
-  chipNumber: string;
+export interface SearchClinicPetsRequest {
+  name?: string | undefined;
+  chipNumber?: string | undefined;
+  species?: string | undefined;
+  page: number;
+  pageSize: number;
+  orderFilter?: string | undefined;
+}
+
+export interface SearchClinicPetsResponse {
+  pets: PetSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ListMyPetsRequest {
+}
+
+export interface ListMyPetsResponse {
+  pets: Pet[];
 }
 
 export interface GetPetOwnerRequest {
@@ -69,6 +99,7 @@ export interface CreatePetRequest {
   breed: string;
   sex: PetSex;
   birthDate: string;
+  isBirthDateEstimated: boolean;
   isNeutered: boolean;
   /** düz metin gelir, serviste şifrelenir */
   chipNumber: string;
@@ -81,6 +112,7 @@ export interface UpdatePetRequest {
   name?: string | undefined;
   breed?: string | undefined;
   birthDate?: string | undefined;
+  isBirthDateEstimated?: boolean | undefined;
   isNeutered?: boolean | undefined;
   chipNumber?: string | undefined;
 }
@@ -94,7 +126,9 @@ export const PETS_PACKAGE_NAME = "pets";
 export interface PetsServiceClient {
   getPet(request: GetPetRequest): Observable<PetResponse>;
 
-  getPetByChipNumber(request: GetPetByChipNumberRequest): Observable<PetResponse>;
+  searchClinicPets(request: SearchClinicPetsRequest): Observable<SearchClinicPetsResponse>;
+
+  listMyPets(request: ListMyPetsRequest): Observable<ListMyPetsResponse>;
 
   getPetOwner(request: GetPetOwnerRequest): Observable<GetPetOwnerResponse>;
 
@@ -106,7 +140,13 @@ export interface PetsServiceClient {
 export interface PetsServiceController {
   getPet(request: GetPetRequest): Promise<PetResponse> | Observable<PetResponse> | PetResponse;
 
-  getPetByChipNumber(request: GetPetByChipNumberRequest): Promise<PetResponse> | Observable<PetResponse> | PetResponse;
+  searchClinicPets(
+    request: SearchClinicPetsRequest,
+  ): Promise<SearchClinicPetsResponse> | Observable<SearchClinicPetsResponse> | SearchClinicPetsResponse;
+
+  listMyPets(
+    request: ListMyPetsRequest,
+  ): Promise<ListMyPetsResponse> | Observable<ListMyPetsResponse> | ListMyPetsResponse;
 
   getPetOwner(
     request: GetPetOwnerRequest,
@@ -119,7 +159,7 @@ export interface PetsServiceController {
 
 export function PetsServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["getPet", "getPetByChipNumber", "getPetOwner", "createPet", "updatePet"];
+    const grpcMethods: string[] = ["getPet", "searchClinicPets", "listMyPets", "getPetOwner", "createPet", "updatePet"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("PetsService", method)(constructor.prototype[method], method, descriptor);

@@ -12,6 +12,7 @@ import {
   IsArray,
   IsDateString,
   IsIn,
+  IsNotEmpty,
   IsRFC3339,
   IsUUID,
 } from 'class-validator';
@@ -23,6 +24,12 @@ export class GrantConsentRequestDto implements access.GrantConsentRequest {
       ValidationType.WRONG_DATA_FORMAT,
     ),
   })
+  @IsNotEmpty({
+    message: getValidationMessage(
+      DtoPrefix.CLINIC_ID,
+      ValidationType.NOT_EMPTY,
+    ),
+  })
   clinicId!: string;
 
   @IsUUID('4', {
@@ -30,6 +37,9 @@ export class GrantConsentRequestDto implements access.GrantConsentRequest {
       DtoPrefix.PET_ID,
       ValidationType.WRONG_DATA_FORMAT,
     ),
+  })
+  @IsNotEmpty({
+    message: getValidationMessage(DtoPrefix.PET_ID, ValidationType.NOT_EMPTY),
   })
   petId!: string;
 

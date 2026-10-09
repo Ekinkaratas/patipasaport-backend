@@ -18,6 +18,7 @@ export const LogActionMap: Record<ResponseMessages, LogAction> = {
   [ResponseMessages.FORBIDDEN]: LogAction.FORBIDDEN,
   [ResponseMessages.USER_TYPE_NOT_VALID_FOR_REGISTER]: LogAction.FORBIDDEN,
   [ResponseMessages.ACCOUNT_DISABLED]: LogAction.FORBIDDEN,
+  [ResponseMessages.PERMISSION_DENIED]: LogAction.FORBIDDEN,
 
   [ResponseMessages.NOT_FOUND]: LogAction.NOT_FOUND,
 

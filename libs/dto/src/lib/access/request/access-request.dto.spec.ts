@@ -44,12 +44,7 @@ describe('GrantConsentRequestDto', () => {
       'clinicId',
       msg(P.CLINIC_ID, V.WRONG_DATA_FORMAT),
     ],
-    [
-      'petId yok',
-      { petId: undefined },
-      'petId',
-      msg(P.PET_ID, V.WRONG_DATA_FORMAT),
-    ],
+    ['petId yok', { petId: undefined }, 'petId', msg(P.PET_ID, V.NOT_EMPTY)],
     [
       'expiresAt tarih değil',
       { expiresAt: 'yarın' },

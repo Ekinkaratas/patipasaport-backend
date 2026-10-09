@@ -200,6 +200,7 @@ describe('AccessController', () => {
         status: access.ConsentStatus.ACTIVE,
         expiresAt: '2026-12-01T00:00:00.000Z',
         deniedReason: access.DeniedReason.DENIED_REASON_UNSPECIFIED,
+        petOwnerId: '8f9e0d1c-2b3a-4c5d-8e6f-7a8b9c0d1e2f',
       };
       accessService.checkAccess.mockResolvedValue(expected);
 

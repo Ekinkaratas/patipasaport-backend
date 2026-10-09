@@ -1,14 +1,14 @@
 # PatiPasaport — Veritabanı Şeması
 
-Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL foreign key ile değil, **uygulama seviyesinde** (gRPC çağrısı ile doğrulanarak) tutulur — çünkü farklı veritabanı teknolojileri (PostgreSQL / MongoDB) birbirine native referans veremez. Aynı servisin kendi tabloları arasında foreign key kullanılabilir.
+Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL foreign key ile değil, **uygulama seviyesinde** (gRPC çağrısı ile doğrulanarak) tutulur — çünkü her servisin veritabanı ayrı bir sunucudadır ve veritabanları birbirine native referans veremez. Aynı servisin kendi tabloları arasında foreign key kullanılabilir.
 
 | Servis | Durum |
 |---|---|
-| Auth | ✅ Kesinleşti — Prisma schema + migration uygulandı |
-| Users | ✅ Kesinleşti — Prisma schema + migration uygulandı |
-| Clinics | 🟡 Yüzeysel — ileride genişletilecek |
-| Pets | 🟡 Taslak — açık soru: `species` |
-| Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `CheckAccess`) henüz yazılmadı |
+| Auth | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`Register`, `Login`, `RefreshToken`, `Logout`) |
+| Users | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`CreateUser`, `DeleteUser`, `GetMe`, `UpdateMe`, `GetUserRole`, `GetUserAuthInfo`, `GetUserDisplayNames`, `GetUserContact`). `ListUsersByClinic` yazılmadı — `STAFF` rolü kaldırıldığı için işlevsiz kaldı |
+| Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`); servis metotları yazıldı (`GetClinic`, `AddStockItem`, `ListStockItems`, `GetClinicPetOverview`). `UploadPetResult` Medical Record tasarımını bekliyor (şimdilik `UNIMPLEMENTED` döner) |
+| Pets | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`) |
+| Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor |
 | Medical Record | ⏸ Tartışılacak — aşağıdaki içerik ilk taslaktır |
 
 ---
@@ -92,44 +92,95 @@ Prisma: `apps/users/prisma/schema.prisma`
 
 ---
 
-## Clinics Service — PostgreSQL
+## Clinics Service — PostgreSQL (`clinics_db`)
+
+Prisma: `apps/clinics/prisma/schema.prisma`
 
 ### clinics
 
 | Kolon | Tip | Not |
 |---|---|---|
 | id | UUID (PK) | |
-| full_name | varchar | |
+| full_name | varchar(128) | Proto `Clinic.name` |
 | tax_number | varchar(11), unique | VKN (10 hane) veya şahıs işletmesi için TCKN (11 hane) |
-| contact_email | varchar, unique | Kurumsal iletişim adresi — **giriş kimliği değil** (girişler auth_db üzerinden) |
-| tel_no | varchar, unique | E.164 formatında |
+| contact_email | varchar(254), unique | Kurumsal iletişim adresi — **giriş kimliği değil** (girişler auth_db üzerinden). Proto `Clinic.email` |
+| tel_no | varchar(16), unique | E.164 formatında. Proto `Clinic.phone` |
+| is_active | boolean, default `true` | `false` ise klinik pasif; Access Service `GrantConsent`'te pasif kliniği `NOT_FOUND` sayar |
 | created_at | timestamp | |
 | updated_at | timestamp | |
 
+**Silme yok, pasifleştirme var:** klinik kaydı fiziksel olarak silinmez; `is_active = false` yapılır, ad ve diğer alanlar korunur. `tax_number` gibi özel bilgiler rastgele değerlerle belirsizleştirilir (hangi alanlar ve değer biçimi pasifleştirme RPC'si yazılırken kesinleşecek; değerler sütun uzunluğuna sığmalı ve gerçek bir VKN/TCKN, email ya da telefonla çakışmamalı).
+
+### stock_items
+
+| Kolon | Tip | Not |
+|---|---|---|
+| id | UUID (PK) | |
+| clinic_id | UUID, FK → `clinics.id`, index | `ON DELETE RESTRICT` — stoku olan klinik silinemez (zaten silinmez, pasifleştirilir) |
+| name | varchar(64) | Kural: `AddStockItemRequestDto` |
+| category | enum `StockCategory` | `VACCINE` / `MEDICINE` / `SUPPLY` / `FOOD` / `OTHER` — `STOCK_CATEGORIES` (`libs/common`) ile birebir aynı |
+| unit | enum `StockUnit` | `PIECE` / `BOX` / `BOTTLE` / `AMPOULE` / `TABLET` / `DOSE` / `ML` / `MG` / `G` — `STOCK_UNITS` ile birebir aynı |
+| quantity | integer | 0–100.000 (DTO) |
+| critical_level | integer | 0–100.000 (DTO); `0` = uyarı yok |
+| expires_at | date, nullable | Son kullanma tarihi; boşsa yok |
+| created_by | UUID | Kaydı giren kullanıcının `users.id`'si — JWT'den alınır, istemciden değil |
+| created_at | timestamp | |
+| updated_at | timestamp | |
+
+**Index:** `(clinic_id, category)` — `ListStockItems` kategori filtresi için.
+
+`is_below_critical` saklanmaz; okurken `quantity < critical_level` olarak hesaplanır.
+
+> Kategori veya birim listesine yeni kod eklemek hem `libs/common` listesini hem enum migration'ını gerektirir.
+
 ---
 
-## Pets Service — MongoDB (taslak)
+## Pets Service — PostgreSQL (`pets_db`)
+
+Prisma: `apps/pets/prisma/schema.prisma`
+
+> İlk tasarım MongoDB'ydi; Prisma 7'nin MongoDB sürücü adaptörü olmadığı ve veri tamamen sabit yapılı olduğu için PostgreSQL'e geçildi (diğer servislerle aynı araç zinciri).
 
 ### pets
 
-| Alan | Tip | Not |
+| Kolon | Tip | Not |
 |---|---|---|
-| _id | UUID | |
-| name | string | Proto `name` ile aynı |
-| species | string | Enum mu serbest metin mi — **açık soru** |
-| breed | string, opsiyonel | Melez / bilinmeyen cins için boş bırakılabilir |
-| sex | enum | `MALE` / `FEMALE` — proto `PetSex` |
-| birth_date | date, opsiyonel | Kesin tarih veya tahmini yaştan hesaplanan tarih — yaş saklanmaz, her okumada bu tarihten hesaplanır |
-| is_birth_date_estimated | boolean, default `false` | `true`: tarih kullanıcının girdiği yaştan türetildi ("~3 yaş" gösterimi) |
+| id | UUID (PK) | Pets Service üretir (UUID v4) |
+| name | varchar(32), collation `tr-TR-x-icu` | 1–32 karakter; yalnızca harf (Türkçe dahil) ve kelimeler arasında tek boşluk — rakam, emoji ve `' _ + -` kabul edilmez. `SearchClinicPets`'teki büyük/küçük harf duyarsız ad araması Türkçe kurala göre çalışır (`I`↔`ı`, `İ`↔`i`); Prisma sütun collation'ını tanımadığı için ayar migration'da tutulur |
+| species | enum `PetSpecies` | `PET_SPECIES` kodlarından biri — aşağıdaki "Tür ve cins listesi" |
+| breed | varchar(32), zorunlu | Kaydın türüne ait `PET_BREEDS` listesinden biri; melez veya cinsi bilinmeyen hayvan için `MIXED`. Tür–cins uyumu uygulamada doğrulanır (liste değişince migration gerekmesin diye enum değil) |
+| sex | enum `PetSex` | `MALE` / `FEMALE` — proto `PetSex` |
+| birth_date | date, nullable | `YYYY-AA-GG`. Kesin tarih veya tahmini yaştan hesaplanan tarih — yaş saklanmaz, her okumada bu tarihten hesaplanır. Türkiye saatine (`Europe/Istanbul`) göre bugünden sonraki tarih kabul edilmez |
+| is_birth_date_estimated | boolean, default `false` | `true`: tarih kullanıcının girdiği yaştan türetildi ("~3 yaş" gösterimi); `true` ise `birth_date` zorunlu. Proto: `Pet` 13, `CreatePetRequest` 9, `UpdatePetRequest` 7 |
 | is_neutered | boolean, default `false` | |
-| owner_user_id | string, index | `users.id` — uygulama seviyesinde referans |
-| chip_no_encrypted | string, opsiyonel | AES-256-GCM, random IV — semantically secure, **aranamaz** |
-| chip_no_index | string, opsiyonel, **partial unique** | HMAC-SHA256 blind index — arama bu alan üzerinden; çipsiz kayıtlar unique kısıtına takılmasın diye partial |
-| chip_no_last4 | string, opsiyonel | `chip_number_masked` ("****1234") için — her okumada şifre çözmemek adına |
-| created_at | datetime | |
-| updated_at | datetime | |
+| owner_user_id | UUID, index | `users.id` — uygulama seviyesinde referans |
+| chip_no_encrypted | text, nullable | AES-256-GCM, random IV — semantically secure, **aranamaz**. Düz metin ISO 11784/11785 biçiminde tam 15 rakam |
+| chip_no_index | varchar(64), nullable, unique | HMAC-SHA256 blind index — arama bu alan üzerinden. PostgreSQL unique kısıtında NULL'lar birbirinden farklı sayıldığı için çipsiz kayıtlar kısıta takılmaz |
+| chip_no_last4 | char(4), nullable | `chip_number_masked` ("****1234") için — her okumada şifre çözmemek adına |
+| created_at | timestamp | |
+| updated_at | timestamp | |
 
 > Çip numarası neden ikiye ayrıldı: Deterministic encryption (aynı girdi → aynı çıktı) aranabilirlik sağlar ama frekans analizine açıktır. Blind index yaklaşımı ile asıl veri semantically secure şekilde şifreli kalır, arama ayrı bir HMAC sütunu üzerinden yapılır.
+
+### Tür ve cins listesi
+
+Tanım: `libs/common/src/lib/enums/messages/pet-species.ts` (`PET_SPECIES`) ve `pet-breeds.ts` (`PET_BREEDS`, anahtar = tür, değer = cins listesi). Değerler İngilizce koddur; arayüz Türkçe adını gösterir. Listede yalnızca küçük hayvan kliniklerine uygun evcil türler vardır (vahşi ve egzotik türler yok). Her türde en fazla 8 cins tutulur, melez ve cinsi bilinmeyenler için her türe ayrıca `MIXED` eklenir.
+
+| Tür | Cinsler |
+|---|---|
+| `DOG` | `GOLDEN_RETRIEVER`, `LABRADOR_RETRIEVER`, `GERMAN_SHEPHERD`, `KANGAL`, `SIBERIAN_HUSKY`, `POODLE`, `POMERANIAN`, `YORKSHIRE_TERRIER`, `MIXED` |
+| `CAT` | `BRITISH_SHORTHAIR`, `SCOTTISH_FOLD`, `PERSIAN`, `TURKISH_VAN`, `TURKISH_ANGORA`, `SIAMESE`, `MAINE_COON`, `RAGDOLL`, `MIXED` |
+| `BIRD` | `BUDGERIGAR`, `CANARY`, `COCKATIEL`, `LOVEBIRD`, `AFRICAN_GREY`, `MIXED` |
+| `RABBIT` | `HOLLAND_LOP`, `NETHERLAND_DWARF`, `LIONHEAD`, `ANGORA`, `REX`, `MIXED` |
+| `HAMSTER` | `SYRIAN`, `CAMPBELL_DWARF`, `WINTER_WHITE_DWARF`, `ROBOROVSKI`, `MIXED` |
+| `GUINEA_PIG` | `AMERICAN`, `ABYSSINIAN`, `PERUVIAN`, `TEDDY`, `MIXED` |
+| `FERRET` | `MIXED` — gelinciğin cinsi yoktur, yalnızca renk varyantı vardır |
+| `TURTLE` | `RED_EARED_SLIDER`, `YELLOW_BELLIED_SLIDER`, `RUSSIAN_TORTOISE`, `MIXED` — yerli mahmuzlu tosbağa koruma altında olduğu için listede yok |
+
+**Kurallar:**
+- `PET_BREEDS`'in anahtarları `PET_SPECIES` ile birebir aynı olmak zorundadır (`satisfies Record<PetSpecies, …>`); yeni bir tür eklenip cinsleri yazılmazsa kod derlenmez.
+- `CreatePet`: cins, istekteki türün listesinden olmalıdır (ör. `DOG` + `CANARY` reddedilir).
+- `UpdatePet`'te `species` alanı yoktur; DTO yalnızca cinsin herhangi bir listede olduğunu doğrular, kayıtlı türle uyumu Pets Service kontrol eder.
 
 ---
 
@@ -149,7 +200,7 @@ Prisma: `apps/access/prisma/schema.prisma`
 | medical_write | boolean, default `false` | Scope |
 | vaccination_read | boolean, default `false` | Scope |
 | prescription_read | boolean, default `false` | Scope |
-| chip_number_read | boolean, default `false` | Scope |
+| chip_number_read | boolean, default `false` | Scope — çip numarasını açık görme. Klinik çip düzeltmesi (`UpdatePet`) de bu scope'u ister: göremediği veriyi değiştiremez |
 | owner_contact_read | boolean, default `false` | Scope |
 | status | enum, default `ACTIVE` | `ACTIVE` / `REVOKED` |
 | expires_at | timestamp | Rıza penceresinin üst sınırı (`GrantConsentRequest.expires_at`) |

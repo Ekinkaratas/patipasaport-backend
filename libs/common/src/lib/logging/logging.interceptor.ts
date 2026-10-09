@@ -10,6 +10,7 @@ import { LogAction, LogActionMap, LogPayload } from '../enums';
 import { DtoPrefix, ResponseMessages } from '../enums/messages';
 import { RpcException } from '@nestjs/microservices';
 import { getCorrelationId } from '../storage';
+import { getAuthUser } from '../guards/auth-user';
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -23,7 +24,7 @@ export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const rpcCtx = context.switchToRpc().getContext();
     const correlationId = getCorrelationId();
-    const userId = this.extract(rpcCtx, 'x-user-id');
+    const userId = getAuthUser(rpcCtx)?.userId ?? null;
     const method = context.getHandler().name;
 
     const base = { correlationId, userId, service: this.serviceName, method };
@@ -89,17 +90,5 @@ export class LoggingInterceptor implements NestInterceptor {
         return throwError(() => err);
       }),
     );
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private extract(rpcCtx: any, key: string): string | null {
-    try {
-      const value = rpcCtx?.get?.(key);
-      return Array.isArray(value) && value.length > 0
-        ? value[0].toString()
-        : null;
-    } catch {
-      return null;
-    }
   }
 }

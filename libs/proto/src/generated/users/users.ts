@@ -153,6 +153,7 @@ export interface GetUserDisplayNamesResponse {
 
 export interface GetUserContactRequest {
   userId: string;
+  petId: string;
 }
 
 export interface GetUserContactResponse {

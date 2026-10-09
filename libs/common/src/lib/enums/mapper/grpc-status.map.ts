@@ -18,6 +18,7 @@ export const GrpcStatusMap: Record<ResponseMessages, status> = {
   [ResponseMessages.FORBIDDEN]: status.PERMISSION_DENIED,
   [ResponseMessages.USER_TYPE_NOT_VALID_FOR_REGISTER]: status.PERMISSION_DENIED,
   [ResponseMessages.ACCOUNT_DISABLED]: status.PERMISSION_DENIED,
+  [ResponseMessages.PERMISSION_DENIED]: status.PERMISSION_DENIED,
 
   [ResponseMessages.NOT_FOUND]: status.NOT_FOUND,
 

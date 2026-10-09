@@ -21,13 +21,12 @@ message Clinic {
   string tax_number = 3;
   string phone = 4;
   string email = 5;
-  string address_line = 6;
-  string city = 7;
-  string district = 8;
-  string working_hours = 9;   // "Pzt-Cum 09:00-18:00"
   bool is_active = 10;
   string created_at = 11;     // ISO-8601
   string updated_at = 12;     // ISO-8601
+
+  reserved 6, 7, 8, 9;
+  reserved "address_line", "city", "district", "working_hours";
 }
 
 message GetClinicRequest {

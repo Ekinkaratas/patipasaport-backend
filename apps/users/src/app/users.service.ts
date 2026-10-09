@@ -1,6 +1,13 @@
-import { users } from '@libs/proto';
-import { Injectable, Logger } from '@nestjs/common';
-import { rejectRpc, ResponseMessages } from '@libs/common';
+import { access, users } from '@libs/proto';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ClientGrpc } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
+import {
+  AuthUser,
+  forwardGrpcError,
+  rejectRpc,
+  ResponseMessages,
+} from '@libs/common';
 import { PrismaService } from './prisma/prisma.service';
 import {
   Prisma,
@@ -9,12 +16,23 @@ import {
 } from '../generated/prisma/client';
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnModuleInit {
   private readonly logger = new Logger(UsersService.name);
+  private accessClient!: access.AccessServiceClient;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject('ACCESS_SERVICE') private readonly access_client: ClientGrpc,
+  ) {}
 
-  // servis içi yardımcı metotlar
+  onModuleInit() {
+    this.accessClient =
+      this.access_client.getService<access.AccessServiceClient>(
+        access.ACCESS_SERVICE_NAME,
+      );
+  }
+
+  //#region  ---  servis içi yardımcı metotlar  ---
   private static toProtoRole(role: DbUserRole): users.UserRole {
     switch (role) {
       case DbUserRole.PET_OWNER:
@@ -47,7 +65,42 @@ export class UsersService {
     return meta?.driverAdapterError?.cause?.constraint?.index;
   }
 
-  // servis içi metotlar
+  private userResponse(user: User): users.User {
+    return {
+      userId: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      phone: user.phone,
+      role: UsersService.toProtoRole(user.role),
+      clinicId: user.clinicId || '',
+      isActive: user.isActive,
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
+    };
+  }
+
+  private async checkOwnerContactAccess(
+    petId: string,
+    user: AuthUser,
+  ): Promise<access.CheckAccessResponse> {
+    try {
+      return await firstValueFrom(
+        this.accessClient.checkAccess({
+          clinicId: user.clinicId,
+          petId,
+          requiredScopes: ['owner_contact_read'],
+        }),
+      );
+    } catch (e) {
+      forwardGrpcError(this.logger, e, 'getUserContact: access.checkAccess');
+    }
+  }
+
+  //#endregion
+
+  //#region  ---  servis içi metotlar  ---
+
+  //#region  --- public dekoratörü ile işaretlenen metotlar  ---
   async createUser(dto: users.CreateUserRequest): Promise<users.UserResponse> {
     try {
       const data = await this.prisma.user.create({
@@ -179,4 +232,188 @@ export class UsersService {
       isActive: user_db_data.isActive,
     };
   }
+
+  //#endregion
+
+  async getMe(user: AuthUser): Promise<users.GetMeResponse> {
+    const me = await this.prisma.user.findUnique({
+      where: { id: user.userId },
+    });
+
+    if (!me) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.NOT_FOUND,
+        `getMe: user bulunamadı (id: ${user.userId})`,
+        'warn',
+      );
+    }
+
+    if (!me.isActive) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.FORBIDDEN,
+        `getMe: aktif değil (id: ${user.userId}, is_Active: ${me.isActive})`,
+        'log',
+      );
+    }
+
+    return this.userResponse(me);
+  }
+
+  async updateMe(
+    request: users.UpdateMeRequest,
+    user: AuthUser,
+  ): Promise<users.UserResponse> {
+    const control = Object.entries(request)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      .filter(([_, val]) => val !== undefined && val !== '' && val !== null)
+      .map(([key]) => key);
+
+    if (control.length === 0) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.BAD_REQUEST,
+        'updateMe: gelen body içi boş',
+      );
+    }
+
+    try {
+      const updateUser: User = await this.prisma.user.update({
+        where: { id: user.userId },
+        data: {
+          ...request,
+        },
+      });
+
+      return { user: this.userResponse(updateUser) };
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        if (e.code === 'P2025') {
+          rejectRpc(
+            this.logger,
+            ResponseMessages.NOT_FOUND,
+            'updateMe: Güncellenmek istenen kullanıcı bulunamadı',
+          );
+        }
+
+        if (e.code === 'P2002') {
+          rejectRpc(
+            this.logger,
+            ResponseMessages.CONFLICT,
+            'updateMe: Bu bilgiler (örneğin e-posta) başka bir kullanıcı tarafından kullanılıyor',
+          );
+        }
+      }
+
+      rejectRpc(
+        this.logger,
+        ResponseMessages.INTERNAL_SERVER_ERROR,
+        'updateMe: Kullanıcı güncellenirken beklenmeyen bir hata oluştu',
+      );
+    }
+  }
+
+  async getUserRole(
+    request: users.UserFindByIdRequest,
+    user: AuthUser,
+  ): Promise<users.GetUserRoleResponse> {
+    const userRole = await this.prisma.user.findUnique({
+      where: { id: request.userId },
+      select: { id: true, role: true, clinicId: true },
+    });
+
+    if (!userRole) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.NOT_FOUND,
+        `getUserRole: user bulunamadı (id: ${user.userId})`,
+      );
+    }
+
+    return {
+      userId: userRole.id,
+      role: UsersService.toProtoRole(userRole.role),
+      clinicId: userRole.clinicId || '',
+    };
+  }
+
+  async getUserDisplayNames(
+    request: users.GetUserDisplayNamesRequest,
+  ): Promise<users.GetUserDisplayNamesResponse> {
+    const userDisplayNames = await this.prisma.user.findMany({
+      where: { id: { in: request.userIds } },
+      select: { id: true, fullName: true, role: true },
+    });
+
+    const userResponse = userDisplayNames.map((value) => ({
+      ...value,
+      userId: value.id,
+      role: UsersService.toProtoRole(value.role),
+    }));
+
+    const existingIds = userDisplayNames.map((user) => user.id);
+
+    const notFoundIds: string[] = request.userIds.filter(
+      (requestedId) => !existingIds.includes(requestedId),
+    );
+
+    return {
+      users: userResponse,
+      notFoundIds: notFoundIds,
+    };
+  }
+
+  async getUserContact(
+    request: users.GetUserContactRequest,
+    user: AuthUser,
+  ): Promise<users.GetUserContactResponse> {
+    const consent = await this.checkOwnerContactAccess(request.petId, user);
+
+    if (!consent.allowed) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.FORBIDDEN,
+        `getUserContact: owner_contact_read izni yok (clinicId=${user.clinicId} petId=${request.petId})`,
+        'log',
+      );
+    }
+
+    if (consent.petOwnerId !== request.userId) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.NOT_FOUND,
+        `getUserContact: kullanıcı rızayı veren pet sahibi değil (userId=${request.userId} petId=${request.petId})`,
+        'warn',
+      );
+    }
+
+    const contact = await this.prisma.user.findUnique({
+      where: { id: request.userId },
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        email: true,
+        isActive: true,
+      },
+    });
+
+    if (!contact || !contact.isActive) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.NOT_FOUND,
+        `getUserContact: kullanıcı yok ya da pasif (userId=${request.userId})`,
+      );
+    }
+
+    return {
+      userId: contact.id,
+      fullName: contact.fullName,
+      phone: contact.phone,
+      email: contact.email,
+    };
+  }
+
+  //#endregion
 }
