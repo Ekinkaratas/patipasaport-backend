@@ -248,12 +248,28 @@ describe('ListStockItemsRequestDto', () => {
     }),
   );
 
-  it.each([true, false, undefined])(
+  it.each([true, false, undefined, 'true', 'false'])(
     'onlyBelowCritical %p kabul edilir',
     (onlyBelowCritical) => expect(check({ onlyBelowCritical })).toEqual({}),
   );
 
-  it.each(['true', 1])(
+  it.each([
+    ['true', true],
+    ['false', false],
+  ])(
+    'sorgu dizesinden gelen onlyBelowCritical %p boolean %p olur',
+    (raw, expected) =>
+      expect(
+        plainToInstance(ListStockItemsRequestDto, {
+          clinicId: UUID_A,
+          page: 1,
+          pageSize: 8,
+          onlyBelowCritical: raw,
+        }).onlyBelowCritical,
+      ).toBe(expected),
+  );
+
+  it.each(['evet', 'TRUE', '1', 1])(
     'onlyBelowCritical %p → ONLY_BELOW_CRITICAL_MUST_BE_BOOLEAN',
     (onlyBelowCritical) =>
       expect(check({ onlyBelowCritical })).toEqual({

@@ -20,6 +20,10 @@ import { ApiAuthController } from './auth.controller';
         options: {
           url: process.env.AUTH_GRPC_URL ?? '0.0.0.0:3002',
           package: AUTH_PACKAGE_NAME,
+          loader: {
+            defaults: true,
+            arrays: true,
+          },
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,

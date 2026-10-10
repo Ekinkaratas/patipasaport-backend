@@ -1,37 +1,54 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { ApiAccessService } from './access.service';
-import { ExchangeTokenRequestDto } from '@libs/dto';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { BaseResponse } from '@libs/common';
+import {
+  GetConsentStatusRequestDto,
+  GrantConsentRequestDto,
+  ListMyConsentsRequestDto,
+  RevokeConsentRequestDto,
+} from '@libs/dto';
 import { access } from '@libs/proto';
-import { Public } from '@libs/common';
+import { ApiAccessService } from './access.service';
 
-@Controller('access')
+@Controller('consents')
 export class ApiAccessController {
   constructor(private readonly accessService: ApiAccessService) {}
 
-  // GEÇİCİ: access.proto ExchangeToken'ı "iç RPC, HTTP endpoint'i yok"
-  // gerçek çağrı bir AuthGuard içinden yapılacak ve bu uç silinecek.
-  // @Public: global guard gelmeden önceki davranış korunur (test ucu).
-  @Public()
-  @Post('exchange-token')
-  exchangeToken(@Body() dto: ExchangeTokenRequestDto) {
-    return this.accessService.exchangeToken(dto);
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  grantConsent(
+    @Body() request: GrantConsentRequestDto,
+  ): Promise<BaseResponse<access.ConsentResponse>> {
+    return this.accessService.grantConsent(request);
   }
 
-  // GEÇİCİ: access.proto createToken'ı "iç RPC, HTTP endpoint'i yok"
-  // @Public: token almak için token istenemez (test ucu).
-  @Public()
-  @Post('create-token')
-  createToken(
-    @Body()
-    dto: {
-      userId: string;
-      role: string;
-      clinicId: string;
-      clientType: access.ClientType;
-      scopes: string[];
-      ttlSeconds: number;
-    },
-  ) {
-    return this.accessService.createToken(dto);
+  @Post(':consentId/revoke')
+  @HttpCode(HttpStatus.OK)
+  revokeConsent(
+    @Param() request: RevokeConsentRequestDto,
+  ): Promise<BaseResponse<access.ConsentResponse>> {
+    return this.accessService.revokeConsent(request);
+  }
+
+  @Get('status')
+  getConsentStatus(
+    @Query() request: GetConsentStatusRequestDto,
+  ): Promise<BaseResponse<access.ConsentResponse>> {
+    return this.accessService.getConsentStatus(request);
+  }
+
+  @Get()
+  listMyConsents(
+    @Query() request: ListMyConsentsRequestDto,
+  ): Promise<BaseResponse<access.ListMyConsentsResponse>> {
+    return this.accessService.listMyConsents(request);
   }
 }

@@ -86,5 +86,8 @@ export class ListStockItemsRequestDto implements clinics.ListStockItemsRequest {
     ),
   })
   @IsOptional()
+  @Transform(({ value }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
   onlyBelowCritical?: boolean | undefined;
 }

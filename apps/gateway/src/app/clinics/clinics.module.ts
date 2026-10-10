@@ -20,6 +20,10 @@ import { ApiClinicsController } from './clinics.controller';
         options: {
           url: process.env.CLINICS_GRPC_URL ?? '0.0.0.0:3003',
           package: CLINICS_PACKAGE_NAME,
+          loader: {
+            defaults: true,
+            arrays: true,
+          },
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,

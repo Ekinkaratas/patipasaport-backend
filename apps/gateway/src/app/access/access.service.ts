@@ -1,13 +1,15 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 import { access } from '@libs/proto';
-import { getCorrelationId } from '@libs/common';
-import { ExchangeTokenRequestDto } from '@libs/dto';
+import {
+  BaseResponse,
+  getCorrelationId,
+  ResponseMessages,
+} from '@libs/common';
 
 @Injectable()
 export class ApiAccessService implements OnModuleInit {
-  private readonly logger = new Logger(ApiAccessService.name);
   private accessClient!: access.AccessServiceClient;
 
   constructor(@Inject('ACCESS_SERVICE') private readonly client: ClientGrpc) {}
@@ -18,35 +20,57 @@ export class ApiAccessService implements OnModuleInit {
     );
   }
 
-  async exchangeToken(
-    dto: ExchangeTokenRequestDto,
-  ): Promise<access.ExchangeTokenResponse> {
-    this.logger.log(`ExchangeToken çağrılıyor (clientType=${dto.clientType})`);
-
-    const response = await firstValueFrom(this.accessClient.exchangeToken(dto));
-
-    const correlationId = getCorrelationId();
-    if (response.traceId && response.traceId !== correlationId) {
-      this.logger.warn(
-        `traceId uyuşmuyor: ${response.traceId} != ${correlationId}`,
-      );
-    }
-
-    return response;
+  async grantConsent(
+    request: access.GrantConsentRequest,
+  ): Promise<BaseResponse<access.ConsentResponse>> {
+    const data = await firstValueFrom(this.accessClient.grantConsent(request));
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
   }
 
-  async createToken(dto: {
-    userId: string;
-    role: string;
-    clinicId: string;
-    clientType: access.ClientType;
-    scopes: string[];
-    ttlSeconds: number;
-  }) {
-    const response = await firstValueFrom(
-      this.accessClient.createOpaqueToken(dto),
+  async revokeConsent(
+    request: access.RevokeConsentRequest,
+  ): Promise<BaseResponse<access.ConsentResponse>> {
+    const data = await firstValueFrom(
+      this.accessClient.revokeConsent(request),
     );
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
+  }
 
-    return response;
+  async getConsentStatus(
+    request: access.GetConsentStatusRequest,
+  ): Promise<BaseResponse<access.ConsentResponse>> {
+    const data = await firstValueFrom(
+      this.accessClient.getConsentStatus(request),
+    );
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
+  }
+
+  async listMyConsents(
+    request: access.ListMyConsentsRequest,
+  ): Promise<BaseResponse<access.ListMyConsentsResponse>> {
+    const data = await firstValueFrom(
+      this.accessClient.listMyConsents(request),
+    );
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
   }
 }

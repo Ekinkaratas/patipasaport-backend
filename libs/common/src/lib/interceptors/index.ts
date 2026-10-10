@@ -1,3 +1,4 @@
+export { ClientTypeHeaderInterceptor } from './client-type-header.interceptor';
 export { GrpcCorrelationInterceptor } from './grpc-correlation.interceptor';
 export { grpcCorrelationClientInterceptor } from './grpc-correlation-client.interceptor';
 export { grpcAuthClientInterceptor } from './grpc-auth-client.interceptor';

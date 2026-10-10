@@ -6,14 +6,23 @@ export interface HttpResponse {
   body: string;
 }
 
-export function httpGet(
+export function httpRequest(
   port: number,
+  method: string,
   path: string,
-  headers: Record<string, string> = {},
+  options: { headers?: Record<string, string>; body?: unknown } = {},
 ): Promise<HttpResponse> {
+  const payload =
+    options.body === undefined ? undefined : JSON.stringify(options.body);
+  const headers: Record<string, string> = { ...(options.headers ?? {}) };
+  if (payload !== undefined) {
+    headers['content-type'] = 'application/json';
+    headers['content-length'] = String(Buffer.byteLength(payload));
+  }
+
   return new Promise((resolvePromise, reject) => {
     const req = request(
-      { host: '127.0.0.1', port, path, method: 'GET', headers, agent: false },
+      { host: '127.0.0.1', port, path, method, headers, agent: false },
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -28,6 +37,17 @@ export function httpGet(
       },
     );
     req.on('error', reject);
+    if (payload !== undefined) {
+      req.write(payload);
+    }
     req.end();
   });
+}
+
+export function httpGet(
+  port: number,
+  path: string,
+  headers: Record<string, string> = {},
+): Promise<HttpResponse> {
+  return httpRequest(port, 'GET', path, { headers });
 }

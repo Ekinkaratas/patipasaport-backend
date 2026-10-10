@@ -20,12 +20,20 @@ import { ApiAccessService } from './access.service';
         options: {
           url: process.env.ACCESS_GRPC_URL ?? '0.0.0.0:3001',
           package: ACCESS_PACKAGE_NAME,
+          loader: {
+            defaults: true,
+            arrays: true,
+          },
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,
               grpcAuthClientInterceptor,
               createGrpcDeadlineInterceptor(GRPC_GATEWAY_TIMEOUT_MS),
             ],
+            loader: {
+              defaults: true,
+              arrays: true,
+            },
           },
           protoPath: join(__dirname, 'proto/access/access.proto'),
         },

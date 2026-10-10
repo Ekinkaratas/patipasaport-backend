@@ -18,6 +18,7 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       stopAtFirstError: true,
+      validateCustomDecorators: true,
     }),
   );
   app.useGlobalFilters(new HttpsExceptionFilter());

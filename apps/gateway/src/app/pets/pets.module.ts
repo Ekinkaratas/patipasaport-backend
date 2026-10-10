@@ -20,6 +20,10 @@ import { ApiPetsController } from './pets.controller';
         options: {
           url: process.env.PETS_GRPC_URL ?? '0.0.0.0:3005',
           package: PETS_PACKAGE_NAME,
+          loader: {
+            defaults: true,
+            arrays: true,
+          },
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,
