@@ -2,6 +2,8 @@ import { Controller } from '@nestjs/common';
 import { ClinicsService } from './clinics.service';
 import {
   AddStockItemRequestDto,
+  CreateClinicRequestDto,
+  DeactivateClinicRequestDto,
   GetClinicPetOverviewRequestDto,
   GetClinicRequestDto,
   ListStockItemsRequestDto,
@@ -9,7 +11,7 @@ import {
 } from '@libs/dto';
 import { GrpcMethod, Payload } from '@nestjs/microservices';
 import { clinics } from '@libs/proto';
-import { AuthUser, CurrentUser, Roles } from '@libs/common';
+import { AuthUser, CurrentUser, Public, Roles } from '@libs/common';
 
 @Controller()
 export class ClinicsController {
@@ -22,6 +24,23 @@ export class ClinicsController {
     @CurrentUser() user: AuthUser,
   ): Promise<clinics.ClinicResponse> {
     return this.clinicsService.getClinic(request, user);
+  }
+
+  @Public()
+  @GrpcMethod(clinics.CLINICS_SERVICE_NAME, 'CreateClinic')
+  async createClinic(
+    @Payload() request: CreateClinicRequestDto,
+  ): Promise<clinics.ClinicResponse> {
+    return this.clinicsService.createClinic(request);
+  }
+
+  @Roles(['CLINIC'])
+  @GrpcMethod(clinics.CLINICS_SERVICE_NAME, 'DeactivateClinic')
+  async deactivateClinic(
+    @Payload() request: DeactivateClinicRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<clinics.ClinicResponse> {
+    return this.clinicsService.deactivateClinic(request, user);
   }
 
   @Roles(['CLINIC'])

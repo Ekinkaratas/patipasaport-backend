@@ -25,6 +25,7 @@ export const GrpcStatusMap: Record<ResponseMessages, status> = {
   [ResponseMessages.CONFLICT]: status.ALREADY_EXISTS,
   [ResponseMessages.EMAIL_ALREADY_EXISTS]: status.ALREADY_EXISTS,
   [ResponseMessages.PHONE_ALREADY_EXISTS]: status.ALREADY_EXISTS,
+  [ResponseMessages.TAX_NUMBER_ALREADY_EXISTS]: status.ALREADY_EXISTS,
 
   [ResponseMessages.METHOD_NOT_ALLOWED]: status.UNIMPLEMENTED,
   [ResponseMessages.TOO_MANY_REQUESTS]: status.RESOURCE_EXHAUSTED,

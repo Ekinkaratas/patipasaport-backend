@@ -4,9 +4,9 @@ Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL fore
 
 | Servis | Durum |
 |---|---|
-| Auth | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`Register`, `Login`, `RefreshToken`, `Logout`) |
-| Users | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`CreateUser`, `DeleteUser`, `GetMe`, `UpdateMe`, `GetUserRole`, `GetUserAuthInfo`, `GetUserDisplayNames`, `GetUserContact`). `ListUsersByClinic` yazılmadı — `STAFF` rolü kaldırıldığı için işlevsiz kaldı |
-| Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`); servis metotları yazıldı (`GetClinic`, `AddStockItem`, `ListStockItems`, `GetClinicPetOverview`). `UploadPetResult` Medical Record tasarımını bekliyor (şimdilik `UNIMPLEMENTED` döner) |
+| Auth | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`Register`, `RegisterClinicAccount`, `Login`, `RefreshToken`, `Logout`) |
+| Users | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`CreateUser`, `CreateClinicUser`, `DeleteUser`, `GetMe`, `UpdateMe`, `DeactivateMe`, `DeactivateClinicUsers`, `GetUserRole`, `GetUserAuthInfo`, `GetUserDisplayNames`, `GetUserContact`). `ListUsersByClinic` proto'dan kaldırıldı — `STAFF` rolü kaldırıldığı için işlevsiz kalmıştı |
+| Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `GetClinicPetOverview`). `UploadPetResult` Medical Record tasarımını bekliyor (şimdilik `UNIMPLEMENTED` döner) |
 | Pets | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`) |
 | Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor |
 | Medical Record | ⏸ Tartışılacak — aşağıdaki içerik ilk taslaktır |
@@ -76,15 +76,15 @@ Prisma: `apps/users/prisma/schema.prisma`
 |---|---|---|
 | id | UUID (PK) | Auth Service'in ürettiği id — default yok |
 | email | varchar(254), unique | **Kopya** — source of truth `auth_db.credentials`; değişiklik önce auth'ta yapılır |
-| full_name | varchar(64) | |
-| tel_no | varchar(16), unique | E.164 formatında (`+905XXXXXXXXX`); 16 = E.164 üst sınırı |
-| role | enum, default `PET_OWNER` | `PET_OWNER` / `CLINIC` — `users.proto` `UserRole` ile aynı; `CLINIC` kliniğin ortak hesabıdır (`STAFF` kaldırıldı, proto numarası `reserved`); `CreateUser` yalnızca `PET_OWNER` üretir |
+| full_name | varchar(64) | Hasta sahibinde ad soyad (`FullName` kuralı); klinik hesabında kliniğin adı (klinik adı kuralı, 2–64) |
+| tel_no | varchar(16), unique | E.164 formatında; hasta sahibinde mobil (`+905XXXXXXXXX`), klinik hesabında sabit hat, 0850 ya da mobil (`+90[2-58]XXXXXXXXX`); 16 = E.164 üst sınırı |
+| role | enum, default `PET_OWNER` | `PET_OWNER` / `CLINIC` — `users.proto` `UserRole` ile aynı; `CLINIC` kliniğin ortak hesabıdır (`STAFF` kaldırıldı, proto numarası `reserved`); `CreateUser` yalnızca `PET_OWNER` üretir, `CLINIC` hesabı yalnızca klinik oluşturma akışında `CreateClinicUser` ile açılır |
 | clinic_id | UUID, nullable | Klinik hesabıysa (`CLINIC`) dolu, hasta sahibiyse null (proto'ya boş string olarak döner) |
-| is_active | boolean, default `true` | Hesap durumu (silmeden devre dışı bırakma) — çevrim içi bilgisi **değil**. `false` ise login ve refresh `ACCOUNT_DISABLED` alır |
+| is_active | boolean, default `true` | Hesap durumu (silmeden devre dışı bırakma) — çevrim içi bilgisi **değil**. `false` ise login ve refresh `ACCOUNT_DISABLED` alır. Hasta sahibi `DeactivateMe` ile, klinik hesabı klinik pasifleştirilirken `DeactivateClinicUsers` ile `false` yapılır; eldeki access token en fazla 15 dk daha geçerli kalır |
 | created_at | timestamp | |
 | updated_at | timestamp | |
 
-**Index:** `(clinic_id, role)` — `ListUsersByClinic` için.
+**Index:** `(clinic_id, role)` — `DeactivateClinicUsers` için (kliniğin ortak hesabını `clinic_id` ile bulur).
 
 > Kullanıcı adres alanları kaldırıldı (proto'da `reserved`).
 
@@ -101,15 +101,17 @@ Prisma: `apps/clinics/prisma/schema.prisma`
 | Kolon | Tip | Not |
 |---|---|---|
 | id | UUID (PK) | |
-| full_name | varchar(128) | Proto `Clinic.name` |
-| tax_number | varchar(11), unique | VKN (10 hane) veya şahıs işletmesi için TCKN (11 hane) |
-| contact_email | varchar(254), unique | Kurumsal iletişim adresi — **giriş kimliği değil** (girişler auth_db üzerinden). Proto `Clinic.email` |
-| tel_no | varchar(16), unique | E.164 formatında. Proto `Clinic.phone` |
-| is_active | boolean, default `true` | `false` ise klinik pasif; Access Service `GrantConsent`'te pasif kliniği `NOT_FOUND` sayar |
+| full_name | varchar(128) | Proto `Clinic.name`. DTO 2–64 karakterle sınırlar (harf, rakam, boşluk, `. ' & -`) çünkü aynı değer kliniğin ortak hesabında `users.full_name`'e (varchar(64)) yazılır |
+| tax_number | varchar(11), unique | VKN (10 hane) veya şahıs işletmesi için TCKN (11 hane); resmi kontrol hanesi algoritmalarıyla doğrulanır. Pasif klinikte `X` + 10 rastgele rakam |
+| contact_email | varchar(254), unique | Kurumsal iletişim adresi. Klinik oluşturulurken aynı değer ortak hesabın giriş e-postası olarak da yazılır (`users.email`, `auth_db.credentials.email`); giriş yine auth_db üzerinden yapılır ve sütunlar sonradan birbirini izlemez. Proto `Clinic.email` |
+| tel_no | varchar(16), unique | E.164 formatında; Türkiye sabit hat, 0850 ya da mobil (`+90[2-58]XXXXXXXXX`). Proto `Clinic.phone` |
+| is_active | boolean, default `true` | `false` ise klinik pasif; Access Service `GrantConsent`'te pasif kliniği `NOT_FOUND` sayar, stok işlemleri `FORBIDDEN` alır |
 | created_at | timestamp | |
 | updated_at | timestamp | |
 
-**Silme yok, pasifleştirme var:** klinik kaydı fiziksel olarak silinmez; `is_active = false` yapılır, ad ve diğer alanlar korunur. `tax_number` gibi özel bilgiler rastgele değerlerle belirsizleştirilir (hangi alanlar ve değer biçimi pasifleştirme RPC'si yazılırken kesinleşecek; değerler sütun uzunluğuna sığmalı ve gerçek bir VKN/TCKN, email ya da telefonla çakışmamalı).
+**Oluşturma akışı:** `CreateClinic` iç RPC'dir (gateway'e açılmaz, yönetici çağırır). Önce klinik satırı yazılır (`TAX_NUMBER_` / `EMAIL_` / `PHONE_ALREADY_EXISTS` burada yakalanır), ardından `auth.RegisterClinicAccount` kliniğin ortak hesabını açar (users `CreateClinicUser` → credentials; credential yazılamazsa `DeleteUser` ile geri alınır). Auth hata verirse klinik satırı silinir. Bilinen sınır: auth kaydı yazdıktan sonra clinics→auth çağrısı zaman aşımına uğrarsa klinik satırı silinir ve hesap sahipsiz kalır (error loguna yazılır).
+
+**Silme yok, pasifleştirme var:** klinik kaydı fiziksel olarak silinmez. `DeactivateClinic`'i yalnızca kliniğin kendisi (`CLINIC` rolü, JWT'deki `clinicId`) çağırabilir: `is_active = false` yapılır ve `tax_number` `X` + 10 rastgele rakamla değiştirilir (gerçek VKN/TCKN yalnızca rakamdan oluştuğu için çakışmaz; nadir çakışmada bir kez yeniden üretilir). Ad, e-posta, telefon ve stok kayıtları korunur. Ardından kliniğin ortak hesabı `DeactivateClinicUsers` ile pasifleşir. Kliniğe verilmiş rızalar iptal edilmez. Hesap pasifleştirme adımı yarım kalırsa işlem tekrar çağrılabilir; klinik zaten pasifse vergi numarasına dokunulmaz.
 
 ### stock_items
 

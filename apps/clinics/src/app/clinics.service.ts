@@ -3,14 +3,17 @@ import {
   forwardGrpcError,
   rejectRpc,
   ResponseMessages,
+  rollbackLocal,
 } from '@libs/common';
-import { clinics, medicalRecord, pets, users } from '@libs/proto';
+import { auth, clinics, medicalRecord, pets, users } from '@libs/proto';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
+import { randomInt } from 'crypto';
 import { firstValueFrom, Observable } from 'rxjs';
 import { PrismaService } from './prisma/prisma.service';
 import {
+  Clinic,
   Prisma,
   StockCategory,
   StockItem,
@@ -31,6 +34,7 @@ export class ClinicsService implements OnModuleInit {
   private petsClient!: pets.PetsServiceClient;
   private usersClient!: users.UsersServiceClient;
   private medicalRecordClient!: medicalRecord.MedicalRecordServiceClient;
+  private authClient!: auth.AuthServiceClient;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -38,6 +42,7 @@ export class ClinicsService implements OnModuleInit {
     @Inject('USERS_SERVICE') private readonly users_client: ClientGrpc,
     @Inject('MEDICAL_RECORD_SERVICE')
     private readonly medical_record_client: ClientGrpc,
+    @Inject('AUTH_SERVICE') private readonly auth_client: ClientGrpc,
   ) {}
 
   onModuleInit() {
@@ -51,6 +56,9 @@ export class ClinicsService implements OnModuleInit {
       this.medical_record_client.getService<medicalRecord.MedicalRecordServiceClient>(
         medicalRecord.MEDICAL_RECORD_SERVICE_NAME,
       );
+    this.authClient = this.auth_client.getService<auth.AuthServiceClient>(
+      auth.AUTH_SERVICE_NAME,
+    );
   }
 
   //#region  --- servis içi yardımcı metotlar ---
@@ -184,6 +192,99 @@ export class ClinicsService implements OnModuleInit {
     };
   }
 
+  private static toProtoClinic(row: Clinic): clinics.Clinic {
+    return {
+      id: row.id,
+      name: row.fullName,
+      taxNumber: row.taxNumber,
+      phone: row.telNo,
+      email: row.contactEmail,
+      isActive: row.isActive,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  private static uniqueConstraintName(
+    e: Prisma.PrismaClientKnownRequestError,
+  ): string | undefined {
+    const meta = e.meta as
+      | { driverAdapterError?: { cause?: { constraint?: { index?: string } } } }
+      | undefined;
+    return meta?.driverAdapterError?.cause?.constraint?.index;
+  }
+
+  private static isTaxNumberCollision(e: unknown): boolean {
+    return (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === 'P2002' &&
+      ClinicsService.uniqueConstraintName(e) === 'clinics_tax_number_key'
+    );
+  }
+
+  private static anonymizedTaxNumber(): string {
+    return `X${Array.from({ length: 10 }, () => randomInt(0, 10)).join('')}`;
+  }
+
+  private rejectClinicConflict(e: unknown, method_name: string): never {
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === 'P2002'
+    ) {
+      const constraint = ClinicsService.uniqueConstraintName(e);
+
+      if (constraint === 'clinics_tax_number_key') {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.TAX_NUMBER_ALREADY_EXISTS,
+          `${method_name}: vergi numarası zaten kayıtlı`,
+        );
+      }
+      if (constraint === 'clinics_contact_email_key') {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.EMAIL_ALREADY_EXISTS,
+          `${method_name}: e-posta zaten kayıtlı`,
+        );
+      }
+      if (constraint === 'clinics_tel_no_key') {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.PHONE_ALREADY_EXISTS,
+          `${method_name}: telefon zaten kayıtlı`,
+        );
+      }
+      rejectRpc(
+        this.logger,
+        ResponseMessages.INTERNAL_SERVER_ERROR,
+        `${method_name}: beklenmeyen unique ihlali (constraint=${String(constraint)})`,
+      );
+    }
+    throw e;
+  }
+
+  private async deactivateWithAnonymizedTaxNumber(
+    clinicId: string,
+  ): Promise<Clinic> {
+    const update = () =>
+      this.prisma.clinic.update({
+        where: { id: clinicId },
+        data: {
+          isActive: false,
+          taxNumber: ClinicsService.anonymizedTaxNumber(),
+        },
+      });
+
+    try {
+      return await update();
+    } catch (e) {
+      if (ClinicsService.isTaxNumberCollision(e)) {
+        return update();
+      }
+      throw e;
+    }
+  }
+
   //#endregion
 
   //#region  --- servis metotları ---
@@ -222,6 +323,95 @@ export class ClinicsService implements OnModuleInit {
         updatedAt: res.updatedAt.toISOString(),
       },
     };
+  }
+
+  async createClinic(
+    request: clinics.CreateClinicRequest,
+  ): Promise<clinics.ClinicResponse> {
+    let clinic: Clinic;
+    try {
+      clinic = await this.prisma.clinic.create({
+        data: {
+          fullName: request.name,
+          taxNumber: request.taxNumber,
+          contactEmail: request.email,
+          telNo: request.phone,
+        },
+      });
+    } catch (e) {
+      this.rejectClinicConflict(e, 'createClinic');
+    }
+
+    try {
+      await firstValueFrom(
+        this.authClient.registerClinicAccount({
+          clinicId: clinic.id,
+          email: request.email,
+          password: request.password,
+          fullName: request.name,
+          phone: request.phone,
+        }),
+      );
+    } catch (e) {
+      if ((e as { code?: unknown } | null)?.code === status.DEADLINE_EXCEEDED) {
+        this.logger.error(
+          `createClinic: auth.registerClinicAccount zaman aşımına uğradı, hesap oluşmuş ve sahipsiz kalmış olabilir (clinicId=${clinic.id})`,
+        );
+      }
+      await rollbackLocal(
+        this.logger,
+        () => this.prisma.clinic.delete({ where: { id: clinic.id } }),
+        `createClinic: klinik hesabı açılamadı, klinik satırı geri alınıyor (clinicId=${clinic.id})`,
+      );
+      forwardGrpcError(
+        this.logger,
+        e,
+        'createClinic: auth.registerClinicAccount',
+        [
+          ResponseMessages.EMAIL_ALREADY_EXISTS,
+          ResponseMessages.PHONE_ALREADY_EXISTS,
+        ],
+      );
+    }
+
+    return { clinic: ClinicsService.toProtoClinic(clinic) };
+  }
+
+  async deactivateClinic(
+    request: clinics.DeactivateClinicRequest,
+    user: AuthUser,
+  ): Promise<clinics.ClinicResponse> {
+    this.assertOwnClinic(request.clinicId, user, 'deactivateClinic');
+
+    let clinic = await this.prisma.clinic.findUnique({
+      where: { id: request.clinicId },
+    });
+
+    if (!clinic) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.NOT_FOUND,
+        `deactivateClinic: klinik bulunamadı (clinicId=${request.clinicId})`,
+      );
+    }
+
+    if (clinic.isActive) {
+      clinic = await this.deactivateWithAnonymizedTaxNumber(clinic.id);
+    }
+
+    try {
+      await firstValueFrom(
+        this.usersClient.deactivateClinicUsers({ clinicId: clinic.id }),
+      );
+    } catch (e) {
+      forwardGrpcError(
+        this.logger,
+        e,
+        'deactivateClinic: users.deactivateClinicUsers',
+      );
+    }
+
+    return { clinic: ClinicsService.toProtoClinic(clinic) };
   }
 
   async addStockItem(

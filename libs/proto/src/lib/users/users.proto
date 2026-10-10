@@ -5,7 +5,6 @@ package users;
 
 //   GetMe                 -> kendi verisi, tam, scope'suz
 //   GetUserContact        -> ÜÇÜNCÜ TARAF iletişim bilgisi, scope zorunlu
-//   ListUsersByClinic     -> yalnızca kendi kliniğinin personeli
 //   GetUserDisplayNames   -> yalnızca görünen ad, elde id varsa
 service UsersService {
   // Sadece Auth Service çağırır (Register akışının 1. adımı — email ve
@@ -46,6 +45,10 @@ service UsersService {
   // scope'u KOŞULSUZ gerektirir.
   // burada sahiplik karşılaştırmasına (requester == target) gerek yok;
   rpc GetUserContact (GetUserContactRequest) returns (GetUserContactResponse);
+
+  rpc CreateClinicUser (CreateClinicUserRequest) returns (UserResponse);
+  rpc DeactivateMe (DeactivateMeRequest) returns (UserResponse);
+  rpc DeactivateClinicUsers (DeactivateClinicUsersRequest) returns (DeactivateClinicUsersResponse);
 }
 
 enum UserRole {
@@ -79,10 +82,11 @@ message UserFindByIdRequest {
 // Auth Service'in ürettiği id ile birebir aynı olmalı.
 //
 // role ve clinic_id KASITLI OLARAK YOK — bu RPC yalnızca PET_OWNER
-// üretir, rolü servis kendi atar. Klinik hesapları davet
-// akışında AYRI bir RPC ile açılacak; role'ü buraya geri eklemek davet
-// doğrulamasını atlatılabilir hale getirir. reserved satırı numaraların
-// başka bir anlamla geri kullanılmasını engeller.
+// üretir, rolü servis kendi atar. Klinik hesapları yalnızca klinik
+// oluşturma akışında (clinics.CreateClinic → auth.RegisterClinicAccount)
+// AYRI RPC olan CreateClinicUser ile açılır; role'ü buraya geri eklemek
+// herkese açık Register akışından klinik hesabı açılmasına yol açar.
+// reserved satırı numaraların başka bir anlamla geri kullanılmasını engeller.
 message CreateUserRequest {
   string id = 1;
   string email = 2;
@@ -90,6 +94,14 @@ message CreateUserRequest {
   string phone = 4;
 
   reserved 5, 6;
+}
+
+message CreateClinicUserRequest {
+  string id = 1;
+  string email = 2;
+  string full_name = 3;
+  string phone = 4;
+  string clinic_id = 5;
 }
 
 message DeleteUserResponse {
@@ -128,6 +140,16 @@ message UpdateMeRequest {
 
   reserved 3, 4, 5;
   reserved "address_line", "city", "district";
+}
+
+message DeactivateMeRequest {}
+
+message DeactivateClinicUsersRequest {
+  string clinic_id = 1;
+}
+
+message DeactivateClinicUsersResponse {
+  int32 deactivated_count = 1;
 }
 
 message GetUserRoleResponse {

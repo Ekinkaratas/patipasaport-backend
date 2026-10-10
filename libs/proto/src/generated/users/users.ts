@@ -42,16 +42,25 @@ export interface UserFindByIdRequest {
  * Auth Service'in ürettiği id ile birebir aynı olmalı.
  *
  * role ve clinic_id KASITLI OLARAK YOK — bu RPC yalnızca PET_OWNER
- * üretir, rolü servis kendi atar. Klinik hesapları davet
- * akışında AYRI bir RPC ile açılacak; role'ü buraya geri eklemek davet
- * doğrulamasını atlatılabilir hale getirir. reserved satırı numaraların
- * başka bir anlamla geri kullanılmasını engeller.
+ * üretir, rolü servis kendi atar. Klinik hesapları yalnızca klinik
+ * oluşturma akışında (clinics.CreateClinic → auth.RegisterClinicAccount)
+ * AYRI RPC olan CreateClinicUser ile açılır; role'ü buraya geri eklemek
+ * herkese açık Register akışından klinik hesabı açılmasına yol açar.
+ * reserved satırı numaraların başka bir anlamla geri kullanılmasını engeller.
  */
 export interface CreateUserRequest {
   id: string;
   email: string;
   fullName: string;
   phone: string;
+}
+
+export interface CreateClinicUserRequest {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string;
+  clinicId: string;
 }
 
 export interface DeleteUserResponse {
@@ -94,6 +103,17 @@ export interface UpdateMeRequest {
   phone?: string | undefined;
 }
 
+export interface DeactivateMeRequest {
+}
+
+export interface DeactivateClinicUsersRequest {
+  clinicId: string;
+}
+
+export interface DeactivateClinicUsersResponse {
+  deactivatedCount: number;
+}
+
 export interface GetUserRoleResponse {
   userId: string;
   role: UserRole;
@@ -109,24 +129,6 @@ export interface GetUserAuthInfoResponse {
   clinicId: string;
   /** false ise Login reddedilir */
   isActive: boolean;
-}
-
-export interface ListUsersByClinicRequest {
-  /** Boş olamaz: klinik belirtilmezse sorgu anlamsızdır. */
-  clinicId: string;
-  role?:
-    | UserRole
-    | undefined;
-  /** 1'den başlar */
-  page: number;
-  pageSize: number;
-}
-
-export interface ListUsersByClinicResponse {
-  users: User[];
-  total: number;
-  page: number;
-  pageSize: number;
 }
 
 export interface GetUserDisplayNamesRequest {
@@ -172,7 +174,6 @@ export const USERS_PACKAGE_NAME = "users";
 /**
  * GetMe                 -> kendi verisi, tam, scope'suz
  *   GetUserContact        -> ÜÇÜNCÜ TARAF iletişim bilgisi, scope zorunlu
- *   ListUsersByClinic     -> yalnızca kendi kliniğinin personeli
  *   GetUserDisplayNames   -> yalnızca görünen ad, elde id varsa
  */
 
@@ -215,10 +216,6 @@ export interface UsersServiceClient {
 
   getUserAuthInfo(request: UserFindByIdRequest): Observable<GetUserAuthInfoResponse>;
 
-  /** Kliniğin kendi personel listesi. */
-
-  listUsersByClinic(request: ListUsersByClinicRequest): Observable<ListUsersByClinicResponse>;
-
   /**
    * Elde TUTULAN user_id'lerin görünen adını çözer.tam profil döndürmez, yalnızca ad ve rol.
    * Kullanım yeri: bir tıbbi kayıtta author_user_id var, ekranda
@@ -239,12 +236,17 @@ export interface UsersServiceClient {
    */
 
   getUserContact(request: GetUserContactRequest): Observable<GetUserContactResponse>;
+
+  createClinicUser(request: CreateClinicUserRequest): Observable<UserResponse>;
+
+  deactivateMe(request: DeactivateMeRequest): Observable<UserResponse>;
+
+  deactivateClinicUsers(request: DeactivateClinicUsersRequest): Observable<DeactivateClinicUsersResponse>;
 }
 
 /**
  * GetMe                 -> kendi verisi, tam, scope'suz
  *   GetUserContact        -> ÜÇÜNCÜ TARAF iletişim bilgisi, scope zorunlu
- *   ListUsersByClinic     -> yalnızca kendi kliniğinin personeli
  *   GetUserDisplayNames   -> yalnızca görünen ad, elde id varsa
  */
 
@@ -293,12 +295,6 @@ export interface UsersServiceController {
     request: UserFindByIdRequest,
   ): Promise<GetUserAuthInfoResponse> | Observable<GetUserAuthInfoResponse> | GetUserAuthInfoResponse;
 
-  /** Kliniğin kendi personel listesi. */
-
-  listUsersByClinic(
-    request: ListUsersByClinicRequest,
-  ): Promise<ListUsersByClinicResponse> | Observable<ListUsersByClinicResponse> | ListUsersByClinicResponse;
-
   /**
    * Elde TUTULAN user_id'lerin görünen adını çözer.tam profil döndürmez, yalnızca ad ve rol.
    * Kullanım yeri: bir tıbbi kayıtta author_user_id var, ekranda
@@ -323,6 +319,14 @@ export interface UsersServiceController {
   getUserContact(
     request: GetUserContactRequest,
   ): Promise<GetUserContactResponse> | Observable<GetUserContactResponse> | GetUserContactResponse;
+
+  createClinicUser(request: CreateClinicUserRequest): Promise<UserResponse> | Observable<UserResponse> | UserResponse;
+
+  deactivateMe(request: DeactivateMeRequest): Promise<UserResponse> | Observable<UserResponse> | UserResponse;
+
+  deactivateClinicUsers(
+    request: DeactivateClinicUsersRequest,
+  ): Promise<DeactivateClinicUsersResponse> | Observable<DeactivateClinicUsersResponse> | DeactivateClinicUsersResponse;
 }
 
 export function UsersServiceControllerMethods() {
@@ -334,9 +338,11 @@ export function UsersServiceControllerMethods() {
       "updateMe",
       "getUserRole",
       "getUserAuthInfo",
-      "listUsersByClinic",
       "getUserDisplayNames",
       "getUserContact",
+      "createClinicUser",
+      "deactivateMe",
+      "deactivateClinicUsers",
     ];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);

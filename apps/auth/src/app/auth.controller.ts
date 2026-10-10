@@ -7,6 +7,7 @@ import {
   LoginRequestDto,
   LogoutRequestDto,
   RefreshTokenRequestDto,
+  RegisterClinicAccountRequestDto,
   RegisterRequestDto,
 } from '@libs/dto';
 
@@ -20,6 +21,14 @@ export class AuthController {
     @Payload() request: RegisterRequestDto,
   ): Promise<auth.TokenResponse> {
     return await this.authService.register(request);
+  }
+
+  @Public()
+  @GrpcMethod(auth.AUTH_SERVICE_NAME, 'RegisterClinicAccount')
+  async registerClinicAccount(
+    @Payload() request: RegisterClinicAccountRequestDto,
+  ): Promise<auth.RegisterClinicAccountResponse> {
+    return this.authService.registerClinicAccount(request);
   }
 
   @Public()

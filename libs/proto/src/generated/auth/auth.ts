@@ -26,6 +26,18 @@ export interface RegisterRequest {
   clientType: ClientType;
 }
 
+export interface RegisterClinicAccountRequest {
+  clinicId: string;
+  email: string;
+  password: string;
+  fullName: string;
+  phone: string;
+}
+
+export interface RegisterClinicAccountResponse {
+  userId: string;
+}
+
 /** ---------- Giriş / Yenileme ---------- */
 export interface LoginRequest {
   email: string;
@@ -65,6 +77,8 @@ export const AUTH_PACKAGE_NAME = "auth";
 export interface AuthServiceClient {
   register(request: RegisterRequest): Observable<TokenResponse>;
 
+  registerClinicAccount(request: RegisterClinicAccountRequest): Observable<RegisterClinicAccountResponse>;
+
   login(request: LoginRequest): Observable<TokenResponse>;
 
   refreshToken(request: RefreshTokenRequest): Observable<TokenResponse>;
@@ -75,6 +89,10 @@ export interface AuthServiceClient {
 export interface AuthServiceController {
   register(request: RegisterRequest): Promise<TokenResponse> | Observable<TokenResponse> | TokenResponse;
 
+  registerClinicAccount(
+    request: RegisterClinicAccountRequest,
+  ): Promise<RegisterClinicAccountResponse> | Observable<RegisterClinicAccountResponse> | RegisterClinicAccountResponse;
+
   login(request: LoginRequest): Promise<TokenResponse> | Observable<TokenResponse> | TokenResponse;
 
   refreshToken(request: RefreshTokenRequest): Promise<TokenResponse> | Observable<TokenResponse> | TokenResponse;
@@ -84,7 +102,7 @@ export interface AuthServiceController {
 
 export function AuthServiceControllerMethods() {
   return function (constructor: Function) {
-    const grpcMethods: string[] = ["register", "login", "refreshToken", "logout"];
+    const grpcMethods: string[] = ["register", "registerClinicAccount", "login", "refreshToken", "logout"];
     for (const method of grpcMethods) {
       const descriptor: any = Reflect.getOwnPropertyDescriptor(constructor.prototype, method);
       GrpcMethod("AuthService", method)(constructor.prototype[method], method, descriptor);

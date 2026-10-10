@@ -8,6 +8,8 @@ import {
 import { plainToInstance } from 'class-transformer';
 import { firstErrors, msg, UUID_A, UUID_B } from '../../../testing/first-error';
 import { AddStockItemRequestDto } from './add-stock-item.dto';
+import { CreateClinicRequestDto } from './create-clinic.dto';
+import { DeactivateClinicRequestDto } from './deactivate-clinic.dto';
 import { GetClinicPetOverviewRequestDto } from './get-clinic-pet-overview.dto';
 import { GetClinicRequestDto } from './get-clinic.dto';
 import { ListStockItemsRequestDto } from './list-stock-items.dto';
@@ -516,4 +518,208 @@ describe('tek kurallı klinik id alanları', () => {
       expected,
     ),
   );
+
+  it.each([
+    ['geçerli', { clinicId: UUID_A }, {}],
+    ['yok', {}, { clinicId: msg(P.CLINIC_ID, V.NOT_EMPTY) }],
+    ['boş', { clinicId: '' }, { clinicId: msg(P.CLINIC_ID, V.NOT_EMPTY) }],
+    [
+      'v1 uuid',
+      { clinicId: UUID_V1 },
+      { clinicId: msg(P.CLINIC_ID, V.WRONG_DATA_FORMAT) },
+    ],
+  ])('DeactivateClinicRequestDto %s', (_n, plain, expected) =>
+    expect(firstErrors(DeactivateClinicRequestDto, plain)).toEqual(expected),
+  );
+});
+
+// ---Amaç: klinik oluşturma isteğinin ad, vergi no, telefon, e-posta ve şifre kurallarını ilk hata mesajıyla doğrulamak ---
+describe('CreateClinicRequestDto', () => {
+  const valid = {
+    name: 'Pati&Can 2 Veteriner Kliniği',
+    taxNumber: '4540536920',
+    phone: '+902161234567',
+    email: 'klinik@example.com',
+    password: 'Abcdef1!',
+  };
+  const check = (o: object) =>
+    firstErrors(CreateClinicRequestDto, { ...valid, ...o });
+
+  it('geçerli istek hata vermez', () => expect(check({})).toEqual({}));
+
+  it.each([
+    ['10 haneli geçerli VKN', '4540536920'],
+    ['11 haneli geçerli TCKN', '17291716060'],
+  ])('taxNumber %s kabul edilir', (_n, taxNumber) =>
+    expect(check({ taxNumber })).toEqual({}),
+  );
+
+  it.each([
+    "Dr. Ayşe'nin Kliniği",
+    'Can-Vet',
+    'Şifa 24',
+    'a'.repeat(64),
+  ])('name "%s" kabul edilir', (name) => expect(check({ name })).toEqual({}));
+
+  it.each([
+    ['name yok', { name: undefined }, 'name', msg(P.CLINIC_NAME, V.NOT_EMPTY)],
+    ['name sayı', { name: 5 }, 'name', msg(P.CLINIC_NAME, V.MUST_BE_STRING)],
+    ['name kısa', { name: 'A' }, 'name', msg(P.CLINIC_NAME, V.MIN_LENGTH, 2)],
+    [
+      'name uzun',
+      { name: 'a'.repeat(65) },
+      'name',
+      msg(P.CLINIC_NAME, V.MAX_LENGTH, 64),
+    ],
+    [
+      'name izinsiz karakter',
+      { name: 'Pati_Klinik' },
+      'name',
+      msg(P.CLINIC_NAME, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'name yalnız işaret',
+      { name: '--' },
+      'name',
+      msg(P.CLINIC_NAME, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'name yalnız rakam',
+      { name: '24 7' },
+      'name',
+      msg(P.CLINIC_NAME, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'taxNumber yok',
+      { taxNumber: undefined },
+      'taxNumber',
+      msg(P.TAX_NUMBER, V.NOT_EMPTY),
+    ],
+    [
+      'taxNumber sayı',
+      { taxNumber: 4540536920 },
+      'taxNumber',
+      msg(P.TAX_NUMBER, V.MUST_BE_STRING),
+    ],
+    [
+      'taxNumber 9 hane',
+      { taxNumber: '454053692' },
+      'taxNumber',
+      msg(P.TAX_NUMBER, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'taxNumber 12 hane',
+      { taxNumber: '454053692012' },
+      'taxNumber',
+      msg(P.TAX_NUMBER, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'taxNumber harf içeriyor',
+      { taxNumber: 'X540536920' },
+      'taxNumber',
+      msg(P.TAX_NUMBER, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'VKN kontrol hanesi tutmuyor',
+      { taxNumber: '4540536921' },
+      'taxNumber',
+      msg(P.TAX_NUMBER, V.NOT_VALID),
+    ],
+    [
+      'TCKN kontrol haneleri tutmuyor',
+      { taxNumber: '17291716050' },
+      'taxNumber',
+      msg(P.TAX_NUMBER, V.NOT_VALID),
+    ],
+    [
+      'TCKN 0 ile başlıyor',
+      { taxNumber: '07291716092' },
+      'taxNumber',
+      msg(P.TAX_NUMBER, V.NOT_VALID),
+    ],
+    [
+      'phone yok',
+      { phone: undefined },
+      'phone',
+      msg(P.PHONE, V.WRONG_DATA_FORMAT),
+    ],
+    ['email yok', { email: undefined }, 'email', msg(P.EMAIL, V.NOT_EMPTY)],
+    [
+      'email formatı',
+      { email: 'klinik@' },
+      'email',
+      msg(P.EMAIL, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'password yok',
+      { password: undefined },
+      'password',
+      msg(P.PASSWORD, V.NOT_EMPTY),
+    ],
+    [
+      'password sayı',
+      { password: 12345678 },
+      'password',
+      msg(P.PASSWORD, V.MUST_BE_STRING),
+    ],
+    [
+      'password kısa',
+      { password: 'Ab1!' },
+      'password',
+      msg(P.PASSWORD, V.MIN_LENGTH, 8),
+    ],
+    [
+      'password uzun',
+      { password: `Ab1!${'a'.repeat(69)}` },
+      'password',
+      msg(P.PASSWORD, V.MAX_LENGTH, 72),
+    ],
+    [
+      'password zayıf',
+      { password: 'abcdefgh' },
+      'password',
+      msg(P.PASSWORD, V.WEAK_PASSWORD),
+    ],
+  ])('%s', (_n, override, field, expected) => {
+    expect(check(override)).toEqual({ [field]: expected });
+  });
+
+  it.each([
+    ['0216 123 45 67', '+902161234567'],
+    ['02161234567', '+902161234567'],
+    ['2161234567', '+902161234567'],
+    ['+902161234567', '+902161234567'],
+    ['0312 123 45 67', '+903121234567'],
+    ['0422 123 45 67', '+904221234567'],
+    ['0850 123 45 67', '+908501234567'],
+    ['0555 123 45 67', '+905551234567'],
+  ])('phone %s -> %s', (phone, expected) => {
+    expect(check({ phone })).toEqual({});
+    expect(plainToInstance(CreateClinicRequestDto, { ...valid, phone }).phone).toBe(
+      expected,
+    );
+  });
+
+  it.each([
+    '01161234567',
+    '06161234567',
+    '07161234567',
+    '09161234567',
+    '902161234567',
+    '021612345',
+    '(0216) 123-45-67',
+  ])('phone %s reddedilir', (phone) => {
+    expect(check({ phone })).toEqual({
+      phone: msg(P.PHONE, V.WRONG_DATA_FORMAT),
+    });
+  });
+
+  it('name tek boşluğa indirilir, email küçük harfe çevrilir', () => {
+    const dto = plainToInstance(CreateClinicRequestDto, {
+      ...valid,
+      name: '  Pati   Can  ',
+      email: ' Klinik@Example.COM ',
+    });
+    expect(dto).toMatchObject({ name: 'Pati Can', email: 'klinik@example.com' });
+  });
 });

@@ -22,6 +22,7 @@ export const ResponseStatusMap: Record<ResponseMessages, HttpStatus> = {
   [ResponseMessages.USER_TYPE_NOT_VALID_FOR_REGISTER]: HttpStatus.BAD_REQUEST,
   [ResponseMessages.EMAIL_ALREADY_EXISTS]: HttpStatus.CONFLICT,
   [ResponseMessages.PHONE_ALREADY_EXISTS]: HttpStatus.CONFLICT,
+  [ResponseMessages.TAX_NUMBER_ALREADY_EXISTS]: HttpStatus.CONFLICT,
   [ResponseMessages.ACCOUNT_DISABLED]: HttpStatus.FORBIDDEN,
   [ResponseMessages.TOKEN_EXPIRED]: HttpStatus.UNAUTHORIZED,
   [ResponseMessages.INVALID_TOKEN]: HttpStatus.UNAUTHORIZED,

@@ -188,7 +188,6 @@ services:
       REDIS_HOST: redis-access
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       AUTH_GRPC_URL: auth:3002
       CLINICS_GRPC_URL: clinics:3003
       PETS_GRPC_URL: pets:3005
@@ -200,7 +199,6 @@ services:
     depends_on:
       postgres-access: { condition: service_healthy }
       redis-access:    { condition: service_healthy }
-      rabbitmq:        { condition: service_healthy }
 
   auth:
     <<: *app-common
@@ -220,7 +218,6 @@ services:
       REDIS_HOST: redis-auth
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       ACCESS_GRPC_URL: access:3001
       USERS_GRPC_URL: users:3006
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
@@ -230,7 +227,6 @@ services:
     depends_on:
       postgres-auth: { condition: service_healthy }
       redis-auth:    { condition: service_healthy }
-      rabbitmq:      { condition: service_healthy }
 
   clinics:
     <<: *app-common
@@ -247,7 +243,7 @@ services:
       DB_USER: ${CLINICS_DB_USER:-clinics_user}
       DB_PASSWORD: ${CLINICS_DB_PASSWORD}
       DB_NAME: ${CLINICS_DB_NAME:-clinics_db}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      AUTH_GRPC_URL: auth:3002
       MEDICAL_RECORD_GRPC_URL: medical-record:3004
       PETS_GRPC_URL: pets:3005
       USERS_GRPC_URL: users:3006
@@ -257,7 +253,6 @@ services:
       <<: *grpc-healthcheck
     depends_on:
       postgres-clinics: { condition: service_healthy }
-      rabbitmq:         { condition: service_healthy }
 
   medical-record:
     <<: *app-common
@@ -301,7 +296,6 @@ services:
       DB_USER: ${PETS_DB_USER:-pets_user}
       DB_PASSWORD: ${PETS_DB_PASSWORD}
       DB_NAME: ${PETS_DB_NAME:-pets_db}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       ACCESS_GRPC_URL: access:3001
       PETS_CHIP_ENCRYPTION_KEY: ${PETS_CHIP_ENCRYPTION_KEY}
       PETS_CHIP_INDEX_KEY: ${PETS_CHIP_INDEX_KEY}
@@ -311,7 +305,6 @@ services:
       <<: *grpc-healthcheck
     depends_on:
       postgres-pets: { condition: service_healthy }
-      rabbitmq:      { condition: service_healthy }
 
   users:
     <<: *app-common
@@ -328,7 +321,6 @@ services:
       DB_USER: ${USERS_DB_USER:-users_user}
       DB_PASSWORD: ${USERS_DB_PASSWORD}
       DB_NAME: ${USERS_DB_NAME:-users_db}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       ACCESS_GRPC_URL: access:3001
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
@@ -336,7 +328,6 @@ services:
       <<: *grpc-healthcheck
     depends_on:
       postgres-users: { condition: service_healthy }
-      rabbitmq:       { condition: service_healthy }
 
   # ============================================================
   # GATEWAY (HTTP)

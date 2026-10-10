@@ -1,11 +1,11 @@
 import { DtoPrefix as P, ValidationType as V } from '@libs/common';
-import { users } from '@libs/proto';
 import { plainToInstance } from 'class-transformer';
 import { firstErrors, msg, UUID_A, UUID_B } from '../../../testing/first-error';
+import { CreateClinicUserRequestDto } from './create-clinic-user.dto';
 import { CreateUserRequestDto } from './create-user.dto';
+import { DeactivateClinicUsersRequestDto } from './deactivate-clinic-users.dto';
 import { GetUserContactRequestDto } from './get-user-contact.dto';
 import { GetUserDisplayNamesRequesDto } from './get-user-display-names.dto';
-import { ListUsersByClinicRequestDto } from './list-users-by-clinic.dto';
 import { UpdateUserRequestDto } from './update-me.dto';
 
 describe('CreateUserRequestDto', () => {
@@ -28,7 +28,7 @@ describe('CreateUserRequestDto', () => {
       'email çok uzun',
       { email: `${'a'.repeat(251)}@x.co` },
       'email',
-      msg(P.EMAIL, V.MAX_LENGTH, 255),
+      msg(P.EMAIL, V.MAX_LENGTH, 254),
     ],
     [
       'email formatı',
@@ -168,16 +168,83 @@ describe('GetUserDisplayNamesRequesDto', () => {
   });
 });
 
-describe('ListUsersByClinicRequestDto', () => {
-  const valid = { clinicId: UUID_A, page: 1, pageSize: 16 };
+describe('CreateClinicUserRequestDto', () => {
+  const valid = {
+    id: UUID_A,
+    email: 'klinik@example.com',
+    fullName: 'Pati&Can 2 Veteriner',
+    phone: '+902161234567',
+    clinicId: UUID_B,
+  };
   const check = (o: object) =>
-    firstErrors(ListUsersByClinicRequestDto, { ...valid, ...o });
+    firstErrors(CreateClinicUserRequestDto, { ...valid, ...o });
 
   it('geçerli istek hata vermez', () => expect(check({})).toEqual({}));
-  it('role opsiyonel ve geçerli değer kabul edilir', () =>
-    expect(check({ role: users.UserRole.CLINIC })).toEqual({}));
 
   it.each([
+    ['id yok', { id: undefined }, 'id', msg(P.USER_ID, V.NOT_EMPTY)],
+    ['id bozuk', { id: 'abc' }, 'id', msg(P.USER_ID, V.WRONG_DATA_FORMAT)],
+    ['email yok', { email: undefined }, 'email', msg(P.EMAIL, V.NOT_EMPTY)],
+    [
+      'email çok uzun',
+      { email: `${'a'.repeat(250)}@x.co` },
+      'email',
+      msg(P.EMAIL, V.MAX_LENGTH, 254),
+    ],
+    [
+      'email formatı',
+      { email: 'klinik' },
+      'email',
+      msg(P.EMAIL, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'fullName yok',
+      { fullName: undefined },
+      'fullName',
+      msg(P.CLINIC_NAME, V.NOT_EMPTY),
+    ],
+    [
+      'fullName yalnız boşluk',
+      { fullName: '   ' },
+      'fullName',
+      msg(P.CLINIC_NAME, V.NOT_EMPTY),
+    ],
+    [
+      'fullName sayı',
+      { fullName: 1 },
+      'fullName',
+      msg(P.CLINIC_NAME, V.MUST_BE_STRING),
+    ],
+    [
+      'fullName kısa',
+      { fullName: 'A' },
+      'fullName',
+      msg(P.CLINIC_NAME, V.MIN_LENGTH, 2),
+    ],
+    [
+      'fullName uzun',
+      { fullName: 'a'.repeat(65) },
+      'fullName',
+      msg(P.CLINIC_NAME, V.MAX_LENGTH, 64),
+    ],
+    [
+      'fullName izinsiz karakter',
+      { fullName: 'Pati@Klinik' },
+      'fullName',
+      msg(P.CLINIC_NAME, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'phone yok',
+      { phone: undefined },
+      'phone',
+      msg(P.PHONE, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'phone 1 ile başlıyor',
+      { phone: '+901161234567' },
+      'phone',
+      msg(P.PHONE, V.WRONG_DATA_FORMAT),
+    ],
     [
       'clinicId yok',
       { clinicId: undefined },
@@ -190,35 +257,39 @@ describe('ListUsersByClinicRequestDto', () => {
       'clinicId',
       msg(P.CLINIC_ID, V.WRONG_DATA_FORMAT),
     ],
-    [
-      'role UNSPECIFIED',
-      { role: 0 },
-      'role',
-      msg(P.USER_ROLE, V.WRONG_DATA_FORMAT),
-    ],
-    [
-      'kaldırılan STAFF değeri (3)',
-      { role: 3 },
-      'role',
-      msg(P.USER_ROLE, V.WRONG_DATA_FORMAT),
-    ],
-    ['page yok', { page: undefined }, 'page', msg(P.PAGE, V.MUST_BE_NUMBER)],
-    ['page ondalık', { page: 1.5 }, 'page', msg(P.PAGE, V.MUST_BE_NUMBER)],
-    ['page sıfır', { page: 0 }, 'page', msg(P.PAGE, V.MIN, 1)],
-    [
-      'pageSize yok',
-      { pageSize: undefined },
-      'pageSize',
-      msg(P.PAGE_SIZE, V.MUST_BE_NUMBER),
-    ],
-    [
-      'pageSize listede yok',
-      { pageSize: 10 },
-      'pageSize',
-      msg(P.PAGE_SIZE, V.NOT_VALID),
-    ],
   ])('%s', (_n, override, field, expected) => {
     expect(check(override)).toEqual({ [field]: expected });
+  });
+
+  it('email küçük harfe, fullName tek boşluğa, phone E.164 biçimine çevrilir', () => {
+    const dto = plainToInstance(CreateClinicUserRequestDto, {
+      ...valid,
+      email: ' Klinik@Example.com ',
+      fullName: '  Pati   Can  ',
+      phone: '0216 123 45 67',
+    });
+    expect(dto).toMatchObject({
+      email: 'klinik@example.com',
+      fullName: 'Pati Can',
+      phone: '+902161234567',
+    });
+  });
+});
+
+describe('DeactivateClinicUsersRequestDto', () => {
+  it.each([
+    ['geçerli', { clinicId: UUID_A }, {}],
+    ['yok', {}, { clinicId: msg(P.CLINIC_ID, V.NOT_EMPTY) }],
+    ['boş', { clinicId: '' }, { clinicId: msg(P.CLINIC_ID, V.NOT_EMPTY) }],
+    [
+      'bozuk',
+      { clinicId: 'abc' },
+      { clinicId: msg(P.CLINIC_ID, V.WRONG_DATA_FORMAT) },
+    ],
+  ])('clinicId %s', (_n, plain, expected) => {
+    expect(firstErrors(DeactivateClinicUsersRequestDto, plain)).toEqual(
+      expected,
+    );
   });
 });
 

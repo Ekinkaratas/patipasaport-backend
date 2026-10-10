@@ -9,3 +9,4 @@ export * from './pipes';
 export * from './rollback';
 export * from './storage';
 export * from './transforms';
+export * from './validators';

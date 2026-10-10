@@ -12,8 +12,7 @@
         "{workspaceRoot}/coverage/{e2eProjectRoot}"
       ],
       "dependsOn": [
-        "clinics:build",
-        "clinics:serve"
+        "clinics:build"
       ],
       "options": {
         "jestConfig": "apps/clinics-e2e/jest.config.cts",

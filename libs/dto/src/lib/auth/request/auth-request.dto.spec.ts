@@ -1,10 +1,11 @@
 import { DtoPrefix as P, ValidationType as V } from '@libs/common';
 import { auth } from '@libs/proto';
 import { plainToInstance } from 'class-transformer';
-import { firstErrors, msg } from '../../../testing/first-error';
+import { firstErrors, msg, UUID_A } from '../../../testing/first-error';
 import { LoginRequestDto } from './login.dto';
 import { LogoutRequestDto } from './logout.dto';
 import { RefreshTokenRequestDto } from './refresh-token.dto';
+import { RegisterClinicAccountRequestDto } from './register-clinic-account.dto';
 import { RegisterRequestDto } from './register.dto';
 
 describe('RegisterRequestDto', () => {
@@ -386,4 +387,63 @@ describe('LogoutRequestDto opaqueToken', () => {
     expect(check({ opaqueToken: '' })).toEqual({
       opaqueToken: msg(P.OPAQUE_TOKEN, V.NOT_EMPTY),
     }));
+});
+
+// ---Amaç: klinik hesabı açma isteğinde her alanın kendi kuralına (klinik adı, sabit hat dahil telefon, e-posta, şifre) bağlandığını doğrulamak ---
+describe('RegisterClinicAccountRequestDto', () => {
+  const valid = {
+    clinicId: UUID_A,
+    email: 'klinik@example.com',
+    password: 'Abcdef1!',
+    fullName: 'Pati&Can 2 Veteriner',
+    phone: '+908501234567',
+  };
+  const check = (o: object) =>
+    firstErrors(RegisterClinicAccountRequestDto, { ...valid, ...o });
+
+  it('geçerli istek hata vermez', () => expect(check({})).toEqual({}));
+
+  it.each([
+    [
+      'clinicId yok',
+      { clinicId: undefined },
+      'clinicId',
+      msg(P.CLINIC_ID, V.NOT_EMPTY),
+    ],
+    [
+      'clinicId bozuk',
+      { clinicId: 'abc' },
+      'clinicId',
+      msg(P.CLINIC_ID, V.WRONG_DATA_FORMAT),
+    ],
+    ['email yok', { email: undefined }, 'email', msg(P.EMAIL, V.NOT_EMPTY)],
+    [
+      'password zayıf',
+      { password: 'abcdefgh' },
+      'password',
+      msg(P.PASSWORD, V.WEAK_PASSWORD),
+    ],
+    [
+      'fullName kişi adı kuralına değil klinik adı kuralına bağlı',
+      { fullName: 'A' },
+      'fullName',
+      msg(P.CLINIC_NAME, V.MIN_LENGTH, 2),
+    ],
+    [
+      'phone 6 ile başlıyor',
+      { phone: '06161234567' },
+      'phone',
+      msg(P.PHONE, V.WRONG_DATA_FORMAT),
+    ],
+  ])('%s', (_n, override, field, expected) => {
+    expect(check(override)).toEqual({ [field]: expected });
+  });
+
+  it('sabit hat numarası E.164 biçimine çevrilir', () =>
+    expect(
+      plainToInstance(RegisterClinicAccountRequestDto, {
+        ...valid,
+        phone: '0212 123 45 67',
+      }).phone,
+    ).toBe('+902121234567'));
 });

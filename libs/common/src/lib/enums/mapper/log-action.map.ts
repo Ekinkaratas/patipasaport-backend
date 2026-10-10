@@ -25,6 +25,7 @@ export const LogActionMap: Record<ResponseMessages, LogAction> = {
   [ResponseMessages.CONFLICT]: LogAction.CONFLICT,
   [ResponseMessages.EMAIL_ALREADY_EXISTS]: LogAction.CONFLICT,
   [ResponseMessages.PHONE_ALREADY_EXISTS]: LogAction.CONFLICT,
+  [ResponseMessages.TAX_NUMBER_ALREADY_EXISTS]: LogAction.CONFLICT,
 
   [ResponseMessages.METHOD_NOT_ALLOWED]: LogAction.REQUEST_FAILED,
   [ResponseMessages.TOO_MANY_REQUESTS]: LogAction.RATE_LIMITED,

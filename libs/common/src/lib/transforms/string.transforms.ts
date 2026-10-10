@@ -31,3 +31,14 @@ export function normalizeTrMobilePhone(value: unknown): unknown {
 
 /** normalizeTrMobilePhone sonrası beklenen tek format. */
 export const TR_MOBILE_E164_PATTERN = /^\+905\d{9}$/;
+
+const TR_PHONE_INPUT = /^(?:\+90|0)?([2-58]\d{9})$/;
+
+export function normalizeTrPhone(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const compact = value.replace(/\s+/g, '');
+  const match = TR_PHONE_INPUT.exec(compact);
+  return match ? `+90${match[1]}` : compact;
+}
+
+export const TR_PHONE_E164_PATTERN = /^\+90[2-58]\d{9}$/;

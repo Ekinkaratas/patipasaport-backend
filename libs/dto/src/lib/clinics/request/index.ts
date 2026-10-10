@@ -1,4 +1,6 @@
 export * from './add-stock-item.dto';
+export * from './create-clinic.dto';
+export * from './deactivate-clinic.dto';
 export * from './get-clinic-pet-overview.dto';
 export * from './get-clinic.dto';
 export * from './list-stock-items.dto';

@@ -4,6 +4,7 @@ package auth;
 
 service AuthService {
   rpc Register (RegisterRequest) returns (TokenResponse);
+  rpc RegisterClinicAccount (RegisterClinicAccountRequest) returns (RegisterClinicAccountResponse);
   rpc Login (LoginRequest) returns (TokenResponse);
   rpc RefreshToken (RefreshTokenRequest) returns (TokenResponse);
   rpc Logout (LogoutRequest) returns (LogoutResponse);
@@ -22,6 +23,18 @@ message RegisterRequest {
   string full_name = 3;
   string phone = 4;
   ClientType client_type = 5;
+}
+
+message RegisterClinicAccountRequest {
+  string clinic_id = 1;
+  string email = 2;
+  string password = 3;
+  string full_name = 4;
+  string phone = 5;
+}
+
+message RegisterClinicAccountResponse {
+  string user_id = 1;
 }
 
 // ---------- Giriş / Yenileme ----------

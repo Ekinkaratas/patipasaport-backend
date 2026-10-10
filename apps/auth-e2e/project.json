@@ -12,8 +12,7 @@
         "{workspaceRoot}/coverage/{e2eProjectRoot}"
       ],
       "dependsOn": [
-        "auth:build",
-        "auth:serve"
+        "auth:build"
       ],
       "options": {
         "jestConfig": "apps/auth-e2e/jest.config.cts",

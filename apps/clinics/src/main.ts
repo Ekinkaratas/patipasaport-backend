@@ -18,7 +18,7 @@ async function bootstrap() {
     {
       transport: Transport.GRPC,
       options: {
-        url: '0.0.0.0:3003',
+        url: `0.0.0.0:${process.env.PORT ?? 3003}`,
         package: CLINICS_PACKAGE_NAME,
         protoPath: join(__dirname, 'proto/clinics/clinics.proto'),
       },

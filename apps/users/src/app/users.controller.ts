@@ -9,6 +9,8 @@ import {
   UpdateUserRequestDto,
   GetUserDisplayNamesRequesDto,
   GetUserContactRequestDto,
+  CreateClinicUserRequestDto,
+  DeactivateClinicUsersRequestDto,
 } from '@libs/dto';
 
 @Controller()
@@ -78,5 +80,30 @@ export class UsersController {
     @CurrentUser() user: AuthUser,
   ): Promise<users.GetUserContactResponse> {
     return this.usersService.getUserContact(request, user);
+  }
+
+  @Public()
+  @GrpcMethod(users.USERS_SERVICE_NAME, 'CreateClinicUser')
+  async createClinicUser(
+    @Payload() dto: CreateClinicUserRequestDto,
+  ): Promise<users.UserResponse> {
+    return this.usersService.createClinicUser(dto);
+  }
+
+  @Roles(['PET_OWNER'])
+  @GrpcMethod(users.USERS_SERVICE_NAME, 'DeactivateMe')
+  async deactivateMe(
+    @CurrentUser() user: AuthUser,
+  ): Promise<users.UserResponse> {
+    return this.usersService.deactivateMe(user);
+  }
+
+  @Roles(['CLINIC'])
+  @GrpcMethod(users.USERS_SERVICE_NAME, 'DeactivateClinicUsers')
+  async deactivateClinicUsers(
+    @Payload() request: DeactivateClinicUsersRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<users.DeactivateClinicUsersResponse> {
+    return this.usersService.deactivateClinicUsers(request, user);
   }
 }

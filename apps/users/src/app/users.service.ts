@@ -96,6 +96,36 @@ export class UsersService implements OnModuleInit {
     }
   }
 
+  private rejectUniqueViolation(e: unknown, method_name: string): never {
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === 'P2002'
+    ) {
+      const constraint = UsersService.uniqueConstraintName(e);
+
+      if (constraint === 'users_email_key') {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.EMAIL_ALREADY_EXISTS,
+          `${method_name}: email zaten kayıtlı`,
+        );
+      }
+      if (constraint === 'users_tel_no_key') {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.PHONE_ALREADY_EXISTS,
+          `${method_name}: telefon zaten kayıtlı`,
+        );
+      }
+      rejectRpc(
+        this.logger,
+        ResponseMessages.INTERNAL_SERVER_ERROR,
+        `${method_name}: beklenmeyen unique ihlali (constraint=${String(constraint)})`,
+      );
+    }
+    throw e;
+  }
+
   //#endregion
 
   //#region  ---  servis içi metotlar  ---
@@ -413,6 +443,72 @@ export class UsersService implements OnModuleInit {
       phone: contact.phone,
       email: contact.email,
     };
+  }
+
+  async createClinicUser(
+    dto: users.CreateClinicUserRequest,
+  ): Promise<users.UserResponse> {
+    try {
+      const data = await this.prisma.user.create({
+        data: {
+          id: dto.id,
+          email: dto.email,
+          fullName: dto.fullName,
+          phone: dto.phone,
+          role: DbUserRole.CLINIC,
+          clinicId: dto.clinicId,
+        },
+      });
+
+      return { user: UsersService.toProtoUser(data) };
+    } catch (e) {
+      this.rejectUniqueViolation(e, 'createClinicUser');
+    }
+  }
+
+  async deactivateMe(user: AuthUser): Promise<users.UserResponse> {
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id: user.userId },
+        data: { isActive: false },
+      });
+
+      return { user: this.userResponse(updated) };
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2025'
+      ) {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.NOT_FOUND,
+          `deactivateMe: kullanıcı bulunamadı (userId=${user.userId})`,
+          'warn',
+        );
+      }
+      throw e;
+    }
+  }
+
+  async deactivateClinicUsers(
+    request: users.DeactivateClinicUsersRequest,
+    user: AuthUser,
+  ): Promise<users.DeactivateClinicUsersResponse> {
+    if (request.clinicId !== user.clinicId) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.FORBIDDEN,
+        `deactivateClinicUsers: clinicId uyuşmazlığı (token=${user.clinicId} istek=${request.clinicId})`,
+        'warn',
+      );
+    }
+
+    const { count } = await this.prisma.user.updateMany({
+      where: { clinicId: request.clinicId, role: DbUserRole.CLINIC },
+      data: { isActive: false },
+    });
+
+    return { deactivatedCount: count };
   }
 
   //#endregion

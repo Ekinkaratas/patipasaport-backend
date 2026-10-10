@@ -465,6 +465,93 @@ export class AuthService {
     return response;
   }
 
+  async registerClinicAccount(
+    dto: auth.RegisterClinicAccountRequest,
+  ): Promise<auth.RegisterClinicAccountResponse> {
+    const passwordHash = await argon.hash(dto.password);
+    const userId = randomUUID();
+
+    let user_data: UserResponseDto;
+    try {
+      user_data = await firstValueFrom(
+        this.usersClient.createClinicUser({
+          id: userId,
+          email: dto.email,
+          fullName: dto.fullName,
+          phone: dto.phone,
+          clinicId: dto.clinicId,
+        }),
+      );
+    } catch (e) {
+      const code = (e as { code?: unknown } | null)?.code;
+      if (code !== status.UNAVAILABLE && code !== status.ALREADY_EXISTS) {
+        await rollback(
+          this.logger,
+          this.usersClient,
+          'deleteUser',
+          { userId },
+          `registerClinicAccount: users.createClinicUser hata verdi, users kaydı geri alınıyor (userId=${userId})`,
+        );
+      }
+      forwardGrpcError(
+        this.logger,
+        e,
+        'registerClinicAccount: users.createClinicUser',
+        [
+          ResponseMessages.EMAIL_ALREADY_EXISTS,
+          ResponseMessages.PHONE_ALREADY_EXISTS,
+        ],
+      );
+    }
+
+    const createdUser = user_data.user;
+    if (
+      createdUser?.role !== users.UserRole.CLINIC ||
+      createdUser.clinicId !== dto.clinicId
+    ) {
+      await rollback(
+        this.logger,
+        this.usersClient,
+        'deleteUser',
+        { userId },
+        `registerClinicAccount: users yanıtı geçersiz, users kaydı geri alınıyor (userId=${userId})`,
+      );
+      rejectRpc(
+        this.logger,
+        ResponseMessages.INTERNAL_SERVER_ERROR,
+        `registerClinicAccount: users yanıtı geçersiz (role=${String(createdUser?.role)} clinicId=${String(createdUser?.clinicId)})`,
+      );
+    }
+
+    try {
+      await this.prisma.credential.create({
+        data: { userId, email: dto.email, passwordHash },
+      });
+    } catch (e) {
+      await rollback(
+        this.logger,
+        this.usersClient,
+        'deleteUser',
+        { userId },
+        `registerClinicAccount: credential yazılamadı, users kaydı geri alınıyor (userId=${userId})`,
+      );
+
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        rejectRpc(
+          this.logger,
+          ResponseMessages.EMAIL_ALREADY_EXISTS,
+          'registerClinicAccount: email zaten kayıtlı',
+        );
+      }
+      throw e;
+    }
+
+    return { userId };
+  }
+
   // --- Amaç: user girişini sağlamak ---
   async login(req: auth.LoginRequest): Promise<auth.TokenResponse> {
     this.logger.log('login servisi başlatılıyor');

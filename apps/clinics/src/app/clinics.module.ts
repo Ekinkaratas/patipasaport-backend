@@ -10,6 +10,7 @@ import {
   GrpcJwtGuard,
 } from '@libs/common';
 import {
+  AUTH_PACKAGE_NAME,
   MEDICAL_RECORD_PACKAGE_NAME,
   PETS_PACKAGE_NAME,
   USERS_PACKAGE_NAME,
@@ -70,6 +71,15 @@ const grpcClientOptions = (
           process.env.MEDICAL_RECORD_GRPC_URL ?? '0.0.0.0:3004',
           MEDICAL_RECORD_PACKAGE_NAME,
           'medical_record/medical_record.proto',
+        ),
+      },
+      {
+        name: 'AUTH_SERVICE',
+        transport: Transport.GRPC,
+        options: grpcClientOptions(
+          process.env.AUTH_GRPC_URL ?? '0.0.0.0:3002',
+          AUTH_PACKAGE_NAME,
+          'auth/auth.proto',
         ),
       },
     ]),

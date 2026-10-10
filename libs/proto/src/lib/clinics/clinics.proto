@@ -9,6 +9,8 @@ package clinics;
 // kendi CheckAccess kontrollerini yapar. 
 service ClinicsService {
   rpc GetClinic (GetClinicRequest) returns (ClinicResponse);
+  rpc CreateClinic (CreateClinicRequest) returns (ClinicResponse);
+  rpc DeactivateClinic (DeactivateClinicRequest) returns (ClinicResponse);
   rpc ListStockItems (ListStockItemsRequest) returns (ListStockItemsResponse);
   rpc AddStockItem (AddStockItemRequest) returns (StockItemResponse);
   rpc GetClinicPetOverview (GetClinicPetOverviewRequest) returns (GetClinicPetOverviewResponse);
@@ -31,6 +33,18 @@ message Clinic {
 
 message GetClinicRequest {
   string id = 1;
+}
+
+message CreateClinicRequest {
+  string name = 1;
+  string tax_number = 2;
+  string phone = 3;
+  string email = 4;
+  string password = 5;
+}
+
+message DeactivateClinicRequest {
+  string clinic_id = 1;
 }
 
 message ClinicResponse {

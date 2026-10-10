@@ -27,6 +27,18 @@ export interface GetClinicRequest {
   id: string;
 }
 
+export interface CreateClinicRequest {
+  name: string;
+  taxNumber: string;
+  phone: string;
+  email: string;
+  password: string;
+}
+
+export interface DeactivateClinicRequest {
+  clinicId: string;
+}
+
 export interface ClinicResponse {
   clinic: Clinic | undefined;
 }
@@ -164,6 +176,10 @@ export const CLINICS_PACKAGE_NAME = "clinics";
 export interface ClinicsServiceClient {
   getClinic(request: GetClinicRequest): Observable<ClinicResponse>;
 
+  createClinic(request: CreateClinicRequest): Observable<ClinicResponse>;
+
+  deactivateClinic(request: DeactivateClinicRequest): Observable<ClinicResponse>;
+
   listStockItems(request: ListStockItemsRequest): Observable<ListStockItemsResponse>;
 
   addStockItem(request: AddStockItemRequest): Observable<StockItemResponse>;
@@ -183,6 +199,12 @@ export interface ClinicsServiceClient {
 
 export interface ClinicsServiceController {
   getClinic(request: GetClinicRequest): Promise<ClinicResponse> | Observable<ClinicResponse> | ClinicResponse;
+
+  createClinic(request: CreateClinicRequest): Promise<ClinicResponse> | Observable<ClinicResponse> | ClinicResponse;
+
+  deactivateClinic(
+    request: DeactivateClinicRequest,
+  ): Promise<ClinicResponse> | Observable<ClinicResponse> | ClinicResponse;
 
   listStockItems(
     request: ListStockItemsRequest,
@@ -205,6 +227,8 @@ export function ClinicsServiceControllerMethods() {
   return function (constructor: Function) {
     const grpcMethods: string[] = [
       "getClinic",
+      "createClinic",
+      "deactivateClinic",
       "listStockItems",
       "addStockItem",
       "getClinicPetOverview",

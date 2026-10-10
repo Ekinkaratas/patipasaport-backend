@@ -1,7 +1,6 @@
 import {
   DtoPrefix,
   getValidationMessage,
-  normalizeEmail,
   normalizeTrMobilePhone,
   TR_MOBILE_E164_PATTERN,
   ValidationType,
@@ -9,13 +8,8 @@ import {
 import { users } from '@libs/proto';
 import { Transform } from 'class-transformer';
 import { FullName } from '../../shared/full-name.decorator';
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsUUID,
-  Matches,
-  MaxLength,
-} from 'class-validator';
+import { AccountEmail } from '../../shared/account-fields.decorator';
+import { IsNotEmpty, IsUUID, Matches } from 'class-validator';
 
 export class CreateUserRequestDto implements users.CreateUserRequest {
   @IsUUID('4', {
@@ -29,26 +23,7 @@ export class CreateUserRequestDto implements users.CreateUserRequest {
   })
   id!: string;
 
-  @Transform(({ value }) => normalizeEmail(value))
-  @IsEmail(
-    {},
-    {
-      message: getValidationMessage(
-        DtoPrefix.EMAIL,
-        ValidationType.WRONG_DATA_FORMAT,
-      ),
-    },
-  )
-  @MaxLength(255, {
-    message: getValidationMessage(
-      DtoPrefix.EMAIL,
-      ValidationType.MAX_LENGTH,
-      255,
-    ),
-  })
-  @IsNotEmpty({
-    message: getValidationMessage(DtoPrefix.EMAIL, ValidationType.NOT_EMPTY),
-  })
+  @AccountEmail()
   email!: string;
 
   @FullName()
