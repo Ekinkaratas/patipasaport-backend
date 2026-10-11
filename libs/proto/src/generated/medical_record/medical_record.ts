@@ -28,6 +28,23 @@ export enum DraftReviewStatus {
   UNRECOGNIZED = -1,
 }
 
+export enum DocumentStatus {
+  DOCUMENT_STATUS_UNSPECIFIED = 0,
+  QUEUED = 1,
+  PROCESSING = 2,
+  DRAFT_READY = 3,
+  FAILED = 4,
+  UNRECOGNIZED = -1,
+}
+
+export enum LabResultFlag {
+  LAB_RESULT_FLAG_UNSPECIFIED = 0,
+  NORMAL = 1,
+  LOW = 2,
+  HIGH = 3,
+  UNRECOGNIZED = -1,
+}
+
 /** Dosya İÇERİĞİ değil, referansı taşınır. */
 export interface FileReference {
   documentId: string;
@@ -39,12 +56,49 @@ export interface FileReference {
   uploadedAt: string;
 }
 
+export interface VaccinationDetails {
+  vaccineName: string;
+  batchNumber: string;
+  administeredAt: string;
+  nextDueAt: string;
+}
+
+export interface PrescriptionDetails {
+  medicationName: string;
+  dosage: string;
+  frequency: string;
+  durationDays: number;
+  instructions: string;
+  prescribedAt: string;
+}
+
+export interface LabResultItem {
+  testName: string;
+  value: string;
+  unit: string;
+  referenceRange: string;
+  flag: LabResultFlag;
+}
+
+export interface LabResultDetails {
+  items: LabResultItem[];
+  sampledAt: string;
+}
+
+export interface RecordContent {
+  type: RecordType;
+  title: string;
+  notes: string;
+  recordedAt: string;
+  vaccination?: VaccinationDetails | undefined;
+  prescription?: PrescriptionDetails | undefined;
+  labResult?: LabResultDetails | undefined;
+}
+
 export interface MedicalRecord {
   id: string;
   petId: string;
   clinicId: string;
-  /** KAYITLI VERİ — request'te değil, yazılırken JWT'den alınır */
-  authorUserId: string;
   type: RecordType;
   title: string;
   notes: string;
@@ -55,6 +109,9 @@ export interface MedicalRecord {
   sourceDraftReviewId: string;
   /** ISO-8601 */
   createdAt: string;
+  vaccination?: VaccinationDetails | undefined;
+  prescription?: PrescriptionDetails | undefined;
+  labResult?: LabResultDetails | undefined;
 }
 
 export interface ListRecordsByPetRequest {
@@ -76,18 +133,50 @@ export interface ListRecordsResponse {
   pageSize: number;
 }
 
-/** author_user_id ve clinic_id, ikisi de JWT'den okunur. */
+/** clinic_id JWT'den okunur. */
 export interface CreateRecordRequest {
   petId: string;
-  type: RecordType;
-  title: string;
-  notes: string;
-  recordedAt: string;
   attachments: FileReference[];
+  content: RecordContent | undefined;
 }
 
 export interface RecordResponse {
   record: MedicalRecord | undefined;
+}
+
+export interface Document {
+  id: string;
+  petId: string;
+  clinicId: string;
+  storagePath: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  note: string;
+  status: DocumentStatus;
+  failureReason: string;
+  draftReviewId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RegisterDocumentRequest {
+  petId: string;
+  storagePath: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  note: string;
+}
+
+export interface GetDocumentRequest {
+  id: string;
+}
+
+export interface DocumentResponse {
+  document: Document | undefined;
 }
 
 export interface Vaccination {
@@ -100,7 +189,6 @@ export interface Vaccination {
   administeredAt: string;
   /** ISO-8601, yoksa boş string */
   nextDueAt: string;
-  veterinarianUserId: string;
   clinicId: string;
 }
 
@@ -132,8 +220,6 @@ export interface Prescription {
   instructions: string;
   /** ISO-8601 */
   prescribedAt: string;
-  veterinarianUserId: string;
-  /** eğer user bir klinik hesabı değilse burası boş string döner */
   clinicId: string;
 }
 
@@ -151,18 +237,40 @@ export interface ListPrescriptionsResponse {
   pageSize: number;
 }
 
-/** AI'ın ürettiği taslak. Hekim onaylamadan kalıcı kayda DÖNÜŞMEZ. */
+export interface LabResult {
+  id: string;
+  recordId: string;
+  petId: string;
+  clinicId: string;
+  testName: string;
+  value: string;
+  unit: string;
+  referenceRange: string;
+  flag: LabResultFlag;
+  sampledAt: string;
+}
+
+export interface ListLabResultsRequest {
+  petId: string;
+  testName?: string | undefined;
+  page: number;
+  pageSize: number;
+}
+
+export interface ListLabResultsResponse {
+  labResults: LabResult[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** AI'ın ürettiği taslak. Klinik onaylamadan kalıcı kayda DÖNÜŞMEZ. */
 export interface DraftReview {
   id: string;
   petId: string;
   clinicId: string;
-  proposedType: RecordType;
-  proposedTitle: string;
-  proposedNotes: string;
   sourceFiles: FileReference[];
   status: DraftReviewStatus;
-  /** KAYITLI VERİ — sorumluluk zinciri */
-  reviewedByUserId: string;
   reviewNote: string;
   /** onaylanınca oluşan kaydın id'si */
   createdRecordId: string;
@@ -170,6 +278,12 @@ export interface DraftReview {
   createdAt: string;
   /** ISO-8601 */
   reviewedAt: string;
+  reviewedByClinicId: string;
+  documentId: string;
+  proposal: RecordContent | undefined;
+  approvedContent: RecordContent | undefined;
+  modelVersion: string;
+  confidence: number;
 }
 
 export interface ListDraftReviewsRequest {
@@ -188,17 +302,16 @@ export interface ListDraftReviewsResponse {
 }
 
 /**
- * reviewed_by_user_id YOK kimlik JWT'den alınır.
- * İstemciden gelseydi bir hekim başkasının adına onay verebilirdi.
+ * reviewed_by_clinic_id YOK, klinik JWT'den alınır.
+ * İstemciden gelseydi bir klinik başkasının adına onay verebilirdi.
  */
 export interface ReviewDraftRequest {
   id: string;
   /** false ise reddedilir */
   approved: boolean;
   reviewNote: string;
-  /** Hekim taslağı düzelterek onaylayabilir: */
-  editedTitle?: string | undefined;
-  editedNotes?: string | undefined;
+  /** Klinik taslağı düzelterek onaylayabilir: */
+  editedContent: RecordContent | undefined;
 }
 
 export interface DraftReviewResponse {
@@ -208,9 +321,9 @@ export interface DraftReviewResponse {
 export const MEDICAL_RECORD_PACKAGE_NAME = "medical_record";
 
 /**
- * Tıbbi geçmiş yönetimi, dosya referansı ve physician-in-the-loop onay akışı.
+ * Tıbbi geçmiş yönetimi, dosya referansı ve klinik onaylı (human-in-the-loop) taslak akışı.
  *
- * Python/FastAPI servisiyle iletişim tamamen RabbitMQ üzerinden asenkrondur (fire-and-forget + callback).
+ * Python/FastAPI servisiyle iletişim tamamen RabbitMQ üzerinden asenkrondur (outbox + CloudEvents olayları, bkz. events/events.proto).
  */
 
 export interface MedicalRecordServiceClient {
@@ -222,7 +335,13 @@ export interface MedicalRecordServiceClient {
 
   listPrescriptions(request: ListPrescriptionsRequest): Observable<ListPrescriptionsResponse>;
 
-  /** Hekimin onay bekleyen taslakları görmesi sebebiyle yazıldı. */
+  listLabResults(request: ListLabResultsRequest): Observable<ListLabResultsResponse>;
+
+  registerDocument(request: RegisterDocumentRequest): Observable<DocumentResponse>;
+
+  getDocument(request: GetDocumentRequest): Observable<DocumentResponse>;
+
+  /** Kliniğin onay bekleyen taslakları görmesi sebebiyle yazıldı. */
 
   listDraftReviews(request: ListDraftReviewsRequest): Observable<ListDraftReviewsResponse>;
 
@@ -230,9 +349,9 @@ export interface MedicalRecordServiceClient {
 }
 
 /**
- * Tıbbi geçmiş yönetimi, dosya referansı ve physician-in-the-loop onay akışı.
+ * Tıbbi geçmiş yönetimi, dosya referansı ve klinik onaylı (human-in-the-loop) taslak akışı.
  *
- * Python/FastAPI servisiyle iletişim tamamen RabbitMQ üzerinden asenkrondur (fire-and-forget + callback).
+ * Python/FastAPI servisiyle iletişim tamamen RabbitMQ üzerinden asenkrondur (outbox + CloudEvents olayları, bkz. events/events.proto).
  */
 
 export interface MedicalRecordServiceController {
@@ -250,7 +369,17 @@ export interface MedicalRecordServiceController {
     request: ListPrescriptionsRequest,
   ): Promise<ListPrescriptionsResponse> | Observable<ListPrescriptionsResponse> | ListPrescriptionsResponse;
 
-  /** Hekimin onay bekleyen taslakları görmesi sebebiyle yazıldı. */
+  listLabResults(
+    request: ListLabResultsRequest,
+  ): Promise<ListLabResultsResponse> | Observable<ListLabResultsResponse> | ListLabResultsResponse;
+
+  registerDocument(
+    request: RegisterDocumentRequest,
+  ): Promise<DocumentResponse> | Observable<DocumentResponse> | DocumentResponse;
+
+  getDocument(request: GetDocumentRequest): Promise<DocumentResponse> | Observable<DocumentResponse> | DocumentResponse;
+
+  /** Kliniğin onay bekleyen taslakları görmesi sebebiyle yazıldı. */
 
   listDraftReviews(
     request: ListDraftReviewsRequest,
@@ -268,6 +397,9 @@ export function MedicalRecordServiceControllerMethods() {
       "createRecord",
       "listVaccinations",
       "listPrescriptions",
+      "listLabResults",
+      "registerDocument",
+      "getDocument",
       "listDraftReviews",
       "reviewDraft",
     ];

@@ -311,11 +311,23 @@ describe('UploadPetResultRequestDto', () => {
     mimeType: 'application/pdf',
     sizeBytes: 1024,
     note: 'Açlık kan şekeri',
+    sha256: 'a'.repeat(64),
   };
   const check = (o: object) =>
     firstErrors(UploadPetResultRequestDto, { ...valid, ...o });
 
   it('geçerli istek hata vermez', () => expect(check({})).toEqual({}));
+
+  it.each([
+    ['yok', undefined, msg(P.SHA256, V.NOT_EMPTY)],
+    ['boş', '', msg(P.SHA256, V.NOT_EMPTY)],
+    ['sayı', 123, msg(P.SHA256, V.MUST_BE_STRING)],
+    ['63 hane', 'a'.repeat(63), msg(P.SHA256, V.WRONG_DATA_FORMAT)],
+    ['büyük harf', 'A'.repeat(64), msg(P.SHA256, V.WRONG_DATA_FORMAT)],
+    ['hex dışı karakter', `${'a'.repeat(63)}g`, msg(P.SHA256, V.WRONG_DATA_FORMAT)],
+  ])('sha256 %s → reddedilir', (_n, sha256, expected) =>
+    expect(check({ sha256 })).toEqual({ sha256: expected }),
+  );
 
   it.each([
     ['image/jpeg', 'jpg'],

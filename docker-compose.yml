@@ -164,6 +164,36 @@ services:
       retries: 12
       start_period: 30s
 
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    restart: unless-stopped
+    networks: [backend]
+    command: server -dir=/data -s3 -filer.encryptVolumeData
+    volumes:
+      - seaweedfs_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8333 && nc -z 127.0.0.1 8888"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:4.48
+    restart: "no"
+    networks: [backend]
+    entrypoint: ["/bin/sh", "/init/init.sh"]
+    environment:
+      S3_BUCKET: ${S3_BUCKET:-medical-documents}
+      S3_GATEWAY_ACCESS_KEY: ${S3_GATEWAY_ACCESS_KEY}
+      S3_GATEWAY_SECRET_KEY: ${S3_GATEWAY_SECRET_KEY}
+      S3_AI_ACCESS_KEY: ${S3_AI_ACCESS_KEY}
+      S3_AI_SECRET_KEY: ${S3_AI_SECRET_KEY}
+    volumes:
+      - ./tools/seaweedfs/init.sh:/init/init.sh:ro
+    depends_on:
+      seaweedfs: { condition: service_healthy }
+
   # ============================================================
   # gRPC Mikroservisler (apps/*)
   # Dışarıya port açılmaz; sadece gateway backend ağından erişir.
@@ -269,11 +299,8 @@ services:
       DB_USER: ${MEDICAL_DB_USER:-medical_user}
       DB_PASSWORD: ${MEDICAL_DB_PASSWORD}
       DB_NAME: ${MEDICAL_DB_NAME:-medical_db}
-      RAW_FILES_PATH: /var/medical-files
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
-    volumes:
-      - medical_files:/var/medical-files
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3004"]
       <<: *grpc-healthcheck
@@ -348,6 +375,10 @@ services:
       MEDICAL_RECORD_GRPC_URL: medical-record:3004
       PETS_GRPC_URL:           pets:3005
       USERS_GRPC_URL:          users:3006
+      S3_ENDPOINT:             http://seaweedfs:8333
+      S3_BUCKET:               ${S3_BUCKET:-medical-documents}
+      S3_ACCESS_KEY:           ${S3_GATEWAY_ACCESS_KEY}
+      S3_SECRET_KEY:           ${S3_GATEWAY_SECRET_KEY}
     ports:
       - "${GATEWAY_PORT:-3000}:3000"
     healthcheck:
@@ -380,7 +411,7 @@ volumes:
   redis_access_data:
   redis_auth_data:
   rabbitmq_data:
-  medical_files:
+  seaweedfs_data:
 
 # Docker secret'i /run/secrets/<secret_adi> olarak mount eder — dosya adindaki
 # .pem uzantisi konteynere TASINMAZ. Servisin environment: blogundaki

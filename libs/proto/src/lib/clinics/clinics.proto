@@ -141,21 +141,28 @@ message GetClinicPetOverviewResponse {
 // ---------- Sonuç (tahlil/görüntü) yükleme ----------
 
 // DOSYANIN KENDİSİ BURADAN GEÇMEZ. Gateway multipart isteği alır,
-// dosyayı local file system'a yazar, sadece referansını iletir.
-// Bu çağrı Medical Record'a iletilir ve AI pipeline'ını tetikler.
+// türünü dosya imzasından (file-type) doğrular, dosyayı SeaweedFS'teki
+// (S3 uyumlu) özel bucket'a yazar ve sadece referansını iletir. Clinics bu çağrıyı
+// medical_record.RegisterDocument'a aktarır; rıza (medical_write) orada
+// kontrol edilir. Kayıt başarısız olursa gateway yalnızca bu istekte
+// yüklediği dosyayı siler; önceden var olan dosyalara dokunulmaz.
+// AI işlemi, outbox üzerinden RabbitMQ'ya düşen olayla başlar.
 message UploadPetResultRequest {
   string clinic_id = 1; 
   string pet_id = 2;
-  string storage_path = 3;    // dosya sisteminde nereye yazıldığı
+  string storage_path = 3;    // bucket içindeki nesne anahtarı
   string original_name = 4;
   string mime_type = 5;       // "application/pdf", "image/jpeg"
   int32 size_bytes = 6;
   string note = 7;
+  string sha256 = 8;
 }
 
 message UploadPetResultResponse {
   string document_id = 1;
-  string record_id = 2;         // Medical Record'da açılan kaydın id'si
-  bool ai_pipeline_queued = 3;  // RabbitMQ'ya atıldı mı
   string uploaded_at = 4;       // ISO-8601
+  string status = 5;
+
+  reserved 2, 3;
+  reserved "record_id", "ai_pipeline_queued";
 }

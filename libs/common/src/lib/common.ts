@@ -1,6 +1,7 @@
 export { BaseResponse } from './base/base.response';
 export * from './decorator';
 export * from './enums';
+export * from './events';
 export * from './exceptions';
 export * from './guards';
 export * from './interceptors';

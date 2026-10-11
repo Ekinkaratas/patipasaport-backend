@@ -9,7 +9,7 @@ Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL fore
 | Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `GetClinicPetOverview`). `UploadPetResult` Medical Record tasarımını bekliyor (şimdilik `UNIMPLEMENTED` döner) |
 | Pets | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`) |
 | Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor |
-| Medical Record | ⏸ Tartışılacak — aşağıdaki içerik ilk taslaktır |
+| Medical Record | 🚧 Uygulanıyor — proto güncellendi; DTO'lar ve CloudEvents yardımcısı yazıldı; Prisma schema + init migration (trigger'larla) hazır; servis metotları henüz yazılmadı |
 
 ---
 
@@ -262,23 +262,155 @@ TTL:   auth'un istediği süre (15 dk), en fazla OPAQUE_TOKEN_TTL (.env, varsay�
 
 ---
 
-## Medical Record Service — PostgreSQL + Local File System (tartışılacak)
+## Medical Record Service — PostgreSQL (`medical_db`) + SeaweedFS (S3) + RabbitMQ
 
-> Bu bölüm ilk taslaktır, henüz uygulanmadı. Proto'daki aşı / reçete listeleri ve `ReviewDraft` akışının tablolarla eşleşmesi netleştirilecek.
+> Uygulanıyor. Proto: `libs/proto/src/lib/medical_record/medical_record.proto`, olay şemaları: `libs/proto/src/lib/events/events.proto`.
 
-### medical_records
+### Dosya deposu — SeaweedFS (S3 uyumlu, on-premise)
+
+Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan SeaweedFS'e yazılır; veri sunucudan çıkmaz (KVKK yurt dışı aktarım riski yok). Uygulamalar S3 API'siyle konuşur; bu yüzden depo değişirse servis kodu ve `S3_*` ortam değişkenleri aynı kalır.
+
+> **Neden MinIO değil:** MinIO Ekim 2025'te topluluk sürümünün Docker imajlarını yayınlamayı bıraktı, topluluk deposu bakım moduna alınıp arşivlendi; güvenlik yamaları imaj olarak gelmiyor. SeaweedFS aktif geliştirilen, Apache-2.0 lisanslı bir alternatif (imaj: `chrislusf/seaweedfs:4.48`).
+
+- Compose servisi: `seaweedfs` (`weed server -s3`, S3 portu 8333; master 9333, filer 8888 yalnızca iç ağda). Veri `seaweedfs_data` volume'unda.
+- Node servisleri `@aws-sdk/client-s3` ile bağlanır (`endpoint: S3_ENDPOINT`, `forcePathStyle: true`, `region: us-east-1`); SeaweedFS ile yazma/okuma/silme ve salt okunur sınır doğrulandı.
+- `seaweedfs-init` tek seferlik container'ı (`tools/seaweedfs/init.sh`) bucket'ı ve kullanıcıları oluşturur; tekrar çalıştırıldığında var olana dokunmaz. `.env`'deki anahtarlardan biri boşsa hiçbir şey oluşturmadan durur.
+- Bucket **özeldir**; anonim erişim kapalıdır.
+- Erişim en az yetkiyle (bucket'a özel politika): `gateway` kullanıcısı `readwrite` (yazma/okuma/silme), `ai` kullanıcısı `readonly`. Uygulamalar admin kimliği kullanmaz.
+- Diskte şifreleme: `-filer.encryptVolumeData` ile volume verisi şifrelenir; anahtarlar filer meta verisinde tutulur. Aynı makinede durdukları için ek koruma olarak sunucu diski de şifrelenmelidir (LUKS/BitLocker).
+- S3 portu yalnızca dev ortamında `127.0.0.1:8333`'e açılır (`docker-compose.override.yml`); dışarıya açık tek kapı gateway'dir.
+- Periyodik saklama/imha görevi ve hesap silme işlemi yoktur (proje kararı). Dosya yalnızca yükleme geri alındığında silinir (Yükleme akışı, 5. madde).
+- Erişim denetim logu SeaweedFS'in `-s3.auditLogConfig` seçeneğiyle açılacak; henüz yapılandırılmadı.
+- Anahtar değiştirme: `.env`'deki bir anahtar sonradan değiştirilirse init betiği var olan kullanıcıyı güncellemez; değişiklik `weed shell` içinde `s3.accesskey.rotate` ile yapılır.
+
+### Yükleme akışı
+
+1. Klinik `POST /clinics/:clinicId/pets/:petId/documents` ile dosyayı gateway'e yükler (multipart). Dosya en fazla 10 MB; pdf, jpg/jpeg veya png (`PET_RESULT_*` sabitleri).
+2. Gateway gerçek türü dosya imzasından (`file-type`) doğrular; istemcinin bildirdiği MIME tipine güvenmez. Dosyayı diske yazmadan SeaweedFS'e (S3) aktarır.
+3. Gateway `clinics.UploadPetResult` ile yalnızca referansı iletir; clinics bunu `medical_record.RegisterDocument`'a aktarır.
+4. medical-record `CheckAccess` ile `medical_write` rızasını kontrol eder. Aynı transaction içinde `documents` satırını (`QUEUED`) ve `outbox` satırını (`document.uploaded.v1`) yazar.
+5. **Geri alma:** kayıt başarısız olursa (rıza yok vb.) gateway **yalnızca bu istekte yüklediği dosyayı** SeaweedFS'ten siler. Daha önce yüklenmiş bir dosyaya ilişkin istek erişim engeline takılırsa o dosya silinmez.
+
+
+### Olaylar — CloudEvents + RabbitMQ
+
+- Zarf: CNCF **CloudEvents**, JSON yapılı biçim (`application/cloudevents+json`). Zorunlu alanlar: `id`, `source`, `type`, `specversion`, `subject`, `time`, `datacontenttype`, `dataschema`.
+  - `specversion`: `1.0`; `datacontenttype`: `application/json`; `subject`: `document_id`.
+  - `source`: medical-record için `/patipasaport/medical-record`, AI servisi için `/patipasaport/ai-service`.
+  - `dataschema`: URN (örn. `urn:patipasaport:events:DocumentUploaded:v1`). Bir adres değil, şema adıdır; indirilmez, sunucu gerektirmez.
+- `data`: `events.proto`'daki mesajın protobuf resmi JSON eşlemesi; Node (ts-proto) ve FastAPI (`grpcio-tools`) aynı şemadan tip üretir.
+- Correlation id mesaj başlığında taşınır; mesajlarda kişisel veri (ad, telefon, e-posta) bulunmaz, yalnızca kimlik ve dosya referansı.
+
+| `type` | Yayınlayan → Dinleyen | `data` |
+|---|---|---|
+| `com.patipasaport.document.uploaded.v1` | medical-record → AI | `DocumentUploaded` |
+| `com.patipasaport.document.processing_started.v1` | AI → medical-record | `DocumentProcessingStarted` |
+| `com.patipasaport.document.analyzed.v1` | AI → medical-record | `DocumentAnalyzed` |
+| `com.patipasaport.document.analysis_failed.v1` | AI → medical-record | `DocumentAnalysisFailed` |
+
+**Güvenilirlik:** kalıcı (durable/quorum) kuyruk, kalıcı mesaj, yayıncı onayı (publisher confirm), tüketicide iş bittikten sonra elle onay (manual ack), gecikmeli tekrar deneme ve dead-letter kuyruğu. Teslim en az bir kez (at-least-once) olduğundan tüketiciler idempotenttir: aynı `document_id` için ikinci sonuç yok sayılır.
+
+**Outbox:** medical-record RabbitMQ'ya doğrudan yazmaz. Olay, iş verisiyle aynı transaction'da `outbox` tablosuna yazılır; servis içindeki gönderim döngüsü yayınlar ve onay gelince `published_at`'i doldurur. RabbitMQ kapalıysa olay tabloda bekler, kaybolmaz.
+
+**AI servisi (Python/FastAPI):** `document.uploaded.v1` ile tetiklenir; dosyayı mesajdaki `storage_path` ile, salt okunur S3 anahtarıyla (`ai` kullanıcısı) okur; sonucu yayınlamadan gelen mesajı onaylamaz. Kendi veritabanı olmadığından outbox gerekmez. Gateway ve medical-record AI servisini HTTP/gRPC ile çağırmaz.
+
+### Durum makineleri
+
+- Belge: `QUEUED → PROCESSING → DRAFT_READY | FAILED`
+- Taslak: `PENDING → APPROVED | REJECTED`. Onaylanan kayıt değiştirilemez; düzeltme yeni kayıt olarak eklenir.
+
+### Veri modeli — karışık
+
+AI önerisi doğrulanmamış ve biçimi değişken olduğu için **taslakta jsonb** olarak durur; klinik onaylayınca **tipli tablolara** dönüştürülür. Klinik elle kayıt girdiğinde (`CreateRecord`) taslak aşaması atlanır.
+
+> Şema: `apps/medical_record/prisma/schema.prisma`, migration: `apps/medical_record/prisma/migrations/*_init`. Metin uzunlukları DTO sınırlarıyla aynıdır. Kullanıcının girdiği tarihler `date` (YYYY-MM-DD), sistem zamanları `timestamp`.
+
+#### documents
 
 | Kolon | Tip | Not |
 |---|---|---|
 | id | UUID (PK) | |
-| pet_id | UUID | **Tekil** — bir tıbbi kayıt tek bir hayvana ait |
-| raw_file_path | varchar | Local file system yolu, örn. `/var/medical-files/xxx.pdf` |
-| result_json | jsonb | AI'ın ürettiği / hekimin onayladığı yapılandırılmış veri |
-| status | enum | `ai_draft` / `physician_approved` / `physician_rejected` |
-| reviewed_by | UUID, nullable | Onaylayan / reddeden hekimin `users.id`'si |
+| pet_id | UUID | |
+| clinic_id | UUID | Yükleyen klinik (JWT) |
+| storage_path | varchar(64), unique | Bucket içindeki nesne anahtarı |
+| original_name | varchar(255) | |
+| mime_type | varchar(32) | Dosya imzasından doğrulanmış tür |
+| size_bytes | integer | En fazla 10 MB |
+| sha256 | char(64) | Bütünlük kontrolü |
+| note | varchar(500), nullable | |
+| status | enum `DocumentStatus`, default `QUEUED` | `QUEUED` / `PROCESSING` / `DRAFT_READY` / `FAILED` |
+| failure_reason | varchar(64), nullable | AI hata kodu |
+| created_at / updated_at | timestamp | |
+
+#### draft_reviews
+
+| Kolon | Tip | Not |
+|---|---|---|
+| id | UUID (PK) | |
+| document_id | UUID, FK → `documents.id`, unique | Aynı belgeye ikinci taslak açılmaz (idempotent tüketici) |
+| pet_id / clinic_id | UUID | |
+| record_type | enum `RecordType` | |
+| proposed_payload | jsonb | AI'ın ham önerisi (`RecordContent`) |
+| approved_payload | jsonb, nullable | Klinik düzelterek onayladıysa son hali |
+| model_version | varchar(64) | |
+| confidence | double precision | Proto'daki `double` ile birebir |
+| status | enum `DraftReviewStatus`, default `PENDING` | `PENDING` / `APPROVED` / `REJECTED` |
+| review_note | varchar(500), nullable | Red sebebi (redde zorunlu) |
+| reviewed_by_clinic_id | UUID, nullable | Onaylayan/reddeden **klinik** (ortak hesap modeli; ayrıca user id tutulmaz) |
+| reviewed_at | timestamp, nullable | |
+| created_record_id | UUID, FK → `medical_records.id`, unique, nullable | Onayla oluşan kayıt |
 | created_at | timestamp | |
-| updated_at | timestamp | |
 
-> **Physician-in-the-Loop:** AI çıktısı doğrudan veritabanına yazılmaz; `ai_draft` statüsüyle hekimin önüne taslak olarak düşer, hekim onaylarsa `physician_approved` olur.
+#### medical_records (onaylı kaydın ortak başlığı — değiştirilemez)
 
-> **Bulut kullanılmıyor:** Fiziksel dosyalar local file system'da tutulur, DB'de sadece yol referansı saklanır (on-premise ve KVKK kısıtları).
+| Kolon | Tip | Not |
+|---|---|---|
+| id | UUID (PK) | |
+| pet_id | UUID | |
+| clinic_id | UUID | Kaydı oluşturan / onaylayan klinik |
+| type | enum `RecordType` | `EXAMINATION` / `VACCINATION` / `PRESCRIPTION` / `LAB_RESULT` / `SURGERY` |
+| title | varchar(128) | |
+| notes | text, nullable | En fazla 2000 karakter (DTO) |
+| recorded_at | date | Muayene/uygulama tarihi |
+| source_document_id | UUID, FK → `documents.id`, nullable | AI taslağının kaynak belgesi |
+| source_draft_review_id | UUID, FK → `draft_reviews.id`, nullable | AI taslağından geldiyse |
+| created_at | timestamp | |
+
+#### record_attachments (kayda eklenen belgeler)
+
+| Kolon | Tip | Not |
+|---|---|---|
+| record_id | UUID, FK → `medical_records.id` | Birleşik PK |
+| document_id | UUID, FK → `documents.id` | Birleşik PK; bir belge birden çok kayda eklenebilir |
+
+İstemci `CreateRecord`'da yalnızca `document_id` gönderir; servis belgenin aynı hayvana ve kliniğe ait olduğunu kontrol eder, dosya bilgilerini `documents`'tan doldurur.
+
+#### Tipli ayrıntı tabloları
+
+Her tablonun kendi `id`'si (UUID, PK) vardır. `pet_id` / `clinic_id` tekrar yazılmaz; listeler `medical_records` ile birleştirilerek okunur.
+
+| Tablo | Kolonlar |
+|---|---|
+| `vaccinations` | id, record_id (FK, unique), vaccine_name varchar(128), batch_number varchar(64) nullable, administered_at date, next_due_at date nullable |
+| `prescriptions` | id, record_id (FK, unique), medication_name varchar(128), dosage varchar(64), frequency varchar(64), duration_days integer, instructions varchar(1000) nullable, prescribed_at date |
+| `lab_results` | id, record_id (FK, bir kayıtta birden çok satır), test_name varchar(128), value varchar(64), unit varchar(32) nullable, reference_range varchar(64) nullable, flag enum nullable (`NORMAL` / `LOW` / `HIGH`; belirtilmemişse null), sampled_at date |
+
+**Değişmezlik (trigger, migration SQL'inde):** `forbid_medical_record_change()` fonksiyonu `medical_records`, `record_attachments`, `vaccinations`, `prescriptions` ve `lab_results` tablolarında `UPDATE` ve `DELETE`'i reddeder. Düzeltme yeni kayıt olarak eklenir. Tüm yabancı anahtarlar `ON DELETE RESTRICT`'tir.
+
+#### outbox
+
+| Kolon | Tip | Not |
+|---|---|---|
+| id | UUID (PK) | CloudEvents `id` |
+| type | varchar(128) | CloudEvents `type` |
+| payload | jsonb | CloudEvents zarfı |
+| correlation_id | varchar(128) | |
+| attempts | integer, default 0 | |
+| next_attempt_at | timestamp, default now | Hatada artan bekleme; döngü yalnızca zamanı gelenleri alır |
+| last_error | varchar(500), nullable | Son gönderim hatası |
+| created_at | timestamp | |
+| published_at | timestamp, nullable | Doluysa gönderildi |
+
+**İndeksler:** `documents (clinic_id, status)`, `draft_reviews (clinic_id, status)`, `medical_records (pet_id, recorded_at)`, `record_attachments (document_id)`, `vaccinations (next_due_at)`, `lab_results (record_id)`, `outbox (published_at, next_attempt_at)` — gönderilmemiş ve zamanı gelmiş olayları hızlı bulmak için.
+
+**Zero trust:** her okuma ve yazmada `CheckAccess` ile ilgili scope kontrol edilir (`medical_read`, `medical_write`, `vaccination_read`, `prescription_read`).

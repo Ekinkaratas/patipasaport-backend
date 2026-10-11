@@ -1,0 +1,180 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum DocumentStatus {
+  QUEUED
+  PROCESSING
+  DRAFT_READY
+  FAILED
+}
+
+enum DraftReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RecordType {
+  EXAMINATION
+  VACCINATION
+  PRESCRIPTION
+  LAB_RESULT
+  SURGERY
+}
+
+enum LabResultFlag {
+  NORMAL
+  LOW
+  HIGH
+}
+
+model Document {
+  id            String         @id @default(uuid()) @db.Uuid
+  petId         String         @map("pet_id") @db.Uuid
+  clinicId      String         @map("clinic_id") @db.Uuid
+  storagePath   String         @unique @map("storage_path") @db.VarChar(64)
+  originalName  String         @map("original_name") @db.VarChar(255)
+  mimeType      String         @map("mime_type") @db.VarChar(32)
+  sizeBytes     Int            @map("size_bytes")
+  sha256        String         @db.Char(64)
+  note          String?        @db.VarChar(500)
+  status        DocumentStatus @default(QUEUED)
+  failureReason String?        @map("failure_reason") @db.VarChar(64)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  draftReview DraftReview?
+  sourceOf    MedicalRecord[]
+  attachedTo  RecordAttachment[]
+
+  @@index([clinicId, status])
+  @@map("documents")
+}
+
+model DraftReview {
+  id                 String            @id @default(uuid()) @db.Uuid
+  documentId         String            @unique @map("document_id") @db.Uuid
+  petId              String            @map("pet_id") @db.Uuid
+  clinicId           String            @map("clinic_id") @db.Uuid
+  recordType         RecordType        @map("record_type")
+  proposedPayload    Json              @map("proposed_payload")
+  approvedPayload    Json?             @map("approved_payload")
+  modelVersion       String            @map("model_version") @db.VarChar(64)
+  confidence         Float
+  status             DraftReviewStatus @default(PENDING)
+  reviewNote         String?           @map("review_note") @db.VarChar(500)
+  reviewedByClinicId String?           @map("reviewed_by_clinic_id") @db.Uuid
+  reviewedAt         DateTime?         @map("reviewed_at")
+  createdRecordId    String?           @unique @map("created_record_id") @db.Uuid
+  createdAt          DateTime          @default(now()) @map("created_at")
+
+  document      Document        @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  createdRecord MedicalRecord?  @relation("DraftCreatedRecord", fields: [createdRecordId], references: [id], onDelete: Restrict)
+  sourceOf      MedicalRecord[] @relation("RecordSourceDraft")
+
+  @@index([clinicId, status])
+  @@map("draft_reviews")
+}
+
+model MedicalRecord {
+  id                  String     @id @default(uuid()) @db.Uuid
+  petId               String     @map("pet_id") @db.Uuid
+  clinicId            String     @map("clinic_id") @db.Uuid
+  type                RecordType
+  title               String     @db.VarChar(128)
+  notes               String?
+  recordedAt          DateTime   @map("recorded_at") @db.Date
+  sourceDocumentId    String?    @map("source_document_id") @db.Uuid
+  sourceDraftReviewId String?    @map("source_draft_review_id") @db.Uuid
+  createdAt           DateTime   @default(now()) @map("created_at")
+
+  sourceDocument    Document?          @relation(fields: [sourceDocumentId], references: [id], onDelete: Restrict)
+  sourceDraftReview DraftReview?       @relation("RecordSourceDraft", fields: [sourceDraftReviewId], references: [id], onDelete: Restrict)
+  createdByDraft    DraftReview?       @relation("DraftCreatedRecord")
+  attachments       RecordAttachment[]
+  vaccination       Vaccination?
+  prescription      Prescription?
+  labResults        LabResult[]
+
+  @@index([petId, recordedAt])
+  @@map("medical_records")
+}
+
+model RecordAttachment {
+  recordId   String @map("record_id") @db.Uuid
+  documentId String @map("document_id") @db.Uuid
+
+  record   MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+  document Document      @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@id([recordId, documentId])
+  @@index([documentId])
+  @@map("record_attachments")
+}
+
+model Vaccination {
+  id             String    @id @default(uuid()) @db.Uuid
+  recordId       String    @unique @map("record_id") @db.Uuid
+  vaccineName    String    @map("vaccine_name") @db.VarChar(128)
+  batchNumber    String?   @map("batch_number") @db.VarChar(64)
+  administeredAt DateTime  @map("administered_at") @db.Date
+  nextDueAt      DateTime? @map("next_due_at") @db.Date
+
+  record MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+
+  @@index([nextDueAt])
+  @@map("vaccinations")
+}
+
+model Prescription {
+  id             String   @id @default(uuid()) @db.Uuid
+  recordId       String   @unique @map("record_id") @db.Uuid
+  medicationName String   @map("medication_name") @db.VarChar(128)
+  dosage         String   @db.VarChar(64)
+  frequency      String   @db.VarChar(64)
+  durationDays   Int      @map("duration_days")
+  instructions   String?  @db.VarChar(1000)
+  prescribedAt   DateTime @map("prescribed_at") @db.Date
+
+  record MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+
+  @@map("prescriptions")
+}
+
+model LabResult {
+  id             String         @id @default(uuid()) @db.Uuid
+  recordId       String         @map("record_id") @db.Uuid
+  testName       String         @map("test_name") @db.VarChar(128)
+  value          String         @db.VarChar(64)
+  unit           String?        @db.VarChar(32)
+  referenceRange String?        @map("reference_range") @db.VarChar(64)
+  flag           LabResultFlag?
+  sampledAt      DateTime       @map("sampled_at") @db.Date
+
+  record MedicalRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+
+  @@index([recordId])
+  @@map("lab_results")
+}
+
+model Outbox {
+  id            String    @id @db.Uuid
+  type          String    @db.VarChar(128)
+  payload       Json
+  correlationId String    @map("correlation_id") @db.VarChar(128)
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at")
+  lastError     String?   @map("last_error") @db.VarChar(500)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  publishedAt   DateTime? @map("published_at")
+
+  @@index([publishedAt, nextAttemptAt])
+  @@map("outbox")
+}

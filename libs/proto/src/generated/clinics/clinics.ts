@@ -138,29 +138,31 @@ export interface GetClinicPetOverviewResponse {
 
 /**
  * DOSYANIN KENDİSİ BURADAN GEÇMEZ. Gateway multipart isteği alır,
- * dosyayı local file system'a yazar, sadece referansını iletir.
- * Bu çağrı Medical Record'a iletilir ve AI pipeline'ını tetikler.
+ * türünü dosya imzasından (file-type) doğrular, dosyayı SeaweedFS'teki
+ * (S3 uyumlu) özel bucket'a yazar ve sadece referansını iletir. Clinics bu çağrıyı
+ * medical_record.RegisterDocument'a aktarır; rıza (medical_write) orada
+ * kontrol edilir. Kayıt başarısız olursa gateway yalnızca bu istekte
+ * yüklediği dosyayı siler; önceden var olan dosyalara dokunulmaz.
+ * AI işlemi, outbox üzerinden RabbitMQ'ya düşen olayla başlar.
  */
 export interface UploadPetResultRequest {
   clinicId: string;
   petId: string;
-  /** dosya sisteminde nereye yazıldığı */
+  /** bucket içindeki nesne anahtarı */
   storagePath: string;
   originalName: string;
   /** "application/pdf", "image/jpeg" */
   mimeType: string;
   sizeBytes: number;
   note: string;
+  sha256: string;
 }
 
 export interface UploadPetResultResponse {
   documentId: string;
-  /** Medical Record'da açılan kaydın id'si */
-  recordId: string;
-  /** RabbitMQ'ya atıldı mı */
-  aiPipelineQueued: boolean;
   /** ISO-8601 */
   uploadedAt: string;
+  status: string;
 }
 
 export const CLINICS_PACKAGE_NAME = "clinics";

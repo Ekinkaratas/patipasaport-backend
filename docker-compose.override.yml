@@ -25,6 +25,8 @@ services:
     ports:
       - "127.0.0.1:5672:5672"      # AMQP
       - "127.0.0.1:15672:15672"    # Management UI -> http://localhost:15672
+  seaweedfs:
+    ports: ["127.0.0.1:8333:8333"]
 
   # ---- gRPC servisleri: grpcurl / Postman ile doğrudan test için ----
   access:

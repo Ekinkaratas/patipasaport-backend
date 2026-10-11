@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package events;
+
+import "medical_record/medical_record.proto";
+
+message DocumentUploaded {
+  string document_id = 1;
+  string pet_id = 2;
+  string clinic_id = 3;
+  string storage_path = 4;
+  string mime_type = 5;
+  int32 size_bytes = 6;
+  string sha256 = 7;
+}
+
+message DocumentProcessingStarted {
+  string document_id = 1;
+  string model_version = 2;
+  string started_at = 3;
+}
+
+message DocumentAnalyzed {
+  string document_id = 1;
+  string model_version = 2;
+  double confidence = 3;
+  medical_record.RecordContent proposal = 4;
+  string analyzed_at = 5;
+}
+
+message DocumentAnalysisFailed {
+  string document_id = 1;
+  string model_version = 2;
+  string error_code = 3;
+  string error_message = 4;
+  string failed_at = 5;
+}

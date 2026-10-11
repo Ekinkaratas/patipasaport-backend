@@ -758,6 +758,7 @@ describe('ClinicsService', () => {
       clinicId: CLINIC_ID,
       petId: PET_ID,
       storagePath: 'dosya.pdf',
+      sha256: 'a'.repeat(64),
       originalName: 'Kan Tahlili.pdf',
       mimeType: 'application/pdf',
       sizeBytes: 2048,

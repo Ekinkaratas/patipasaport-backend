@@ -28,6 +28,7 @@ export const STORAGE_PATH_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.[a-z]+$/;
 export const ORIGINAL_NAME_MAX_LENGTH = 255;
 export const NOTE_MAX_LENGTH = 500;
+export const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
 const isPetResultMimeType = (value: unknown): value is PetResultMimeType =>
   PET_RESULT_MIME_TYPES.includes(value as PetResultMimeType);
@@ -238,4 +239,21 @@ export class UploadPetResultRequestDto
     return trimmed === '' ? undefined : trimmed;
   })
   note!: string;
+
+  @Matches(SHA256_PATTERN, {
+    message: getValidationMessage(
+      DtoPrefix.SHA256,
+      ValidationType.WRONG_DATA_FORMAT,
+    ),
+  })
+  @IsString({
+    message: getValidationMessage(
+      DtoPrefix.SHA256,
+      ValidationType.MUST_BE_STRING,
+    ),
+  })
+  @IsNotEmpty({
+    message: getValidationMessage(DtoPrefix.SHA256, ValidationType.NOT_EMPTY),
+  })
+  sha256!: string;
 }

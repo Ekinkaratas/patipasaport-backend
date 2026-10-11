@@ -476,6 +476,7 @@ describe('clinics servisi (e2e)', () => {
           mimeType: 'application/pdf',
           sizeBytes: 2048,
           note: '',
+          sha256: 'a'.repeat(64),
           ...override,
         }, await clinicToken(active.id));
 
