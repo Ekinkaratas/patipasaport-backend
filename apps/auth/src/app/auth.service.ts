@@ -460,6 +460,7 @@ export class AuthService {
       tokenType: 'Bearer',
       expiresIn: opaque_token.expiresIn,
       userId,
+      clinicId: createdUser.clinicId || '',
     };
 
     return response;
@@ -640,6 +641,7 @@ export class AuthService {
       tokenType: 'Bearer',
       expiresIn: access_response_data.expiresIn,
       userId: auth_db_data.userId,
+      clinicId: user_db_data.clinicId || '',
     };
 
     this.logger.log('login: metodu başarıyla tamamlandı');
@@ -766,6 +768,7 @@ export class AuthService {
       tokenType: 'Bearer',
       expiresIn: access_response_data.expiresIn,
       userId: session.userId,
+      clinicId: user_db_data.clinicId || '',
     };
 
     this.logger.log('refreshToken: metodu başarıyla tamamlandı');

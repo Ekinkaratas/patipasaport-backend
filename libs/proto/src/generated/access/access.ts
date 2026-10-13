@@ -19,11 +19,85 @@ export enum ConsentStatus {
   UNRECOGNIZED = -1,
 }
 
+export function consentStatusFromJSON(object: any): ConsentStatus {
+  switch (object) {
+    case 0:
+    case "CONSENT_STATUS_UNSPECIFIED":
+      return ConsentStatus.CONSENT_STATUS_UNSPECIFIED;
+    case 1:
+    case "ACTIVE":
+      return ConsentStatus.ACTIVE;
+    case 2:
+    case "REVOKED":
+      return ConsentStatus.REVOKED;
+    case 3:
+    case "EXPIRED":
+      return ConsentStatus.EXPIRED;
+    case 4:
+    case "NOT_FOUND":
+      return ConsentStatus.NOT_FOUND;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return ConsentStatus.UNRECOGNIZED;
+  }
+}
+
+export function consentStatusToJSON(object: ConsentStatus): string {
+  switch (object) {
+    case ConsentStatus.CONSENT_STATUS_UNSPECIFIED:
+      return "CONSENT_STATUS_UNSPECIFIED";
+    case ConsentStatus.ACTIVE:
+      return "ACTIVE";
+    case ConsentStatus.REVOKED:
+      return "REVOKED";
+    case ConsentStatus.EXPIRED:
+      return "EXPIRED";
+    case ConsentStatus.NOT_FOUND:
+      return "NOT_FOUND";
+    case ConsentStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export enum ClientType {
   CLIENT_TYPE_UNSPECIFIED = 0,
   WEB = 1,
   MOBILE = 2,
   UNRECOGNIZED = -1,
+}
+
+export function clientTypeFromJSON(object: any): ClientType {
+  switch (object) {
+    case 0:
+    case "CLIENT_TYPE_UNSPECIFIED":
+      return ClientType.CLIENT_TYPE_UNSPECIFIED;
+    case 1:
+    case "WEB":
+      return ClientType.WEB;
+    case 2:
+    case "MOBILE":
+      return ClientType.MOBILE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return ClientType.UNRECOGNIZED;
+  }
+}
+
+export function clientTypeToJSON(object: ClientType): string {
+  switch (object) {
+    case ClientType.CLIENT_TYPE_UNSPECIFIED:
+      return "CLIENT_TYPE_UNSPECIFIED";
+    case ClientType.WEB:
+      return "WEB";
+    case ClientType.MOBILE:
+      return "MOBILE";
+    case ClientType.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
 }
 
 export enum DeniedReason {
@@ -38,6 +112,48 @@ export enum DeniedReason {
   /** DENIED_REASON_INSUFFICIENT_SCOPE - rıza AKTİF ama istenen scope yok */
   DENIED_REASON_INSUFFICIENT_SCOPE = 4,
   UNRECOGNIZED = -1,
+}
+
+export function deniedReasonFromJSON(object: any): DeniedReason {
+  switch (object) {
+    case 0:
+    case "DENIED_REASON_UNSPECIFIED":
+      return DeniedReason.DENIED_REASON_UNSPECIFIED;
+    case 1:
+    case "DENIED_REASON_NO_CONSENT":
+      return DeniedReason.DENIED_REASON_NO_CONSENT;
+    case 2:
+    case "DENIED_REASON_REVOKED":
+      return DeniedReason.DENIED_REASON_REVOKED;
+    case 3:
+    case "DENIED_REASON_EXPIRED":
+      return DeniedReason.DENIED_REASON_EXPIRED;
+    case 4:
+    case "DENIED_REASON_INSUFFICIENT_SCOPE":
+      return DeniedReason.DENIED_REASON_INSUFFICIENT_SCOPE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return DeniedReason.UNRECOGNIZED;
+  }
+}
+
+export function deniedReasonToJSON(object: DeniedReason): string {
+  switch (object) {
+    case DeniedReason.DENIED_REASON_UNSPECIFIED:
+      return "DENIED_REASON_UNSPECIFIED";
+    case DeniedReason.DENIED_REASON_NO_CONSENT:
+      return "DENIED_REASON_NO_CONSENT";
+    case DeniedReason.DENIED_REASON_REVOKED:
+      return "DENIED_REASON_REVOKED";
+    case DeniedReason.DENIED_REASON_EXPIRED:
+      return "DENIED_REASON_EXPIRED";
+    case DeniedReason.DENIED_REASON_INSUFFICIENT_SCOPE:
+      return "DENIED_REASON_INSUFFICIENT_SCOPE";
+    case DeniedReason.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
 }
 
 export interface CreateTokenRequest {
@@ -158,6 +274,550 @@ export interface ListMyConsentsResponse {
 }
 
 export const ACCESS_PACKAGE_NAME = "access";
+
+export const CreateTokenRequest: MessageFns<CreateTokenRequest> = {
+  fromJSON(object: any): CreateTokenRequest {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      role: isSet(object.role) ? globalThis.String(object.role) : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      clientType: isSet(object.clientType)
+        ? clientTypeFromJSON(object.clientType)
+        : isSet(object.client_type)
+        ? clientTypeFromJSON(object.client_type)
+        : 0,
+      ttlSeconds: isSet(object.ttlSeconds)
+        ? globalThis.Number(object.ttlSeconds)
+        : isSet(object.ttl_seconds)
+        ? globalThis.Number(object.ttl_seconds)
+        : 0,
+    };
+  },
+
+  toJSON(message: CreateTokenRequest): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.role !== "") {
+      obj.role = message.role;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.clientType !== 0) {
+      obj.clientType = clientTypeToJSON(message.clientType);
+    }
+    if (message.ttlSeconds !== 0) {
+      obj.ttlSeconds = Math.round(message.ttlSeconds);
+    }
+    return obj;
+  },
+};
+
+export const CreateTokenResponse: MessageFns<CreateTokenResponse> = {
+  fromJSON(object: any): CreateTokenResponse {
+    return {
+      opaqueToken: isSet(object.opaqueToken)
+        ? globalThis.String(object.opaqueToken)
+        : isSet(object.opaque_token)
+        ? globalThis.String(object.opaque_token)
+        : "",
+      expiresIn: isSet(object.expiresIn)
+        ? globalThis.Number(object.expiresIn)
+        : isSet(object.expires_in)
+        ? globalThis.Number(object.expires_in)
+        : 0,
+      issuedAt: isSet(object.issuedAt)
+        ? globalThis.String(object.issuedAt)
+        : isSet(object.issued_at)
+        ? globalThis.String(object.issued_at)
+        : "",
+      expiresAt: isSet(object.expiresAt)
+        ? globalThis.String(object.expiresAt)
+        : isSet(object.expires_at)
+        ? globalThis.String(object.expires_at)
+        : "",
+    };
+  },
+
+  toJSON(message: CreateTokenResponse): unknown {
+    const obj: any = {};
+    if (message.opaqueToken !== "") {
+      obj.opaqueToken = message.opaqueToken;
+    }
+    if (message.expiresIn !== 0) {
+      obj.expiresIn = Math.round(message.expiresIn);
+    }
+    if (message.issuedAt !== "") {
+      obj.issuedAt = message.issuedAt;
+    }
+    if (message.expiresAt !== "") {
+      obj.expiresAt = message.expiresAt;
+    }
+    return obj;
+  },
+};
+
+export const RevokeTokenRequest: MessageFns<RevokeTokenRequest> = {
+  fromJSON(object: any): RevokeTokenRequest {
+    return {
+      opaqueToken: isSet(object.opaqueToken)
+        ? globalThis.String(object.opaqueToken)
+        : isSet(object.opaque_token)
+        ? globalThis.String(object.opaque_token)
+        : "",
+    };
+  },
+
+  toJSON(message: RevokeTokenRequest): unknown {
+    const obj: any = {};
+    if (message.opaqueToken !== "") {
+      obj.opaqueToken = message.opaqueToken;
+    }
+    return obj;
+  },
+};
+
+export const RevokeTokenResponse: MessageFns<RevokeTokenResponse> = {
+  fromJSON(object: any): RevokeTokenResponse {
+    return { revoked: isSet(object.revoked) ? globalThis.Boolean(object.revoked) : false };
+  },
+
+  toJSON(message: RevokeTokenResponse): unknown {
+    const obj: any = {};
+    if (message.revoked !== false) {
+      obj.revoked = message.revoked;
+    }
+    return obj;
+  },
+};
+
+export const ExchangeTokenRequest: MessageFns<ExchangeTokenRequest> = {
+  fromJSON(object: any): ExchangeTokenRequest {
+    return {
+      opaqueToken: isSet(object.opaqueToken)
+        ? globalThis.String(object.opaqueToken)
+        : isSet(object.opaque_token)
+        ? globalThis.String(object.opaque_token)
+        : "",
+      clientType: isSet(object.clientType)
+        ? clientTypeFromJSON(object.clientType)
+        : isSet(object.client_type)
+        ? clientTypeFromJSON(object.client_type)
+        : 0,
+    };
+  },
+
+  toJSON(message: ExchangeTokenRequest): unknown {
+    const obj: any = {};
+    if (message.opaqueToken !== "") {
+      obj.opaqueToken = message.opaqueToken;
+    }
+    if (message.clientType !== 0) {
+      obj.clientType = clientTypeToJSON(message.clientType);
+    }
+    return obj;
+  },
+};
+
+export const ExchangeTokenResponse: MessageFns<ExchangeTokenResponse> = {
+  fromJSON(object: any): ExchangeTokenResponse {
+    return {
+      jwt: isSet(object.jwt) ? globalThis.String(object.jwt) : "",
+      expiresIn: isSet(object.expiresIn)
+        ? globalThis.Number(object.expiresIn)
+        : isSet(object.expires_in)
+        ? globalThis.Number(object.expires_in)
+        : 0,
+      traceId: isSet(object.traceId)
+        ? globalThis.String(object.traceId)
+        : isSet(object.trace_id)
+        ? globalThis.String(object.trace_id)
+        : "",
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      role: isSet(object.role) ? globalThis.String(object.role) : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      clientType: isSet(object.clientType)
+        ? clientTypeFromJSON(object.clientType)
+        : isSet(object.client_type)
+        ? clientTypeFromJSON(object.client_type)
+        : 0,
+    };
+  },
+
+  toJSON(message: ExchangeTokenResponse): unknown {
+    const obj: any = {};
+    if (message.jwt !== "") {
+      obj.jwt = message.jwt;
+    }
+    if (message.expiresIn !== 0) {
+      obj.expiresIn = Math.round(message.expiresIn);
+    }
+    if (message.traceId !== "") {
+      obj.traceId = message.traceId;
+    }
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.role !== "") {
+      obj.role = message.role;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.clientType !== 0) {
+      obj.clientType = clientTypeToJSON(message.clientType);
+    }
+    return obj;
+  },
+};
+
+export const CheckAccessRequest: MessageFns<CheckAccessRequest> = {
+  fromJSON(object: any): CheckAccessRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      requiredScopes: globalThis.Array.isArray(object?.requiredScopes)
+        ? object.requiredScopes.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.required_scopes)
+        ? object.required_scopes.map((e: any) => globalThis.String(e))
+        : [],
+    };
+  },
+
+  toJSON(message: CheckAccessRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.requiredScopes?.length) {
+      obj.requiredScopes = message.requiredScopes;
+    }
+    return obj;
+  },
+};
+
+export const CheckAccessResponse: MessageFns<CheckAccessResponse> = {
+  fromJSON(object: any): CheckAccessResponse {
+    return {
+      allowed: isSet(object.allowed) ? globalThis.Boolean(object.allowed) : false,
+      grantedScopes: globalThis.Array.isArray(object?.grantedScopes)
+        ? object.grantedScopes.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.granted_scopes)
+        ? object.granted_scopes.map((e: any) => globalThis.String(e))
+        : [],
+      missingScopes: globalThis.Array.isArray(object?.missingScopes)
+        ? object.missingScopes.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.missing_scopes)
+        ? object.missing_scopes.map((e: any) => globalThis.String(e))
+        : [],
+      consentId: isSet(object.consentId)
+        ? globalThis.String(object.consentId)
+        : isSet(object.consent_id)
+        ? globalThis.String(object.consent_id)
+        : "",
+      status: isSet(object.status) ? consentStatusFromJSON(object.status) : 0,
+      expiresAt: isSet(object.expiresAt)
+        ? globalThis.String(object.expiresAt)
+        : isSet(object.expires_at)
+        ? globalThis.String(object.expires_at)
+        : "",
+      deniedReason: isSet(object.deniedReason)
+        ? deniedReasonFromJSON(object.deniedReason)
+        : isSet(object.denied_reason)
+        ? deniedReasonFromJSON(object.denied_reason)
+        : 0,
+      petOwnerId: isSet(object.petOwnerId)
+        ? globalThis.String(object.petOwnerId)
+        : isSet(object.pet_owner_id)
+        ? globalThis.String(object.pet_owner_id)
+        : "",
+    };
+  },
+
+  toJSON(message: CheckAccessResponse): unknown {
+    const obj: any = {};
+    if (message.allowed !== false) {
+      obj.allowed = message.allowed;
+    }
+    if (message.grantedScopes?.length) {
+      obj.grantedScopes = message.grantedScopes;
+    }
+    if (message.missingScopes?.length) {
+      obj.missingScopes = message.missingScopes;
+    }
+    if (message.consentId !== "") {
+      obj.consentId = message.consentId;
+    }
+    if (message.status !== 0) {
+      obj.status = consentStatusToJSON(message.status);
+    }
+    if (message.expiresAt !== "") {
+      obj.expiresAt = message.expiresAt;
+    }
+    if (message.deniedReason !== 0) {
+      obj.deniedReason = deniedReasonToJSON(message.deniedReason);
+    }
+    if (message.petOwnerId !== "") {
+      obj.petOwnerId = message.petOwnerId;
+    }
+    return obj;
+  },
+};
+
+export const GrantConsentRequest: MessageFns<GrantConsentRequest> = {
+  fromJSON(object: any): GrantConsentRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      scopes: globalThis.Array.isArray(object?.scopes)
+        ? object.scopes.map((e: any) => globalThis.String(e))
+        : [],
+      expiresAt: isSet(object.expiresAt)
+        ? globalThis.String(object.expiresAt)
+        : isSet(object.expires_at)
+        ? globalThis.String(object.expires_at)
+        : "",
+    };
+  },
+
+  toJSON(message: GrantConsentRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.scopes?.length) {
+      obj.scopes = message.scopes;
+    }
+    if (message.expiresAt !== "") {
+      obj.expiresAt = message.expiresAt;
+    }
+    return obj;
+  },
+};
+
+export const RevokeConsentRequest: MessageFns<RevokeConsentRequest> = {
+  fromJSON(object: any): RevokeConsentRequest {
+    return {
+      consentId: isSet(object.consentId)
+        ? globalThis.String(object.consentId)
+        : isSet(object.consent_id)
+        ? globalThis.String(object.consent_id)
+        : "",
+    };
+  },
+
+  toJSON(message: RevokeConsentRequest): unknown {
+    const obj: any = {};
+    if (message.consentId !== "") {
+      obj.consentId = message.consentId;
+    }
+    return obj;
+  },
+};
+
+export const GetConsentStatusRequest: MessageFns<GetConsentStatusRequest> = {
+  fromJSON(object: any): GetConsentStatusRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+    };
+  },
+
+  toJSON(message: GetConsentStatusRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    return obj;
+  },
+};
+
+export const ConsentResponse: MessageFns<ConsentResponse> = {
+  fromJSON(object: any): ConsentResponse {
+    return {
+      consentId: isSet(object.consentId)
+        ? globalThis.String(object.consentId)
+        : isSet(object.consent_id)
+        ? globalThis.String(object.consent_id)
+        : "",
+      status: isSet(object.status) ? consentStatusFromJSON(object.status) : 0,
+      ownerUserId: isSet(object.ownerUserId)
+        ? globalThis.String(object.ownerUserId)
+        : isSet(object.owner_user_id)
+        ? globalThis.String(object.owner_user_id)
+        : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      scopes: globalThis.Array.isArray(object?.scopes)
+        ? object.scopes.map((e: any) => globalThis.String(e))
+        : [],
+      grantedAt: isSet(object.grantedAt)
+        ? globalThis.String(object.grantedAt)
+        : isSet(object.granted_at)
+        ? globalThis.String(object.granted_at)
+        : "",
+      expiresAt: isSet(object.expiresAt)
+        ? globalThis.String(object.expiresAt)
+        : isSet(object.expires_at)
+        ? globalThis.String(object.expires_at)
+        : "",
+      revokedAt: isSet(object.revokedAt)
+        ? globalThis.String(object.revokedAt)
+        : isSet(object.revoked_at)
+        ? globalThis.String(object.revoked_at)
+        : "",
+    };
+  },
+
+  toJSON(message: ConsentResponse): unknown {
+    const obj: any = {};
+    if (message.consentId !== "") {
+      obj.consentId = message.consentId;
+    }
+    if (message.status !== 0) {
+      obj.status = consentStatusToJSON(message.status);
+    }
+    if (message.ownerUserId !== "") {
+      obj.ownerUserId = message.ownerUserId;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.scopes?.length) {
+      obj.scopes = message.scopes;
+    }
+    if (message.grantedAt !== "") {
+      obj.grantedAt = message.grantedAt;
+    }
+    if (message.expiresAt !== "") {
+      obj.expiresAt = message.expiresAt;
+    }
+    if (message.revokedAt !== "") {
+      obj.revokedAt = message.revokedAt;
+    }
+    return obj;
+  },
+};
+
+export const ListMyConsentsRequest: MessageFns<ListMyConsentsRequest> = {
+  fromJSON(object: any): ListMyConsentsRequest {
+    return {
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListMyConsentsRequest): unknown {
+    const obj: any = {};
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ListMyConsentsResponse: MessageFns<ListMyConsentsResponse> = {
+  fromJSON(object: any): ListMyConsentsResponse {
+    return {
+      consents: globalThis.Array.isArray(object?.consents)
+        ? object.consents.map((e: any) => ConsentResponse.fromJSON(e))
+        : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListMyConsentsResponse): unknown {
+    const obj: any = {};
+    if (message.consents?.length) {
+      obj.consents = message.consents.map((e) => ConsentResponse.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
 
 /**
  * KİMLİK ALANI KURALI: Hiçbir request mesajı "bu işlemi yapan kim"
@@ -286,3 +946,12 @@ export function AccessServiceControllerMethods() {
 }
 
 export const ACCESS_SERVICE_NAME = "AccessService";
+
+function isSet(value: any): boolean {
+  return value !== null && value !== undefined;
+}
+
+export interface MessageFns<T> {
+  fromJSON(object: any): T;
+  toJSON(message: T): unknown;
+}

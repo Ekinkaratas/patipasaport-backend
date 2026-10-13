@@ -18,14 +18,19 @@ async function bootstrap() {
     {
       transport: Transport.GRPC,
       options: {
-        url: '0.0.0.0:3004',
+        url: `0.0.0.0:${process.env.PORT ?? 3004}`,
         package: MEDICAL_RECORD_PACKAGE_NAME,
         protoPath: join(__dirname, 'proto/medical_record/medical_record.proto'),
+        loader: {
+          defaults: true,
+          arrays: true,
+        },
       },
       logger: createWinstonLogger('medical-record'),
     },
   );
 
+  app.enableShutdownHooks();
   app.useGlobalFilters(new RpcExceptionFilter());
   app.useGlobalPipes(createGrpcValidationPipe());
   app.useGlobalInterceptors(

@@ -17,6 +17,38 @@ export enum ClientType {
   UNRECOGNIZED = -1,
 }
 
+export function clientTypeFromJSON(object: any): ClientType {
+  switch (object) {
+    case 0:
+    case "CLIENT_TYPE_UNSPECIFIED":
+      return ClientType.CLIENT_TYPE_UNSPECIFIED;
+    case 1:
+    case "WEB":
+      return ClientType.WEB;
+    case 2:
+    case "MOBILE":
+      return ClientType.MOBILE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return ClientType.UNRECOGNIZED;
+  }
+}
+
+export function clientTypeToJSON(object: ClientType): string {
+  switch (object) {
+    case ClientType.CLIENT_TYPE_UNSPECIFIED:
+      return "CLIENT_TYPE_UNSPECIFIED";
+    case ClientType.WEB:
+      return "WEB";
+    case ClientType.MOBILE:
+      return "MOBILE";
+    case ClientType.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 /** ---------- Kayıt ---------- */
 export interface RegisterRequest {
   email: string;
@@ -70,9 +102,272 @@ export interface TokenResponse {
   /** saniye */
   expiresIn: number;
   userId: string;
+  clinicId: string;
 }
 
 export const AUTH_PACKAGE_NAME = "auth";
+
+export const RegisterRequest: MessageFns<RegisterRequest> = {
+  fromJSON(object: any): RegisterRequest {
+    return {
+      email: isSet(object.email) ? globalThis.String(object.email) : "",
+      password: isSet(object.password) ? globalThis.String(object.password) : "",
+      fullName: isSet(object.fullName)
+        ? globalThis.String(object.fullName)
+        : isSet(object.full_name)
+        ? globalThis.String(object.full_name)
+        : "",
+      phone: isSet(object.phone) ? globalThis.String(object.phone) : "",
+      clientType: isSet(object.clientType)
+        ? clientTypeFromJSON(object.clientType)
+        : isSet(object.client_type)
+        ? clientTypeFromJSON(object.client_type)
+        : 0,
+    };
+  },
+
+  toJSON(message: RegisterRequest): unknown {
+    const obj: any = {};
+    if (message.email !== "") {
+      obj.email = message.email;
+    }
+    if (message.password !== "") {
+      obj.password = message.password;
+    }
+    if (message.fullName !== "") {
+      obj.fullName = message.fullName;
+    }
+    if (message.phone !== "") {
+      obj.phone = message.phone;
+    }
+    if (message.clientType !== 0) {
+      obj.clientType = clientTypeToJSON(message.clientType);
+    }
+    return obj;
+  },
+};
+
+export const RegisterClinicAccountRequest: MessageFns<RegisterClinicAccountRequest> = {
+  fromJSON(object: any): RegisterClinicAccountRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      email: isSet(object.email) ? globalThis.String(object.email) : "",
+      password: isSet(object.password) ? globalThis.String(object.password) : "",
+      fullName: isSet(object.fullName)
+        ? globalThis.String(object.fullName)
+        : isSet(object.full_name)
+        ? globalThis.String(object.full_name)
+        : "",
+      phone: isSet(object.phone) ? globalThis.String(object.phone) : "",
+    };
+  },
+
+  toJSON(message: RegisterClinicAccountRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.email !== "") {
+      obj.email = message.email;
+    }
+    if (message.password !== "") {
+      obj.password = message.password;
+    }
+    if (message.fullName !== "") {
+      obj.fullName = message.fullName;
+    }
+    if (message.phone !== "") {
+      obj.phone = message.phone;
+    }
+    return obj;
+  },
+};
+
+export const RegisterClinicAccountResponse: MessageFns<RegisterClinicAccountResponse> = {
+  fromJSON(object: any): RegisterClinicAccountResponse {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+    };
+  },
+
+  toJSON(message: RegisterClinicAccountResponse): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    return obj;
+  },
+};
+
+export const LoginRequest: MessageFns<LoginRequest> = {
+  fromJSON(object: any): LoginRequest {
+    return {
+      email: isSet(object.email) ? globalThis.String(object.email) : "",
+      password: isSet(object.password) ? globalThis.String(object.password) : "",
+      clientType: isSet(object.clientType)
+        ? clientTypeFromJSON(object.clientType)
+        : isSet(object.client_type)
+        ? clientTypeFromJSON(object.client_type)
+        : 0,
+      rememberMe: isSet(object.rememberMe)
+        ? globalThis.Boolean(object.rememberMe)
+        : isSet(object.remember_me)
+        ? globalThis.Boolean(object.remember_me)
+        : false,
+    };
+  },
+
+  toJSON(message: LoginRequest): unknown {
+    const obj: any = {};
+    if (message.email !== "") {
+      obj.email = message.email;
+    }
+    if (message.password !== "") {
+      obj.password = message.password;
+    }
+    if (message.clientType !== 0) {
+      obj.clientType = clientTypeToJSON(message.clientType);
+    }
+    if (message.rememberMe !== false) {
+      obj.rememberMe = message.rememberMe;
+    }
+    return obj;
+  },
+};
+
+export const RefreshTokenRequest: MessageFns<RefreshTokenRequest> = {
+  fromJSON(object: any): RefreshTokenRequest {
+    return {
+      refreshToken: isSet(object.refreshToken)
+        ? globalThis.String(object.refreshToken)
+        : isSet(object.refresh_token)
+        ? globalThis.String(object.refresh_token)
+        : "",
+      clientType: isSet(object.clientType)
+        ? clientTypeFromJSON(object.clientType)
+        : isSet(object.client_type)
+        ? clientTypeFromJSON(object.client_type)
+        : 0,
+    };
+  },
+
+  toJSON(message: RefreshTokenRequest): unknown {
+    const obj: any = {};
+    if (message.refreshToken !== "") {
+      obj.refreshToken = message.refreshToken;
+    }
+    if (message.clientType !== 0) {
+      obj.clientType = clientTypeToJSON(message.clientType);
+    }
+    return obj;
+  },
+};
+
+export const LogoutRequest: MessageFns<LogoutRequest> = {
+  fromJSON(object: any): LogoutRequest {
+    return {
+      refreshToken: isSet(object.refreshToken)
+        ? globalThis.String(object.refreshToken)
+        : isSet(object.refresh_token)
+        ? globalThis.String(object.refresh_token)
+        : "",
+      opaqueToken: isSet(object.opaqueToken)
+        ? globalThis.String(object.opaqueToken)
+        : isSet(object.opaque_token)
+        ? globalThis.String(object.opaque_token)
+        : undefined,
+    };
+  },
+
+  toJSON(message: LogoutRequest): unknown {
+    const obj: any = {};
+    if (message.refreshToken !== "") {
+      obj.refreshToken = message.refreshToken;
+    }
+    if (message.opaqueToken !== undefined) {
+      obj.opaqueToken = message.opaqueToken;
+    }
+    return obj;
+  },
+};
+
+export const LogoutResponse: MessageFns<LogoutResponse> = {
+  fromJSON(object: any): LogoutResponse {
+    return { success: isSet(object.success) ? globalThis.Boolean(object.success) : false };
+  },
+
+  toJSON(message: LogoutResponse): unknown {
+    const obj: any = {};
+    if (message.success !== false) {
+      obj.success = message.success;
+    }
+    return obj;
+  },
+};
+
+export const TokenResponse: MessageFns<TokenResponse> = {
+  fromJSON(object: any): TokenResponse {
+    return {
+      accessToken: isSet(object.accessToken)
+        ? globalThis.String(object.accessToken)
+        : isSet(object.access_token)
+        ? globalThis.String(object.access_token)
+        : "",
+      refreshToken: isSet(object.refreshToken)
+        ? globalThis.String(object.refreshToken)
+        : isSet(object.refresh_token)
+        ? globalThis.String(object.refresh_token)
+        : "",
+      tokenType: isSet(object.tokenType)
+        ? globalThis.String(object.tokenType)
+        : isSet(object.token_type)
+        ? globalThis.String(object.token_type)
+        : "",
+      expiresIn: isSet(object.expiresIn)
+        ? globalThis.Number(object.expiresIn)
+        : isSet(object.expires_in)
+        ? globalThis.Number(object.expires_in)
+        : 0,
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      clinicId: isSet(object.clinicId) ? globalThis.String(object.clinicId) : "",
+    };
+  },
+
+  toJSON(message: TokenResponse): unknown {
+    const obj: any = {};
+    if (message.accessToken !== "") {
+      obj.accessToken = message.accessToken;
+    }
+    if (message.refreshToken !== "") {
+      obj.refreshToken = message.refreshToken;
+    }
+    if (message.tokenType !== "") {
+      obj.tokenType = message.tokenType;
+    }
+    if (message.expiresIn !== 0) {
+      obj.expiresIn = Math.round(message.expiresIn);
+    }
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    return obj;
+  },
+};
 
 export interface AuthServiceClient {
   register(request: RegisterRequest): Observable<TokenResponse>;
@@ -116,3 +411,12 @@ export function AuthServiceControllerMethods() {
 }
 
 export const AUTH_SERVICE_NAME = "AuthService";
+
+function isSet(value: any): boolean {
+  return value !== null && value !== undefined;
+}
+
+export interface MessageFns<T> {
+  fromJSON(object: any): T;
+  toJSON(message: T): unknown;
+}

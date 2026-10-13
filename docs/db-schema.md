@@ -9,7 +9,7 @@ Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL fore
 | Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `GetClinicPetOverview`). `UploadPetResult` Medical Record tasarımını bekliyor (şimdilik `UNIMPLEMENTED` döner) |
 | Pets | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`) |
 | Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor |
-| Medical Record | 🚧 Uygulanıyor — proto güncellendi; DTO'lar ve CloudEvents yardımcısı yazıldı; Prisma schema + init migration (trigger'larla) hazır; servis metotları henüz yazılmadı |
+| Medical Record | 🚧 Uygulanıyor — proto, DTO'lar, CloudEvents yardımcısı, Prisma schema + init migration (trigger'larla), senkron gRPC metotları (9 RPC), outbox gönderimi ve RabbitMQ tüketicisi hazır; clinics.UploadPetResult, gateway uçları ve AI sözleşme dokümanı henüz yok |
 
 ---
 
@@ -308,9 +308,37 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
 | `com.patipasaport.document.analyzed.v1` | AI → medical-record | `DocumentAnalyzed` |
 | `com.patipasaport.document.analysis_failed.v1` | AI → medical-record | `DocumentAnalysisFailed` |
 
-**Güvenilirlik:** kalıcı (durable/quorum) kuyruk, kalıcı mesaj, yayıncı onayı (publisher confirm), tüketicide iş bittikten sonra elle onay (manual ack), gecikmeli tekrar deneme ve dead-letter kuyruğu. Teslim en az bir kez (at-least-once) olduğundan tüketiciler idempotenttir: aynı `document_id` için ikinci sonuç yok sayılır.
+**Güvenilirlik:** kalıcı quorum kuyruk, kalıcı mesaj, yayıncı onayı (publisher confirm), tüketicide iş bittikten sonra elle onay (manual ack), gecikmeli tekrar deneme ve dead-letter kuyruğu. Teslim en az bir kez (at-least-once) olduğundan tüketiciler idempotenttir: aynı `document_id` için ikinci sonuç yok sayılır.
 
-**Outbox:** medical-record RabbitMQ'ya doğrudan yazmaz. Olay, iş verisiyle aynı transaction'da `outbox` tablosuna yazılır; servis içindeki gönderim döngüsü yayınlar ve onay gelince `published_at`'i doldurur. RabbitMQ kapalıysa olay tabloda bekler, kaybolmaz.
+**RabbitMQ:** `rabbitmq:4.3-management-alpine` (3.13'ün topluluk desteği 30 Eylül 2024'te bitti). medical-record bağlantıyı ayrı değişkenlerle kurar (`RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`); şifre URL'ye girmediği için özel karakter sorunu olmaz. İstemci: `amqplib` + `amqp-connection-manager` (bağlantı koparsa yeniden bağlanır, topolojiyi ve tüketiciyi yeniden kurar).
+
+**Topoloji** (tamamını medical-record açılışta tanımlar; AI'ın iş kuyruğu dahil, böylece AI çalışmıyorken gelen olaylar kaybolmaz):
+
+| Ad | Tür | Not |
+|---|---|---|
+| `patipasaport.events` | topic exchange | Routing key = CloudEvents `type` |
+| `patipasaport.events.dlx` | direct exchange | Routing key = hedef kuyruğun adı |
+| `ai-service.document-uploaded` | quorum kuyruk | ← `com.patipasaport.document.uploaded.v1` |
+| `medical-record.document-events` | quorum kuyruk | ← `processing_started.v1`, `analyzed.v1`, `analysis_failed.v1` |
+| `<kuyruk>.retry` | quorum kuyruk | `x-message-ttl` 30 sn; süre dolunca ana kuyruğa döner |
+| `<kuyruk>.dlq` | quorum kuyruk | Son durak; elle incelenir |
+
+Ana ve retry kuyruklarının argümanları: `x-queue-type: quorum`, `x-dead-letter-exchange: patipasaport.events.dlx`, `x-dead-letter-routing-key` (ana → `.dlq`, retry → ana kuyruk), `x-dead-letter-strategy: at-least-once`, `x-overflow: reject-publish`; retry'da ayrıca `x-message-ttl: 30000`. AI kuyruğu aynı argümanlarla tanımlamalıdır (farklı argümanla tanımlama RabbitMQ'da hata verir).
+
+**Mesaj özellikleri:** kalıcı (`delivery_mode` 2), `content_type: application/cloudevents+json`, `message_id` = CloudEvents `id`, `type` = CloudEvents `type`, başlık `x-correlation-id`. Gövde CloudEvents zarfıdır.
+
+**Tüketici kuralları** (`medical-record.document-events`, prefetch 10):
+
+- Geçici hata (örn. veritabanı hatası) → mesajın kopyası `x-retry-count` başlığı artırılarak `.retry`'ye yazılır, asıl mesaj onaylanır; 30 sn sonra tekrar işlenir. 5. denemede de işlenemezse `.dlq`'ya gider.
+- Geçersiz mesaj (JSON değil, zarf/şema geçersiz, bilinmeyen tür, `subject` ≠ `document_id`, olmayan belge, öneri yok ya da türü geçersiz, `confidence` 0-1 dışında, `model_version`/`error_code` boş ya da 64 karakterden uzun) → tekrar denenmeden `.dlq`'ya gider.
+- Durum geçişleri: `processing_started` → `QUEUED` ise `PROCESSING`; `analyzed` → `QUEUED`/`PROCESSING` ise taslak açılır ve belge `DRAFT_READY` olur (tek transaction); `analysis_failed` → `QUEUED`/`PROCESSING` ise `FAILED`, `failure_reason` = `error_code`. Belge zaten son durumdaysa olay tekrar sayılır: onaylanır, yok sayılır.
+- AI önerisi olduğu gibi (`RecordContent`, sayısal enum'larla) saklanır; doğrulama klinik onayında yapılır.
+
+**Outbox:** medical-record RabbitMQ'ya doğrudan yazmaz. Olay, iş verisiyle aynı transaction'da `outbox` tablosuna yazılır. Gönderim döngüsü:
+
+- Saniyede bir, zamanı gelmiş en fazla 50 satırı `FOR UPDATE SKIP LOCKED` ile alır ve 60 sn'lik kira için `next_attempt_at`'i ileri atar. Böylece birden çok kopya aynı satırı göndermez ve gönderim sırasında transaction açık kalmaz.
+- Yayıncı onayı gelince `published_at` doldurulur.
+- Hata olursa (10 sn yayın zaman aşımı dahil) `attempts` artar, `last_error` yazılır ve sonraki deneme 2^deneme sn sonraya (en fazla 5 dk) ertelenir. Döngü vazgeçmez: RabbitMQ kapalıysa olay tabloda bekler, kaybolmaz.
 
 **AI servisi (Python/FastAPI):** `document.uploaded.v1` ile tetiklenir; dosyayı mesajdaki `storage_path` ile, salt okunur S3 anahtarıyla (`ai` kullanıcısı) okur; sonucu yayınlamadan gelen mesajı onaylamaz. Kendi veritabanı olmadığından outbox gerekmez. Gateway ve medical-record AI servisini HTTP/gRPC ile çağırmaz.
 
@@ -413,4 +441,22 @@ Her tablonun kendi `id`'si (UUID, PK) vardır. `pet_id` / `clinic_id` tekrar yaz
 
 **İndeksler:** `documents (clinic_id, status)`, `draft_reviews (clinic_id, status)`, `medical_records (pet_id, recorded_at)`, `record_attachments (document_id)`, `vaccinations (next_due_at)`, `lab_results (record_id)`, `outbox (published_at, next_attempt_at)` — gönderilmemiş ve zamanı gelmiş olayları hızlı bulmak için.
 
-**Zero trust:** her okuma ve yazmada `CheckAccess` ile ilgili scope kontrol edilir (`medical_read`, `medical_write`, `vaccination_read`, `prescription_read`).
+### Erişim kuralları (zero trust)
+
+Her okuma ve yazmada erişim yeniden kontrol edilir. Klinik için `access.CheckAccess` ile ilgili scope'a bakılır; hasta sahibi için `pets.GetPetOwner` ile sahiplik doğrulanır (rıza gerekmez).
+
+| RPC | Kim | Kontrol |
+|---|---|---|
+| `ListRecordsByPet`, `ListLabResults` | hasta sahibi, klinik | sahiplik / `medical_read` |
+| `ListVaccinations` | hasta sahibi, klinik | sahiplik / `vaccination_read` |
+| `ListPrescriptions` | hasta sahibi, klinik | sahiplik / `prescription_read` |
+| `RegisterDocument` (yalnızca clinics çağırır), `CreateRecord` | klinik | `medical_write` |
+| `GetDocument` | klinik | belgeyi yükleyen klinik + `medical_write` |
+| `ReviewDraft` | klinik | taslağın kliniği + `medical_write` |
+| `ListDraftReviews` | klinik | yalnızca kendi taslakları; `pet_id` verilirse o hayvanda `medical_write`, verilmezse `medical_write` rızası aktif olan hayvanlar (`ListMyConsents`) |
+
+- Rızası olan klinik hayvanın **tüm** kayıtlarını görür (diğer kliniklerin kayıtları dahil); hasta sahibi kendi hayvanının tüm kayıtlarını görür.
+- Rıza yoksa ya da eksikse `FORBIDDEN`; hayvan kullanıcıya ait değilse ya da belge/taslak başka kliniğinse `NOT_FOUND` döner.
+- Listeler en yeni önce sıralanır. `only_upcoming` → `next_due_at ≥ bugün`, en yakın önce; `only_active` → `prescribed_at + duration_days - 1 ≥ bugün`; `test_name` → içerir, büyük/küçük harf duyarsız. "Bugün" İstanbul saatine göredir.
+- `CreateRecord` ekleri aynı hayvana ve kliniğe ait belgeler olmalıdır; değilse `NOT_FOUND`.
+- `ReviewDraft` onayında son içerik (düzeltilmiş ya da AI önerisi) `RecordContent` kurallarıyla doğrulanır; düzeltmede kayıt türü değişebilir; kaynak belge kaydın eklerine de eklenir. Taslak `PENDING` değilse `CONFLICT`.

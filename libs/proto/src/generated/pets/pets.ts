@@ -17,6 +17,38 @@ export enum PetSex {
   UNRECOGNIZED = -1,
 }
 
+export function petSexFromJSON(object: any): PetSex {
+  switch (object) {
+    case 0:
+    case "PET_SEX_UNSPECIFIED":
+      return PetSex.PET_SEX_UNSPECIFIED;
+    case 1:
+    case "MALE":
+      return PetSex.MALE;
+    case 2:
+    case "FEMALE":
+      return PetSex.FEMALE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return PetSex.UNRECOGNIZED;
+  }
+}
+
+export function petSexToJSON(object: PetSex): string {
+  switch (object) {
+    case PetSex.PET_SEX_UNSPECIFIED:
+      return "PET_SEX_UNSPECIFIED";
+    case PetSex.MALE:
+      return "MALE";
+    case PetSex.FEMALE:
+      return "FEMALE";
+    case PetSex.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export interface Pet {
   id: string;
   name: string;
@@ -123,6 +155,465 @@ export interface PetResponse {
 
 export const PETS_PACKAGE_NAME = "pets";
 
+export const Pet: MessageFns<Pet> = {
+  fromJSON(object: any): Pet {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+      species: isSet(object.species) ? globalThis.String(object.species) : "",
+      breed: isSet(object.breed) ? globalThis.String(object.breed) : "",
+      sex: isSet(object.sex) ? petSexFromJSON(object.sex) : 0,
+      birthDate: isSet(object.birthDate)
+        ? globalThis.String(object.birthDate)
+        : isSet(object.birth_date)
+        ? globalThis.String(object.birth_date)
+        : "",
+      isBirthDateEstimated: isSet(object.isBirthDateEstimated)
+        ? globalThis.Boolean(object.isBirthDateEstimated)
+        : isSet(object.is_birth_date_estimated)
+        ? globalThis.Boolean(object.is_birth_date_estimated)
+        : false,
+      isNeutered: isSet(object.isNeutered)
+        ? globalThis.Boolean(object.isNeutered)
+        : isSet(object.is_neutered)
+        ? globalThis.Boolean(object.is_neutered)
+        : false,
+      ownerUserId: isSet(object.ownerUserId)
+        ? globalThis.String(object.ownerUserId)
+        : isSet(object.owner_user_id)
+        ? globalThis.String(object.owner_user_id)
+        : "",
+      chipNumberMasked: isSet(object.chipNumberMasked)
+        ? globalThis.String(object.chipNumberMasked)
+        : isSet(object.chip_number_masked)
+        ? globalThis.String(object.chip_number_masked)
+        : "",
+      chipNumber: isSet(object.chipNumber)
+        ? globalThis.String(object.chipNumber)
+        : isSet(object.chip_number)
+        ? globalThis.String(object.chip_number)
+        : "",
+      createdAt: isSet(object.createdAt)
+        ? globalThis.String(object.createdAt)
+        : isSet(object.created_at)
+        ? globalThis.String(object.created_at)
+        : "",
+      updatedAt: isSet(object.updatedAt)
+        ? globalThis.String(object.updatedAt)
+        : isSet(object.updated_at)
+        ? globalThis.String(object.updated_at)
+        : "",
+    };
+  },
+
+  toJSON(message: Pet): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.name !== "") {
+      obj.name = message.name;
+    }
+    if (message.species !== "") {
+      obj.species = message.species;
+    }
+    if (message.breed !== "") {
+      obj.breed = message.breed;
+    }
+    if (message.sex !== 0) {
+      obj.sex = petSexToJSON(message.sex);
+    }
+    if (message.birthDate !== "") {
+      obj.birthDate = message.birthDate;
+    }
+    if (message.isBirthDateEstimated !== false) {
+      obj.isBirthDateEstimated = message.isBirthDateEstimated;
+    }
+    if (message.isNeutered !== false) {
+      obj.isNeutered = message.isNeutered;
+    }
+    if (message.ownerUserId !== "") {
+      obj.ownerUserId = message.ownerUserId;
+    }
+    if (message.chipNumberMasked !== "") {
+      obj.chipNumberMasked = message.chipNumberMasked;
+    }
+    if (message.chipNumber !== "") {
+      obj.chipNumber = message.chipNumber;
+    }
+    if (message.createdAt !== "") {
+      obj.createdAt = message.createdAt;
+    }
+    if (message.updatedAt !== "") {
+      obj.updatedAt = message.updatedAt;
+    }
+    return obj;
+  },
+};
+
+export const PetSummary: MessageFns<PetSummary> = {
+  fromJSON(object: any): PetSummary {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+      species: isSet(object.species) ? globalThis.String(object.species) : "",
+      breed: isSet(object.breed) ? globalThis.String(object.breed) : "",
+      sex: isSet(object.sex) ? petSexFromJSON(object.sex) : 0,
+      birthDate: isSet(object.birthDate)
+        ? globalThis.String(object.birthDate)
+        : isSet(object.birth_date)
+        ? globalThis.String(object.birth_date)
+        : "",
+      isBirthDateEstimated: isSet(object.isBirthDateEstimated)
+        ? globalThis.Boolean(object.isBirthDateEstimated)
+        : isSet(object.is_birth_date_estimated)
+        ? globalThis.Boolean(object.is_birth_date_estimated)
+        : false,
+      chipNumberMasked: isSet(object.chipNumberMasked)
+        ? globalThis.String(object.chipNumberMasked)
+        : isSet(object.chip_number_masked)
+        ? globalThis.String(object.chip_number_masked)
+        : "",
+    };
+  },
+
+  toJSON(message: PetSummary): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.name !== "") {
+      obj.name = message.name;
+    }
+    if (message.species !== "") {
+      obj.species = message.species;
+    }
+    if (message.breed !== "") {
+      obj.breed = message.breed;
+    }
+    if (message.sex !== 0) {
+      obj.sex = petSexToJSON(message.sex);
+    }
+    if (message.birthDate !== "") {
+      obj.birthDate = message.birthDate;
+    }
+    if (message.isBirthDateEstimated !== false) {
+      obj.isBirthDateEstimated = message.isBirthDateEstimated;
+    }
+    if (message.chipNumberMasked !== "") {
+      obj.chipNumberMasked = message.chipNumberMasked;
+    }
+    return obj;
+  },
+};
+
+export const GetPetRequest: MessageFns<GetPetRequest> = {
+  fromJSON(object: any): GetPetRequest {
+    return { id: isSet(object.id) ? globalThis.String(object.id) : "" };
+  },
+
+  toJSON(message: GetPetRequest): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    return obj;
+  },
+};
+
+export const SearchClinicPetsRequest: MessageFns<SearchClinicPetsRequest> = {
+  fromJSON(object: any): SearchClinicPetsRequest {
+    return {
+      name: isSet(object.name) ? globalThis.String(object.name) : undefined,
+      chipNumber: isSet(object.chipNumber)
+        ? globalThis.String(object.chipNumber)
+        : isSet(object.chip_number)
+        ? globalThis.String(object.chip_number)
+        : undefined,
+      species: isSet(object.species) ? globalThis.String(object.species) : undefined,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+      orderFilter: isSet(object.orderFilter)
+        ? globalThis.String(object.orderFilter)
+        : isSet(object.order_filter)
+        ? globalThis.String(object.order_filter)
+        : undefined,
+    };
+  },
+
+  toJSON(message: SearchClinicPetsRequest): unknown {
+    const obj: any = {};
+    if (message.name !== undefined) {
+      obj.name = message.name;
+    }
+    if (message.chipNumber !== undefined) {
+      obj.chipNumber = message.chipNumber;
+    }
+    if (message.species !== undefined) {
+      obj.species = message.species;
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    if (message.orderFilter !== undefined) {
+      obj.orderFilter = message.orderFilter;
+    }
+    return obj;
+  },
+};
+
+export const SearchClinicPetsResponse: MessageFns<SearchClinicPetsResponse> = {
+  fromJSON(object: any): SearchClinicPetsResponse {
+    return {
+      pets: globalThis.Array.isArray(object?.pets)
+        ? object.pets.map((e: any) => PetSummary.fromJSON(e))
+        : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: SearchClinicPetsResponse): unknown {
+    const obj: any = {};
+    if (message.pets?.length) {
+      obj.pets = message.pets.map((e) => PetSummary.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ListMyPetsRequest: MessageFns<ListMyPetsRequest> = {
+  fromJSON(_: any): ListMyPetsRequest {
+    return {};
+  },
+
+  toJSON(_: ListMyPetsRequest): unknown {
+    const obj: any = {};
+    return obj;
+  },
+};
+
+export const ListMyPetsResponse: MessageFns<ListMyPetsResponse> = {
+  fromJSON(object: any): ListMyPetsResponse {
+    return { pets: globalThis.Array.isArray(object?.pets) ? object.pets.map((e: any) => Pet.fromJSON(e)) : [] };
+  },
+
+  toJSON(message: ListMyPetsResponse): unknown {
+    const obj: any = {};
+    if (message.pets?.length) {
+      obj.pets = message.pets.map((e) => Pet.toJSON(e));
+    }
+    return obj;
+  },
+};
+
+export const GetPetOwnerRequest: MessageFns<GetPetOwnerRequest> = {
+  fromJSON(object: any): GetPetOwnerRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+    };
+  },
+
+  toJSON(message: GetPetOwnerRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    return obj;
+  },
+};
+
+export const GetPetOwnerResponse: MessageFns<GetPetOwnerResponse> = {
+  fromJSON(object: any): GetPetOwnerResponse {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      ownerUserId: isSet(object.ownerUserId)
+        ? globalThis.String(object.ownerUserId)
+        : isSet(object.owner_user_id)
+        ? globalThis.String(object.owner_user_id)
+        : "",
+    };
+  },
+
+  toJSON(message: GetPetOwnerResponse): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.ownerUserId !== "") {
+      obj.ownerUserId = message.ownerUserId;
+    }
+    return obj;
+  },
+};
+
+export const CreatePetRequest: MessageFns<CreatePetRequest> = {
+  fromJSON(object: any): CreatePetRequest {
+    return {
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+      species: isSet(object.species) ? globalThis.String(object.species) : "",
+      breed: isSet(object.breed) ? globalThis.String(object.breed) : "",
+      sex: isSet(object.sex) ? petSexFromJSON(object.sex) : 0,
+      birthDate: isSet(object.birthDate)
+        ? globalThis.String(object.birthDate)
+        : isSet(object.birth_date)
+        ? globalThis.String(object.birth_date)
+        : "",
+      isBirthDateEstimated: isSet(object.isBirthDateEstimated)
+        ? globalThis.Boolean(object.isBirthDateEstimated)
+        : isSet(object.is_birth_date_estimated)
+        ? globalThis.Boolean(object.is_birth_date_estimated)
+        : false,
+      isNeutered: isSet(object.isNeutered)
+        ? globalThis.Boolean(object.isNeutered)
+        : isSet(object.is_neutered)
+        ? globalThis.Boolean(object.is_neutered)
+        : false,
+      chipNumber: isSet(object.chipNumber)
+        ? globalThis.String(object.chipNumber)
+        : isSet(object.chip_number)
+        ? globalThis.String(object.chip_number)
+        : "",
+      ownerUserId: isSet(object.ownerUserId)
+        ? globalThis.String(object.ownerUserId)
+        : isSet(object.owner_user_id)
+        ? globalThis.String(object.owner_user_id)
+        : "",
+    };
+  },
+
+  toJSON(message: CreatePetRequest): unknown {
+    const obj: any = {};
+    if (message.name !== "") {
+      obj.name = message.name;
+    }
+    if (message.species !== "") {
+      obj.species = message.species;
+    }
+    if (message.breed !== "") {
+      obj.breed = message.breed;
+    }
+    if (message.sex !== 0) {
+      obj.sex = petSexToJSON(message.sex);
+    }
+    if (message.birthDate !== "") {
+      obj.birthDate = message.birthDate;
+    }
+    if (message.isBirthDateEstimated !== false) {
+      obj.isBirthDateEstimated = message.isBirthDateEstimated;
+    }
+    if (message.isNeutered !== false) {
+      obj.isNeutered = message.isNeutered;
+    }
+    if (message.chipNumber !== "") {
+      obj.chipNumber = message.chipNumber;
+    }
+    if (message.ownerUserId !== "") {
+      obj.ownerUserId = message.ownerUserId;
+    }
+    return obj;
+  },
+};
+
+export const UpdatePetRequest: MessageFns<UpdatePetRequest> = {
+  fromJSON(object: any): UpdatePetRequest {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : undefined,
+      breed: isSet(object.breed) ? globalThis.String(object.breed) : undefined,
+      birthDate: isSet(object.birthDate)
+        ? globalThis.String(object.birthDate)
+        : isSet(object.birth_date)
+        ? globalThis.String(object.birth_date)
+        : undefined,
+      isBirthDateEstimated: isSet(object.isBirthDateEstimated)
+        ? globalThis.Boolean(object.isBirthDateEstimated)
+        : isSet(object.is_birth_date_estimated)
+        ? globalThis.Boolean(object.is_birth_date_estimated)
+        : undefined,
+      isNeutered: isSet(object.isNeutered)
+        ? globalThis.Boolean(object.isNeutered)
+        : isSet(object.is_neutered)
+        ? globalThis.Boolean(object.is_neutered)
+        : undefined,
+      chipNumber: isSet(object.chipNumber)
+        ? globalThis.String(object.chipNumber)
+        : isSet(object.chip_number)
+        ? globalThis.String(object.chip_number)
+        : undefined,
+    };
+  },
+
+  toJSON(message: UpdatePetRequest): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.name !== undefined) {
+      obj.name = message.name;
+    }
+    if (message.breed !== undefined) {
+      obj.breed = message.breed;
+    }
+    if (message.birthDate !== undefined) {
+      obj.birthDate = message.birthDate;
+    }
+    if (message.isBirthDateEstimated !== undefined) {
+      obj.isBirthDateEstimated = message.isBirthDateEstimated;
+    }
+    if (message.isNeutered !== undefined) {
+      obj.isNeutered = message.isNeutered;
+    }
+    if (message.chipNumber !== undefined) {
+      obj.chipNumber = message.chipNumber;
+    }
+    return obj;
+  },
+};
+
+export const PetResponse: MessageFns<PetResponse> = {
+  fromJSON(object: any): PetResponse {
+    return { pet: isSet(object.pet) ? Pet.fromJSON(object.pet) : undefined };
+  },
+
+  toJSON(message: PetResponse): unknown {
+    const obj: any = {};
+    if (message.pet !== undefined) {
+      obj.pet = Pet.toJSON(message.pet);
+    }
+    return obj;
+  },
+};
+
 export interface PetsServiceClient {
   getPet(request: GetPetRequest): Observable<PetResponse>;
 
@@ -173,3 +664,12 @@ export function PetsServiceControllerMethods() {
 }
 
 export const PETS_SERVICE_NAME = "PetsService";
+
+function isSet(value: any): boolean {
+  return value !== null && value !== undefined;
+}
+
+export interface MessageFns<T> {
+  fromJSON(object: any): T;
+  toJSON(message: T): unknown;
+}

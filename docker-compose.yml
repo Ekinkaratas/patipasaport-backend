@@ -149,7 +149,7 @@ services:
       <<: *db-healthcheck
 
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:4.3-management-alpine
     restart: unless-stopped
     networks: [backend]
     environment:
@@ -299,7 +299,12 @@ services:
       DB_USER: ${MEDICAL_DB_USER:-medical_user}
       DB_PASSWORD: ${MEDICAL_DB_PASSWORD}
       DB_NAME: ${MEDICAL_DB_NAME:-medical_db}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit_user}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      ACCESS_GRPC_URL: access:3001
+      PETS_GRPC_URL: pets:3005
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER:-rabbit_user}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
       test: ["CMD", "nc", "-z", "127.0.0.1", "3004"]

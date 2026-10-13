@@ -6,4 +6,5 @@ export class TokenResponseDto implements auth.TokenResponse {
   tokenType!: string;
   expiresIn!: number;
   userId!: string;
+  clinicId!: string;
 }

@@ -528,14 +528,48 @@ export class ClinicsService implements OnModuleInit {
     request: clinics.UploadPetResultRequest,
     user: AuthUser,
   ): Promise<clinics.UploadPetResultResponse> {
-    this.assertOwnClinic(request.clinicId, user, 'uploadPetResult');
+    await this.assertActiveOwnClinic(request.clinicId, user, 'uploadPetResult');
 
-    rejectRpc(
-      this.logger,
-      ResponseMessages.METHOD_NOT_ALLOWED,
-      `uploadPetResult: medical record iletimi henüz tasarlanmadı (petId=${request.petId})`,
-      'warn',
-    );
+    let response: medicalRecord.DocumentResponse;
+    try {
+      response = await firstValueFrom(
+        this.medicalRecordClient.registerDocument({
+          petId: request.petId,
+          storagePath: request.storagePath,
+          originalName: request.originalName,
+          mimeType: request.mimeType,
+          sizeBytes: request.sizeBytes,
+          sha256: request.sha256,
+          note: request.note ?? '',
+        }),
+      );
+    } catch (e) {
+      if ((e as { code?: unknown } | null)?.code === status.DEADLINE_EXCEEDED) {
+        this.logger.error(
+          `uploadPetResult: medical_record.registerDocument zaman aşımına uğradı, belge kaydı oluşmuş olabilir (clinicId=${request.clinicId} storagePath=${request.storagePath})`,
+        );
+      }
+      forwardGrpcError(
+        this.logger,
+        e,
+        'uploadPetResult: medical_record.registerDocument',
+        [ResponseMessages.FORBIDDEN, ResponseMessages.CONFLICT],
+      );
+    }
+
+    if (!response.document) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.INTERNAL_SERVER_ERROR,
+        `uploadPetResult: medical_record.registerDocument boş yanıt döndü (storagePath=${request.storagePath})`,
+      );
+    }
+
+    return {
+      documentId: response.document.id,
+      uploadedAt: response.document.createdAt,
+      status: medicalRecord.DocumentStatus[response.document.status] ?? '',
+    };
   }
 
   //#endregion

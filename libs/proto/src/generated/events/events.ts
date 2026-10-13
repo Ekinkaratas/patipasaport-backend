@@ -42,3 +42,208 @@ export interface DocumentAnalysisFailed {
 }
 
 export const EVENTS_PACKAGE_NAME = "events";
+
+export const DocumentUploaded: MessageFns<DocumentUploaded> = {
+  fromJSON(object: any): DocumentUploaded {
+    return {
+      documentId: isSet(object.documentId)
+        ? globalThis.String(object.documentId)
+        : isSet(object.document_id)
+        ? globalThis.String(object.document_id)
+        : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      storagePath: isSet(object.storagePath)
+        ? globalThis.String(object.storagePath)
+        : isSet(object.storage_path)
+        ? globalThis.String(object.storage_path)
+        : "",
+      mimeType: isSet(object.mimeType)
+        ? globalThis.String(object.mimeType)
+        : isSet(object.mime_type)
+        ? globalThis.String(object.mime_type)
+        : "",
+      sizeBytes: isSet(object.sizeBytes)
+        ? globalThis.Number(object.sizeBytes)
+        : isSet(object.size_bytes)
+        ? globalThis.Number(object.size_bytes)
+        : 0,
+      sha256: isSet(object.sha256) ? globalThis.String(object.sha256) : "",
+    };
+  },
+
+  toJSON(message: DocumentUploaded): unknown {
+    const obj: any = {};
+    if (message.documentId !== "") {
+      obj.documentId = message.documentId;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.storagePath !== "") {
+      obj.storagePath = message.storagePath;
+    }
+    if (message.mimeType !== "") {
+      obj.mimeType = message.mimeType;
+    }
+    if (message.sizeBytes !== 0) {
+      obj.sizeBytes = Math.round(message.sizeBytes);
+    }
+    if (message.sha256 !== "") {
+      obj.sha256 = message.sha256;
+    }
+    return obj;
+  },
+};
+
+export const DocumentProcessingStarted: MessageFns<DocumentProcessingStarted> = {
+  fromJSON(object: any): DocumentProcessingStarted {
+    return {
+      documentId: isSet(object.documentId)
+        ? globalThis.String(object.documentId)
+        : isSet(object.document_id)
+        ? globalThis.String(object.document_id)
+        : "",
+      modelVersion: isSet(object.modelVersion)
+        ? globalThis.String(object.modelVersion)
+        : isSet(object.model_version)
+        ? globalThis.String(object.model_version)
+        : "",
+      startedAt: isSet(object.startedAt)
+        ? globalThis.String(object.startedAt)
+        : isSet(object.started_at)
+        ? globalThis.String(object.started_at)
+        : "",
+    };
+  },
+
+  toJSON(message: DocumentProcessingStarted): unknown {
+    const obj: any = {};
+    if (message.documentId !== "") {
+      obj.documentId = message.documentId;
+    }
+    if (message.modelVersion !== "") {
+      obj.modelVersion = message.modelVersion;
+    }
+    if (message.startedAt !== "") {
+      obj.startedAt = message.startedAt;
+    }
+    return obj;
+  },
+};
+
+export const DocumentAnalyzed: MessageFns<DocumentAnalyzed> = {
+  fromJSON(object: any): DocumentAnalyzed {
+    return {
+      documentId: isSet(object.documentId)
+        ? globalThis.String(object.documentId)
+        : isSet(object.document_id)
+        ? globalThis.String(object.document_id)
+        : "",
+      modelVersion: isSet(object.modelVersion)
+        ? globalThis.String(object.modelVersion)
+        : isSet(object.model_version)
+        ? globalThis.String(object.model_version)
+        : "",
+      confidence: isSet(object.confidence) ? globalThis.Number(object.confidence) : 0,
+      proposal: isSet(object.proposal) ? RecordContent.fromJSON(object.proposal) : undefined,
+      analyzedAt: isSet(object.analyzedAt)
+        ? globalThis.String(object.analyzedAt)
+        : isSet(object.analyzed_at)
+        ? globalThis.String(object.analyzed_at)
+        : "",
+    };
+  },
+
+  toJSON(message: DocumentAnalyzed): unknown {
+    const obj: any = {};
+    if (message.documentId !== "") {
+      obj.documentId = message.documentId;
+    }
+    if (message.modelVersion !== "") {
+      obj.modelVersion = message.modelVersion;
+    }
+    if (message.confidence !== 0) {
+      obj.confidence = message.confidence;
+    }
+    if (message.proposal !== undefined) {
+      obj.proposal = RecordContent.toJSON(message.proposal);
+    }
+    if (message.analyzedAt !== "") {
+      obj.analyzedAt = message.analyzedAt;
+    }
+    return obj;
+  },
+};
+
+export const DocumentAnalysisFailed: MessageFns<DocumentAnalysisFailed> = {
+  fromJSON(object: any): DocumentAnalysisFailed {
+    return {
+      documentId: isSet(object.documentId)
+        ? globalThis.String(object.documentId)
+        : isSet(object.document_id)
+        ? globalThis.String(object.document_id)
+        : "",
+      modelVersion: isSet(object.modelVersion)
+        ? globalThis.String(object.modelVersion)
+        : isSet(object.model_version)
+        ? globalThis.String(object.model_version)
+        : "",
+      errorCode: isSet(object.errorCode)
+        ? globalThis.String(object.errorCode)
+        : isSet(object.error_code)
+        ? globalThis.String(object.error_code)
+        : "",
+      errorMessage: isSet(object.errorMessage)
+        ? globalThis.String(object.errorMessage)
+        : isSet(object.error_message)
+        ? globalThis.String(object.error_message)
+        : "",
+      failedAt: isSet(object.failedAt)
+        ? globalThis.String(object.failedAt)
+        : isSet(object.failed_at)
+        ? globalThis.String(object.failed_at)
+        : "",
+    };
+  },
+
+  toJSON(message: DocumentAnalysisFailed): unknown {
+    const obj: any = {};
+    if (message.documentId !== "") {
+      obj.documentId = message.documentId;
+    }
+    if (message.modelVersion !== "") {
+      obj.modelVersion = message.modelVersion;
+    }
+    if (message.errorCode !== "") {
+      obj.errorCode = message.errorCode;
+    }
+    if (message.errorMessage !== "") {
+      obj.errorMessage = message.errorMessage;
+    }
+    if (message.failedAt !== "") {
+      obj.failedAt = message.failedAt;
+    }
+    return obj;
+  },
+};
+
+function isSet(value: any): boolean {
+  return value !== null && value !== undefined;
+}
+
+export interface MessageFns<T> {
+  fromJSON(object: any): T;
+  toJSON(message: T): unknown;
+}

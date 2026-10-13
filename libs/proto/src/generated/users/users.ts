@@ -17,6 +17,38 @@ export enum UserRole {
   UNRECOGNIZED = -1,
 }
 
+export function userRoleFromJSON(object: any): UserRole {
+  switch (object) {
+    case 0:
+    case "USER_ROLE_UNSPECIFIED":
+      return UserRole.USER_ROLE_UNSPECIFIED;
+    case 1:
+    case "CLINIC":
+      return UserRole.CLINIC;
+    case 2:
+    case "PET_OWNER":
+      return UserRole.PET_OWNER;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return UserRole.UNRECOGNIZED;
+  }
+}
+
+export function userRoleToJSON(object: UserRole): string {
+  switch (object) {
+    case UserRole.USER_ROLE_UNSPECIFIED:
+      return "USER_ROLE_UNSPECIFIED";
+    case UserRole.CLINIC:
+      return "CLINIC";
+    case UserRole.PET_OWNER:
+      return "PET_OWNER";
+    case UserRole.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 /** Liste ve genel yanıtlarda kullanılan YALIN kullanıcı görünümü. */
 export interface User {
   userId: string;
@@ -170,6 +202,572 @@ export interface UserResponse {
 }
 
 export const USERS_PACKAGE_NAME = "users";
+
+export const User: MessageFns<User> = {
+  fromJSON(object: any): User {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      email: isSet(object.email) ? globalThis.String(object.email) : "",
+      fullName: isSet(object.fullName)
+        ? globalThis.String(object.fullName)
+        : isSet(object.full_name)
+        ? globalThis.String(object.full_name)
+        : "",
+      phone: isSet(object.phone) ? globalThis.String(object.phone) : "",
+      role: isSet(object.role) ? userRoleFromJSON(object.role) : 0,
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      isActive: isSet(object.isActive)
+        ? globalThis.Boolean(object.isActive)
+        : isSet(object.is_active)
+        ? globalThis.Boolean(object.is_active)
+        : false,
+      createdAt: isSet(object.createdAt)
+        ? globalThis.String(object.createdAt)
+        : isSet(object.created_at)
+        ? globalThis.String(object.created_at)
+        : "",
+      updatedAt: isSet(object.updatedAt)
+        ? globalThis.String(object.updatedAt)
+        : isSet(object.updated_at)
+        ? globalThis.String(object.updated_at)
+        : "",
+    };
+  },
+
+  toJSON(message: User): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.email !== "") {
+      obj.email = message.email;
+    }
+    if (message.fullName !== "") {
+      obj.fullName = message.fullName;
+    }
+    if (message.phone !== "") {
+      obj.phone = message.phone;
+    }
+    if (message.role !== 0) {
+      obj.role = userRoleToJSON(message.role);
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.isActive !== false) {
+      obj.isActive = message.isActive;
+    }
+    if (message.createdAt !== "") {
+      obj.createdAt = message.createdAt;
+    }
+    if (message.updatedAt !== "") {
+      obj.updatedAt = message.updatedAt;
+    }
+    return obj;
+  },
+};
+
+export const UserFindByIdRequest: MessageFns<UserFindByIdRequest> = {
+  fromJSON(object: any): UserFindByIdRequest {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+    };
+  },
+
+  toJSON(message: UserFindByIdRequest): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    return obj;
+  },
+};
+
+export const CreateUserRequest: MessageFns<CreateUserRequest> = {
+  fromJSON(object: any): CreateUserRequest {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      email: isSet(object.email) ? globalThis.String(object.email) : "",
+      fullName: isSet(object.fullName)
+        ? globalThis.String(object.fullName)
+        : isSet(object.full_name)
+        ? globalThis.String(object.full_name)
+        : "",
+      phone: isSet(object.phone) ? globalThis.String(object.phone) : "",
+    };
+  },
+
+  toJSON(message: CreateUserRequest): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.email !== "") {
+      obj.email = message.email;
+    }
+    if (message.fullName !== "") {
+      obj.fullName = message.fullName;
+    }
+    if (message.phone !== "") {
+      obj.phone = message.phone;
+    }
+    return obj;
+  },
+};
+
+export const CreateClinicUserRequest: MessageFns<CreateClinicUserRequest> = {
+  fromJSON(object: any): CreateClinicUserRequest {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      email: isSet(object.email) ? globalThis.String(object.email) : "",
+      fullName: isSet(object.fullName)
+        ? globalThis.String(object.fullName)
+        : isSet(object.full_name)
+        ? globalThis.String(object.full_name)
+        : "",
+      phone: isSet(object.phone) ? globalThis.String(object.phone) : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+    };
+  },
+
+  toJSON(message: CreateClinicUserRequest): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.email !== "") {
+      obj.email = message.email;
+    }
+    if (message.fullName !== "") {
+      obj.fullName = message.fullName;
+    }
+    if (message.phone !== "") {
+      obj.phone = message.phone;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    return obj;
+  },
+};
+
+export const DeleteUserResponse: MessageFns<DeleteUserResponse> = {
+  fromJSON(object: any): DeleteUserResponse {
+    return { deleted: isSet(object.deleted) ? globalThis.Boolean(object.deleted) : false };
+  },
+
+  toJSON(message: DeleteUserResponse): unknown {
+    const obj: any = {};
+    if (message.deleted !== false) {
+      obj.deleted = message.deleted;
+    }
+    return obj;
+  },
+};
+
+export const GetMeRequest: MessageFns<GetMeRequest> = {
+  fromJSON(_: any): GetMeRequest {
+    return {};
+  },
+
+  toJSON(_: GetMeRequest): unknown {
+    const obj: any = {};
+    return obj;
+  },
+};
+
+export const GetMeResponse: MessageFns<GetMeResponse> = {
+  fromJSON(object: any): GetMeResponse {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      email: isSet(object.email) ? globalThis.String(object.email) : "",
+      fullName: isSet(object.fullName)
+        ? globalThis.String(object.fullName)
+        : isSet(object.full_name)
+        ? globalThis.String(object.full_name)
+        : "",
+      phone: isSet(object.phone) ? globalThis.String(object.phone) : "",
+      role: isSet(object.role) ? userRoleFromJSON(object.role) : 0,
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      isActive: isSet(object.isActive)
+        ? globalThis.Boolean(object.isActive)
+        : isSet(object.is_active)
+        ? globalThis.Boolean(object.is_active)
+        : false,
+      createdAt: isSet(object.createdAt)
+        ? globalThis.String(object.createdAt)
+        : isSet(object.created_at)
+        ? globalThis.String(object.created_at)
+        : "",
+      updatedAt: isSet(object.updatedAt)
+        ? globalThis.String(object.updatedAt)
+        : isSet(object.updated_at)
+        ? globalThis.String(object.updated_at)
+        : "",
+    };
+  },
+
+  toJSON(message: GetMeResponse): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.email !== "") {
+      obj.email = message.email;
+    }
+    if (message.fullName !== "") {
+      obj.fullName = message.fullName;
+    }
+    if (message.phone !== "") {
+      obj.phone = message.phone;
+    }
+    if (message.role !== 0) {
+      obj.role = userRoleToJSON(message.role);
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.isActive !== false) {
+      obj.isActive = message.isActive;
+    }
+    if (message.createdAt !== "") {
+      obj.createdAt = message.createdAt;
+    }
+    if (message.updatedAt !== "") {
+      obj.updatedAt = message.updatedAt;
+    }
+    return obj;
+  },
+};
+
+export const UpdateMeRequest: MessageFns<UpdateMeRequest> = {
+  fromJSON(object: any): UpdateMeRequest {
+    return {
+      fullName: isSet(object.fullName)
+        ? globalThis.String(object.fullName)
+        : isSet(object.full_name)
+        ? globalThis.String(object.full_name)
+        : undefined,
+      phone: isSet(object.phone) ? globalThis.String(object.phone) : undefined,
+    };
+  },
+
+  toJSON(message: UpdateMeRequest): unknown {
+    const obj: any = {};
+    if (message.fullName !== undefined) {
+      obj.fullName = message.fullName;
+    }
+    if (message.phone !== undefined) {
+      obj.phone = message.phone;
+    }
+    return obj;
+  },
+};
+
+export const DeactivateMeRequest: MessageFns<DeactivateMeRequest> = {
+  fromJSON(_: any): DeactivateMeRequest {
+    return {};
+  },
+
+  toJSON(_: DeactivateMeRequest): unknown {
+    const obj: any = {};
+    return obj;
+  },
+};
+
+export const DeactivateClinicUsersRequest: MessageFns<DeactivateClinicUsersRequest> = {
+  fromJSON(object: any): DeactivateClinicUsersRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+    };
+  },
+
+  toJSON(message: DeactivateClinicUsersRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    return obj;
+  },
+};
+
+export const DeactivateClinicUsersResponse: MessageFns<DeactivateClinicUsersResponse> = {
+  fromJSON(object: any): DeactivateClinicUsersResponse {
+    return {
+      deactivatedCount: isSet(object.deactivatedCount)
+        ? globalThis.Number(object.deactivatedCount)
+        : isSet(object.deactivated_count)
+        ? globalThis.Number(object.deactivated_count)
+        : 0,
+    };
+  },
+
+  toJSON(message: DeactivateClinicUsersResponse): unknown {
+    const obj: any = {};
+    if (message.deactivatedCount !== 0) {
+      obj.deactivatedCount = Math.round(message.deactivatedCount);
+    }
+    return obj;
+  },
+};
+
+export const GetUserRoleResponse: MessageFns<GetUserRoleResponse> = {
+  fromJSON(object: any): GetUserRoleResponse {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      role: isSet(object.role) ? userRoleFromJSON(object.role) : 0,
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+    };
+  },
+
+  toJSON(message: GetUserRoleResponse): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.role !== 0) {
+      obj.role = userRoleToJSON(message.role);
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    return obj;
+  },
+};
+
+export const GetUserAuthInfoResponse: MessageFns<GetUserAuthInfoResponse> = {
+  fromJSON(object: any): GetUserAuthInfoResponse {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      role: isSet(object.role) ? userRoleFromJSON(object.role) : 0,
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      isActive: isSet(object.isActive)
+        ? globalThis.Boolean(object.isActive)
+        : isSet(object.is_active)
+        ? globalThis.Boolean(object.is_active)
+        : false,
+    };
+  },
+
+  toJSON(message: GetUserAuthInfoResponse): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.role !== 0) {
+      obj.role = userRoleToJSON(message.role);
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.isActive !== false) {
+      obj.isActive = message.isActive;
+    }
+    return obj;
+  },
+};
+
+export const GetUserDisplayNamesRequest: MessageFns<GetUserDisplayNamesRequest> = {
+  fromJSON(object: any): GetUserDisplayNamesRequest {
+    return {
+      userIds: globalThis.Array.isArray(object?.userIds)
+        ? object.userIds.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.user_ids)
+        ? object.user_ids.map((e: any) =>
+          globalThis.String(e)
+        )
+        : [],
+    };
+  },
+
+  toJSON(message: GetUserDisplayNamesRequest): unknown {
+    const obj: any = {};
+    if (message.userIds?.length) {
+      obj.userIds = message.userIds;
+    }
+    return obj;
+  },
+};
+
+export const UserDisplayName: MessageFns<UserDisplayName> = {
+  fromJSON(object: any): UserDisplayName {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      fullName: isSet(object.fullName)
+        ? globalThis.String(object.fullName)
+        : isSet(object.full_name)
+        ? globalThis.String(object.full_name)
+        : "",
+      role: isSet(object.role) ? userRoleFromJSON(object.role) : 0,
+    };
+  },
+
+  toJSON(message: UserDisplayName): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.fullName !== "") {
+      obj.fullName = message.fullName;
+    }
+    if (message.role !== 0) {
+      obj.role = userRoleToJSON(message.role);
+    }
+    return obj;
+  },
+};
+
+export const GetUserDisplayNamesResponse: MessageFns<GetUserDisplayNamesResponse> = {
+  fromJSON(object: any): GetUserDisplayNamesResponse {
+    return {
+      users: globalThis.Array.isArray(object?.users)
+        ? object.users.map((e: any) => UserDisplayName.fromJSON(e))
+        : [],
+      notFoundIds: globalThis.Array.isArray(object?.notFoundIds)
+        ? object.notFoundIds.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.not_found_ids)
+        ? object.not_found_ids.map((e: any) => globalThis.String(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetUserDisplayNamesResponse): unknown {
+    const obj: any = {};
+    if (message.users?.length) {
+      obj.users = message.users.map((e) => UserDisplayName.toJSON(e));
+    }
+    if (message.notFoundIds?.length) {
+      obj.notFoundIds = message.notFoundIds;
+    }
+    return obj;
+  },
+};
+
+export const GetUserContactRequest: MessageFns<GetUserContactRequest> = {
+  fromJSON(object: any): GetUserContactRequest {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+    };
+  },
+
+  toJSON(message: GetUserContactRequest): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    return obj;
+  },
+};
+
+export const GetUserContactResponse: MessageFns<GetUserContactResponse> = {
+  fromJSON(object: any): GetUserContactResponse {
+    return {
+      userId: isSet(object.userId)
+        ? globalThis.String(object.userId)
+        : isSet(object.user_id)
+        ? globalThis.String(object.user_id)
+        : "",
+      fullName: isSet(object.fullName)
+        ? globalThis.String(object.fullName)
+        : isSet(object.full_name)
+        ? globalThis.String(object.full_name)
+        : "",
+      phone: isSet(object.phone) ? globalThis.String(object.phone) : "",
+      email: isSet(object.email) ? globalThis.String(object.email) : "",
+    };
+  },
+
+  toJSON(message: GetUserContactResponse): unknown {
+    const obj: any = {};
+    if (message.userId !== "") {
+      obj.userId = message.userId;
+    }
+    if (message.fullName !== "") {
+      obj.fullName = message.fullName;
+    }
+    if (message.phone !== "") {
+      obj.phone = message.phone;
+    }
+    if (message.email !== "") {
+      obj.email = message.email;
+    }
+    return obj;
+  },
+};
+
+export const UserResponse: MessageFns<UserResponse> = {
+  fromJSON(object: any): UserResponse {
+    return { user: isSet(object.user) ? User.fromJSON(object.user) : undefined };
+  },
+
+  toJSON(message: UserResponse): unknown {
+    const obj: any = {};
+    if (message.user !== undefined) {
+      obj.user = User.toJSON(message.user);
+    }
+    return obj;
+  },
+};
 
 /**
  * GetMe                 -> kendi verisi, tam, scope'suz
@@ -357,3 +955,12 @@ export function UsersServiceControllerMethods() {
 }
 
 export const USERS_SERVICE_NAME = "UsersService";
+
+function isSet(value: any): boolean {
+  return value !== null && value !== undefined;
+}
+
+export interface MessageFns<T> {
+  fromJSON(object: any): T;
+  toJSON(message: T): unknown;
+}

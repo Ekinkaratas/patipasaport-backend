@@ -14,8 +14,12 @@ describe('MedicalRecordController', () => {
 
   describe('getData', () => {
     it('should return "Hello API"', () => {
-      const medicalRecordController = app.get<MedicalRecordController>(MedicalRecordController);
-      expect(medicalRecordController.getData()).toEqual({message: 'Hello API'});
+      const medicalRecordController = app.get<MedicalRecordController>(
+        MedicalRecordController,
+      );
+      expect(medicalRecordController.getData()).toEqual({
+        message: 'Hello API',
+      });
     });
   });
 });

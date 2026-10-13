@@ -4,3 +4,4 @@ plugins:
     out: libs/proto/src/generated
     opt:
       - nestJs=true
+      - outputJsonMethods=true

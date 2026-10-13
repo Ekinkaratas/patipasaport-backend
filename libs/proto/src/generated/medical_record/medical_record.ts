@@ -20,12 +20,96 @@ export enum RecordType {
   UNRECOGNIZED = -1,
 }
 
+export function recordTypeFromJSON(object: any): RecordType {
+  switch (object) {
+    case 0:
+    case "RECORD_TYPE_UNSPECIFIED":
+      return RecordType.RECORD_TYPE_UNSPECIFIED;
+    case 1:
+    case "EXAMINATION":
+      return RecordType.EXAMINATION;
+    case 2:
+    case "VACCINATION":
+      return RecordType.VACCINATION;
+    case 3:
+    case "PRESCRIPTION":
+      return RecordType.PRESCRIPTION;
+    case 4:
+    case "LAB_RESULT":
+      return RecordType.LAB_RESULT;
+    case 5:
+    case "SURGERY":
+      return RecordType.SURGERY;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return RecordType.UNRECOGNIZED;
+  }
+}
+
+export function recordTypeToJSON(object: RecordType): string {
+  switch (object) {
+    case RecordType.RECORD_TYPE_UNSPECIFIED:
+      return "RECORD_TYPE_UNSPECIFIED";
+    case RecordType.EXAMINATION:
+      return "EXAMINATION";
+    case RecordType.VACCINATION:
+      return "VACCINATION";
+    case RecordType.PRESCRIPTION:
+      return "PRESCRIPTION";
+    case RecordType.LAB_RESULT:
+      return "LAB_RESULT";
+    case RecordType.SURGERY:
+      return "SURGERY";
+    case RecordType.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export enum DraftReviewStatus {
   DRAFT_REVIEW_STATUS_UNSPECIFIED = 0,
   PENDING = 1,
   APPROVED = 2,
   REJECTED = 3,
   UNRECOGNIZED = -1,
+}
+
+export function draftReviewStatusFromJSON(object: any): DraftReviewStatus {
+  switch (object) {
+    case 0:
+    case "DRAFT_REVIEW_STATUS_UNSPECIFIED":
+      return DraftReviewStatus.DRAFT_REVIEW_STATUS_UNSPECIFIED;
+    case 1:
+    case "PENDING":
+      return DraftReviewStatus.PENDING;
+    case 2:
+    case "APPROVED":
+      return DraftReviewStatus.APPROVED;
+    case 3:
+    case "REJECTED":
+      return DraftReviewStatus.REJECTED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return DraftReviewStatus.UNRECOGNIZED;
+  }
+}
+
+export function draftReviewStatusToJSON(object: DraftReviewStatus): string {
+  switch (object) {
+    case DraftReviewStatus.DRAFT_REVIEW_STATUS_UNSPECIFIED:
+      return "DRAFT_REVIEW_STATUS_UNSPECIFIED";
+    case DraftReviewStatus.PENDING:
+      return "PENDING";
+    case DraftReviewStatus.APPROVED:
+      return "APPROVED";
+    case DraftReviewStatus.REJECTED:
+      return "REJECTED";
+    case DraftReviewStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
 }
 
 export enum DocumentStatus {
@@ -37,12 +121,91 @@ export enum DocumentStatus {
   UNRECOGNIZED = -1,
 }
 
+export function documentStatusFromJSON(object: any): DocumentStatus {
+  switch (object) {
+    case 0:
+    case "DOCUMENT_STATUS_UNSPECIFIED":
+      return DocumentStatus.DOCUMENT_STATUS_UNSPECIFIED;
+    case 1:
+    case "QUEUED":
+      return DocumentStatus.QUEUED;
+    case 2:
+    case "PROCESSING":
+      return DocumentStatus.PROCESSING;
+    case 3:
+    case "DRAFT_READY":
+      return DocumentStatus.DRAFT_READY;
+    case 4:
+    case "FAILED":
+      return DocumentStatus.FAILED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return DocumentStatus.UNRECOGNIZED;
+  }
+}
+
+export function documentStatusToJSON(object: DocumentStatus): string {
+  switch (object) {
+    case DocumentStatus.DOCUMENT_STATUS_UNSPECIFIED:
+      return "DOCUMENT_STATUS_UNSPECIFIED";
+    case DocumentStatus.QUEUED:
+      return "QUEUED";
+    case DocumentStatus.PROCESSING:
+      return "PROCESSING";
+    case DocumentStatus.DRAFT_READY:
+      return "DRAFT_READY";
+    case DocumentStatus.FAILED:
+      return "FAILED";
+    case DocumentStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export enum LabResultFlag {
   LAB_RESULT_FLAG_UNSPECIFIED = 0,
   NORMAL = 1,
   LOW = 2,
   HIGH = 3,
   UNRECOGNIZED = -1,
+}
+
+export function labResultFlagFromJSON(object: any): LabResultFlag {
+  switch (object) {
+    case 0:
+    case "LAB_RESULT_FLAG_UNSPECIFIED":
+      return LabResultFlag.LAB_RESULT_FLAG_UNSPECIFIED;
+    case 1:
+    case "NORMAL":
+      return LabResultFlag.NORMAL;
+    case 2:
+    case "LOW":
+      return LabResultFlag.LOW;
+    case 3:
+    case "HIGH":
+      return LabResultFlag.HIGH;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return LabResultFlag.UNRECOGNIZED;
+  }
+}
+
+export function labResultFlagToJSON(object: LabResultFlag): string {
+  switch (object) {
+    case LabResultFlag.LAB_RESULT_FLAG_UNSPECIFIED:
+      return "LAB_RESULT_FLAG_UNSPECIFIED";
+    case LabResultFlag.NORMAL:
+      return "NORMAL";
+    case LabResultFlag.LOW:
+      return "LOW";
+    case LabResultFlag.HIGH:
+      return "HIGH";
+    case LabResultFlag.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
 }
 
 /** Dosya İÇERİĞİ değil, referansı taşınır. */
@@ -320,6 +483,1382 @@ export interface DraftReviewResponse {
 
 export const MEDICAL_RECORD_PACKAGE_NAME = "medical_record";
 
+export const FileReference: MessageFns<FileReference> = {
+  fromJSON(object: any): FileReference {
+    return {
+      documentId: isSet(object.documentId)
+        ? globalThis.String(object.documentId)
+        : isSet(object.document_id)
+        ? globalThis.String(object.document_id)
+        : "",
+      storagePath: isSet(object.storagePath)
+        ? globalThis.String(object.storagePath)
+        : isSet(object.storage_path)
+        ? globalThis.String(object.storage_path)
+        : "",
+      originalName: isSet(object.originalName)
+        ? globalThis.String(object.originalName)
+        : isSet(object.original_name)
+        ? globalThis.String(object.original_name)
+        : "",
+      mimeType: isSet(object.mimeType)
+        ? globalThis.String(object.mimeType)
+        : isSet(object.mime_type)
+        ? globalThis.String(object.mime_type)
+        : "",
+      sizeBytes: isSet(object.sizeBytes)
+        ? globalThis.Number(object.sizeBytes)
+        : isSet(object.size_bytes)
+        ? globalThis.Number(object.size_bytes)
+        : 0,
+      uploadedAt: isSet(object.uploadedAt)
+        ? globalThis.String(object.uploadedAt)
+        : isSet(object.uploaded_at)
+        ? globalThis.String(object.uploaded_at)
+        : "",
+    };
+  },
+
+  toJSON(message: FileReference): unknown {
+    const obj: any = {};
+    if (message.documentId !== "") {
+      obj.documentId = message.documentId;
+    }
+    if (message.storagePath !== "") {
+      obj.storagePath = message.storagePath;
+    }
+    if (message.originalName !== "") {
+      obj.originalName = message.originalName;
+    }
+    if (message.mimeType !== "") {
+      obj.mimeType = message.mimeType;
+    }
+    if (message.sizeBytes !== 0) {
+      obj.sizeBytes = Math.round(message.sizeBytes);
+    }
+    if (message.uploadedAt !== "") {
+      obj.uploadedAt = message.uploadedAt;
+    }
+    return obj;
+  },
+};
+
+export const VaccinationDetails: MessageFns<VaccinationDetails> = {
+  fromJSON(object: any): VaccinationDetails {
+    return {
+      vaccineName: isSet(object.vaccineName)
+        ? globalThis.String(object.vaccineName)
+        : isSet(object.vaccine_name)
+        ? globalThis.String(object.vaccine_name)
+        : "",
+      batchNumber: isSet(object.batchNumber)
+        ? globalThis.String(object.batchNumber)
+        : isSet(object.batch_number)
+        ? globalThis.String(object.batch_number)
+        : "",
+      administeredAt: isSet(object.administeredAt)
+        ? globalThis.String(object.administeredAt)
+        : isSet(object.administered_at)
+        ? globalThis.String(object.administered_at)
+        : "",
+      nextDueAt: isSet(object.nextDueAt)
+        ? globalThis.String(object.nextDueAt)
+        : isSet(object.next_due_at)
+        ? globalThis.String(object.next_due_at)
+        : "",
+    };
+  },
+
+  toJSON(message: VaccinationDetails): unknown {
+    const obj: any = {};
+    if (message.vaccineName !== "") {
+      obj.vaccineName = message.vaccineName;
+    }
+    if (message.batchNumber !== "") {
+      obj.batchNumber = message.batchNumber;
+    }
+    if (message.administeredAt !== "") {
+      obj.administeredAt = message.administeredAt;
+    }
+    if (message.nextDueAt !== "") {
+      obj.nextDueAt = message.nextDueAt;
+    }
+    return obj;
+  },
+};
+
+export const PrescriptionDetails: MessageFns<PrescriptionDetails> = {
+  fromJSON(object: any): PrescriptionDetails {
+    return {
+      medicationName: isSet(object.medicationName)
+        ? globalThis.String(object.medicationName)
+        : isSet(object.medication_name)
+        ? globalThis.String(object.medication_name)
+        : "",
+      dosage: isSet(object.dosage) ? globalThis.String(object.dosage) : "",
+      frequency: isSet(object.frequency) ? globalThis.String(object.frequency) : "",
+      durationDays: isSet(object.durationDays)
+        ? globalThis.Number(object.durationDays)
+        : isSet(object.duration_days)
+        ? globalThis.Number(object.duration_days)
+        : 0,
+      instructions: isSet(object.instructions) ? globalThis.String(object.instructions) : "",
+      prescribedAt: isSet(object.prescribedAt)
+        ? globalThis.String(object.prescribedAt)
+        : isSet(object.prescribed_at)
+        ? globalThis.String(object.prescribed_at)
+        : "",
+    };
+  },
+
+  toJSON(message: PrescriptionDetails): unknown {
+    const obj: any = {};
+    if (message.medicationName !== "") {
+      obj.medicationName = message.medicationName;
+    }
+    if (message.dosage !== "") {
+      obj.dosage = message.dosage;
+    }
+    if (message.frequency !== "") {
+      obj.frequency = message.frequency;
+    }
+    if (message.durationDays !== 0) {
+      obj.durationDays = Math.round(message.durationDays);
+    }
+    if (message.instructions !== "") {
+      obj.instructions = message.instructions;
+    }
+    if (message.prescribedAt !== "") {
+      obj.prescribedAt = message.prescribedAt;
+    }
+    return obj;
+  },
+};
+
+export const LabResultItem: MessageFns<LabResultItem> = {
+  fromJSON(object: any): LabResultItem {
+    return {
+      testName: isSet(object.testName)
+        ? globalThis.String(object.testName)
+        : isSet(object.test_name)
+        ? globalThis.String(object.test_name)
+        : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+      unit: isSet(object.unit) ? globalThis.String(object.unit) : "",
+      referenceRange: isSet(object.referenceRange)
+        ? globalThis.String(object.referenceRange)
+        : isSet(object.reference_range)
+        ? globalThis.String(object.reference_range)
+        : "",
+      flag: isSet(object.flag) ? labResultFlagFromJSON(object.flag) : 0,
+    };
+  },
+
+  toJSON(message: LabResultItem): unknown {
+    const obj: any = {};
+    if (message.testName !== "") {
+      obj.testName = message.testName;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    if (message.unit !== "") {
+      obj.unit = message.unit;
+    }
+    if (message.referenceRange !== "") {
+      obj.referenceRange = message.referenceRange;
+    }
+    if (message.flag !== 0) {
+      obj.flag = labResultFlagToJSON(message.flag);
+    }
+    return obj;
+  },
+};
+
+export const LabResultDetails: MessageFns<LabResultDetails> = {
+  fromJSON(object: any): LabResultDetails {
+    return {
+      items: globalThis.Array.isArray(object?.items) ? object.items.map((e: any) => LabResultItem.fromJSON(e)) : [],
+      sampledAt: isSet(object.sampledAt)
+        ? globalThis.String(object.sampledAt)
+        : isSet(object.sampled_at)
+        ? globalThis.String(object.sampled_at)
+        : "",
+    };
+  },
+
+  toJSON(message: LabResultDetails): unknown {
+    const obj: any = {};
+    if (message.items?.length) {
+      obj.items = message.items.map((e) => LabResultItem.toJSON(e));
+    }
+    if (message.sampledAt !== "") {
+      obj.sampledAt = message.sampledAt;
+    }
+    return obj;
+  },
+};
+
+export const RecordContent: MessageFns<RecordContent> = {
+  fromJSON(object: any): RecordContent {
+    return {
+      type: isSet(object.type) ? recordTypeFromJSON(object.type) : 0,
+      title: isSet(object.title) ? globalThis.String(object.title) : "",
+      notes: isSet(object.notes) ? globalThis.String(object.notes) : "",
+      recordedAt: isSet(object.recordedAt)
+        ? globalThis.String(object.recordedAt)
+        : isSet(object.recorded_at)
+        ? globalThis.String(object.recorded_at)
+        : "",
+      vaccination: isSet(object.vaccination) ? VaccinationDetails.fromJSON(object.vaccination) : undefined,
+      prescription: isSet(object.prescription) ? PrescriptionDetails.fromJSON(object.prescription) : undefined,
+      labResult: isSet(object.labResult)
+        ? LabResultDetails.fromJSON(object.labResult)
+        : isSet(object.lab_result)
+        ? LabResultDetails.fromJSON(object.lab_result)
+        : undefined,
+    };
+  },
+
+  toJSON(message: RecordContent): unknown {
+    const obj: any = {};
+    if (message.type !== 0) {
+      obj.type = recordTypeToJSON(message.type);
+    }
+    if (message.title !== "") {
+      obj.title = message.title;
+    }
+    if (message.notes !== "") {
+      obj.notes = message.notes;
+    }
+    if (message.recordedAt !== "") {
+      obj.recordedAt = message.recordedAt;
+    }
+    if (message.vaccination !== undefined) {
+      obj.vaccination = VaccinationDetails.toJSON(message.vaccination);
+    }
+    if (message.prescription !== undefined) {
+      obj.prescription = PrescriptionDetails.toJSON(message.prescription);
+    }
+    if (message.labResult !== undefined) {
+      obj.labResult = LabResultDetails.toJSON(message.labResult);
+    }
+    return obj;
+  },
+};
+
+export const MedicalRecord: MessageFns<MedicalRecord> = {
+  fromJSON(object: any): MedicalRecord {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      type: isSet(object.type) ? recordTypeFromJSON(object.type) : 0,
+      title: isSet(object.title) ? globalThis.String(object.title) : "",
+      notes: isSet(object.notes) ? globalThis.String(object.notes) : "",
+      recordedAt: isSet(object.recordedAt)
+        ? globalThis.String(object.recordedAt)
+        : isSet(object.recorded_at)
+        ? globalThis.String(object.recorded_at)
+        : "",
+      attachments: globalThis.Array.isArray(object?.attachments)
+        ? object.attachments.map((e: any) => FileReference.fromJSON(e))
+        : [],
+      sourceDraftReviewId: isSet(object.sourceDraftReviewId)
+        ? globalThis.String(object.sourceDraftReviewId)
+        : isSet(object.source_draft_review_id)
+        ? globalThis.String(object.source_draft_review_id)
+        : "",
+      createdAt: isSet(object.createdAt)
+        ? globalThis.String(object.createdAt)
+        : isSet(object.created_at)
+        ? globalThis.String(object.created_at)
+        : "",
+      vaccination: isSet(object.vaccination) ? VaccinationDetails.fromJSON(object.vaccination) : undefined,
+      prescription: isSet(object.prescription) ? PrescriptionDetails.fromJSON(object.prescription) : undefined,
+      labResult: isSet(object.labResult)
+        ? LabResultDetails.fromJSON(object.labResult)
+        : isSet(object.lab_result)
+        ? LabResultDetails.fromJSON(object.lab_result)
+        : undefined,
+    };
+  },
+
+  toJSON(message: MedicalRecord): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.type !== 0) {
+      obj.type = recordTypeToJSON(message.type);
+    }
+    if (message.title !== "") {
+      obj.title = message.title;
+    }
+    if (message.notes !== "") {
+      obj.notes = message.notes;
+    }
+    if (message.recordedAt !== "") {
+      obj.recordedAt = message.recordedAt;
+    }
+    if (message.attachments?.length) {
+      obj.attachments = message.attachments.map((e) => FileReference.toJSON(e));
+    }
+    if (message.sourceDraftReviewId !== "") {
+      obj.sourceDraftReviewId = message.sourceDraftReviewId;
+    }
+    if (message.createdAt !== "") {
+      obj.createdAt = message.createdAt;
+    }
+    if (message.vaccination !== undefined) {
+      obj.vaccination = VaccinationDetails.toJSON(message.vaccination);
+    }
+    if (message.prescription !== undefined) {
+      obj.prescription = PrescriptionDetails.toJSON(message.prescription);
+    }
+    if (message.labResult !== undefined) {
+      obj.labResult = LabResultDetails.toJSON(message.labResult);
+    }
+    return obj;
+  },
+};
+
+export const ListRecordsByPetRequest: MessageFns<ListRecordsByPetRequest> = {
+  fromJSON(object: any): ListRecordsByPetRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      type: isSet(object.type) ? recordTypeFromJSON(object.type) : undefined,
+      fromDate: isSet(object.fromDate)
+        ? globalThis.String(object.fromDate)
+        : isSet(object.from_date)
+        ? globalThis.String(object.from_date)
+        : "",
+      toDate: isSet(object.toDate)
+        ? globalThis.String(object.toDate)
+        : isSet(object.to_date)
+        ? globalThis.String(object.to_date)
+        : "",
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListRecordsByPetRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.type !== undefined) {
+      obj.type = recordTypeToJSON(message.type);
+    }
+    if (message.fromDate !== "") {
+      obj.fromDate = message.fromDate;
+    }
+    if (message.toDate !== "") {
+      obj.toDate = message.toDate;
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ListRecordsResponse: MessageFns<ListRecordsResponse> = {
+  fromJSON(object: any): ListRecordsResponse {
+    return {
+      records: globalThis.Array.isArray(object?.records)
+        ? object.records.map((e: any) => MedicalRecord.fromJSON(e))
+        : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListRecordsResponse): unknown {
+    const obj: any = {};
+    if (message.records?.length) {
+      obj.records = message.records.map((e) => MedicalRecord.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const CreateRecordRequest: MessageFns<CreateRecordRequest> = {
+  fromJSON(object: any): CreateRecordRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      attachments: globalThis.Array.isArray(object?.attachments)
+        ? object.attachments.map((e: any) => FileReference.fromJSON(e))
+        : [],
+      content: isSet(object.content) ? RecordContent.fromJSON(object.content) : undefined,
+    };
+  },
+
+  toJSON(message: CreateRecordRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.attachments?.length) {
+      obj.attachments = message.attachments.map((e) => FileReference.toJSON(e));
+    }
+    if (message.content !== undefined) {
+      obj.content = RecordContent.toJSON(message.content);
+    }
+    return obj;
+  },
+};
+
+export const RecordResponse: MessageFns<RecordResponse> = {
+  fromJSON(object: any): RecordResponse {
+    return { record: isSet(object.record) ? MedicalRecord.fromJSON(object.record) : undefined };
+  },
+
+  toJSON(message: RecordResponse): unknown {
+    const obj: any = {};
+    if (message.record !== undefined) {
+      obj.record = MedicalRecord.toJSON(message.record);
+    }
+    return obj;
+  },
+};
+
+export const Document: MessageFns<Document> = {
+  fromJSON(object: any): Document {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      storagePath: isSet(object.storagePath)
+        ? globalThis.String(object.storagePath)
+        : isSet(object.storage_path)
+        ? globalThis.String(object.storage_path)
+        : "",
+      originalName: isSet(object.originalName)
+        ? globalThis.String(object.originalName)
+        : isSet(object.original_name)
+        ? globalThis.String(object.original_name)
+        : "",
+      mimeType: isSet(object.mimeType)
+        ? globalThis.String(object.mimeType)
+        : isSet(object.mime_type)
+        ? globalThis.String(object.mime_type)
+        : "",
+      sizeBytes: isSet(object.sizeBytes)
+        ? globalThis.Number(object.sizeBytes)
+        : isSet(object.size_bytes)
+        ? globalThis.Number(object.size_bytes)
+        : 0,
+      sha256: isSet(object.sha256) ? globalThis.String(object.sha256) : "",
+      note: isSet(object.note) ? globalThis.String(object.note) : "",
+      status: isSet(object.status) ? documentStatusFromJSON(object.status) : 0,
+      failureReason: isSet(object.failureReason)
+        ? globalThis.String(object.failureReason)
+        : isSet(object.failure_reason)
+        ? globalThis.String(object.failure_reason)
+        : "",
+      draftReviewId: isSet(object.draftReviewId)
+        ? globalThis.String(object.draftReviewId)
+        : isSet(object.draft_review_id)
+        ? globalThis.String(object.draft_review_id)
+        : "",
+      createdAt: isSet(object.createdAt)
+        ? globalThis.String(object.createdAt)
+        : isSet(object.created_at)
+        ? globalThis.String(object.created_at)
+        : "",
+      updatedAt: isSet(object.updatedAt)
+        ? globalThis.String(object.updatedAt)
+        : isSet(object.updated_at)
+        ? globalThis.String(object.updated_at)
+        : "",
+    };
+  },
+
+  toJSON(message: Document): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.storagePath !== "") {
+      obj.storagePath = message.storagePath;
+    }
+    if (message.originalName !== "") {
+      obj.originalName = message.originalName;
+    }
+    if (message.mimeType !== "") {
+      obj.mimeType = message.mimeType;
+    }
+    if (message.sizeBytes !== 0) {
+      obj.sizeBytes = Math.round(message.sizeBytes);
+    }
+    if (message.sha256 !== "") {
+      obj.sha256 = message.sha256;
+    }
+    if (message.note !== "") {
+      obj.note = message.note;
+    }
+    if (message.status !== 0) {
+      obj.status = documentStatusToJSON(message.status);
+    }
+    if (message.failureReason !== "") {
+      obj.failureReason = message.failureReason;
+    }
+    if (message.draftReviewId !== "") {
+      obj.draftReviewId = message.draftReviewId;
+    }
+    if (message.createdAt !== "") {
+      obj.createdAt = message.createdAt;
+    }
+    if (message.updatedAt !== "") {
+      obj.updatedAt = message.updatedAt;
+    }
+    return obj;
+  },
+};
+
+export const RegisterDocumentRequest: MessageFns<RegisterDocumentRequest> = {
+  fromJSON(object: any): RegisterDocumentRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      storagePath: isSet(object.storagePath)
+        ? globalThis.String(object.storagePath)
+        : isSet(object.storage_path)
+        ? globalThis.String(object.storage_path)
+        : "",
+      originalName: isSet(object.originalName)
+        ? globalThis.String(object.originalName)
+        : isSet(object.original_name)
+        ? globalThis.String(object.original_name)
+        : "",
+      mimeType: isSet(object.mimeType)
+        ? globalThis.String(object.mimeType)
+        : isSet(object.mime_type)
+        ? globalThis.String(object.mime_type)
+        : "",
+      sizeBytes: isSet(object.sizeBytes)
+        ? globalThis.Number(object.sizeBytes)
+        : isSet(object.size_bytes)
+        ? globalThis.Number(object.size_bytes)
+        : 0,
+      sha256: isSet(object.sha256) ? globalThis.String(object.sha256) : "",
+      note: isSet(object.note) ? globalThis.String(object.note) : "",
+    };
+  },
+
+  toJSON(message: RegisterDocumentRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.storagePath !== "") {
+      obj.storagePath = message.storagePath;
+    }
+    if (message.originalName !== "") {
+      obj.originalName = message.originalName;
+    }
+    if (message.mimeType !== "") {
+      obj.mimeType = message.mimeType;
+    }
+    if (message.sizeBytes !== 0) {
+      obj.sizeBytes = Math.round(message.sizeBytes);
+    }
+    if (message.sha256 !== "") {
+      obj.sha256 = message.sha256;
+    }
+    if (message.note !== "") {
+      obj.note = message.note;
+    }
+    return obj;
+  },
+};
+
+export const GetDocumentRequest: MessageFns<GetDocumentRequest> = {
+  fromJSON(object: any): GetDocumentRequest {
+    return { id: isSet(object.id) ? globalThis.String(object.id) : "" };
+  },
+
+  toJSON(message: GetDocumentRequest): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    return obj;
+  },
+};
+
+export const DocumentResponse: MessageFns<DocumentResponse> = {
+  fromJSON(object: any): DocumentResponse {
+    return { document: isSet(object.document) ? Document.fromJSON(object.document) : undefined };
+  },
+
+  toJSON(message: DocumentResponse): unknown {
+    const obj: any = {};
+    if (message.document !== undefined) {
+      obj.document = Document.toJSON(message.document);
+    }
+    return obj;
+  },
+};
+
+export const Vaccination: MessageFns<Vaccination> = {
+  fromJSON(object: any): Vaccination {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      recordId: isSet(object.recordId)
+        ? globalThis.String(object.recordId)
+        : isSet(object.record_id)
+        ? globalThis.String(object.record_id)
+        : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      vaccineName: isSet(object.vaccineName)
+        ? globalThis.String(object.vaccineName)
+        : isSet(object.vaccine_name)
+        ? globalThis.String(object.vaccine_name)
+        : "",
+      batchNumber: isSet(object.batchNumber)
+        ? globalThis.String(object.batchNumber)
+        : isSet(object.batch_number)
+        ? globalThis.String(object.batch_number)
+        : "",
+      administeredAt: isSet(object.administeredAt)
+        ? globalThis.String(object.administeredAt)
+        : isSet(object.administered_at)
+        ? globalThis.String(object.administered_at)
+        : "",
+      nextDueAt: isSet(object.nextDueAt)
+        ? globalThis.String(object.nextDueAt)
+        : isSet(object.next_due_at)
+        ? globalThis.String(object.next_due_at)
+        : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+    };
+  },
+
+  toJSON(message: Vaccination): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.recordId !== "") {
+      obj.recordId = message.recordId;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.vaccineName !== "") {
+      obj.vaccineName = message.vaccineName;
+    }
+    if (message.batchNumber !== "") {
+      obj.batchNumber = message.batchNumber;
+    }
+    if (message.administeredAt !== "") {
+      obj.administeredAt = message.administeredAt;
+    }
+    if (message.nextDueAt !== "") {
+      obj.nextDueAt = message.nextDueAt;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    return obj;
+  },
+};
+
+export const ListVaccinationsRequest: MessageFns<ListVaccinationsRequest> = {
+  fromJSON(object: any): ListVaccinationsRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      onlyUpcoming: isSet(object.onlyUpcoming)
+        ? globalThis.Boolean(object.onlyUpcoming)
+        : isSet(object.only_upcoming)
+        ? globalThis.Boolean(object.only_upcoming)
+        : undefined,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListVaccinationsRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.onlyUpcoming !== undefined) {
+      obj.onlyUpcoming = message.onlyUpcoming;
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ListVaccinationsResponse: MessageFns<ListVaccinationsResponse> = {
+  fromJSON(object: any): ListVaccinationsResponse {
+    return {
+      vaccinations: globalThis.Array.isArray(object?.vaccinations)
+        ? object.vaccinations.map((e: any) => Vaccination.fromJSON(e))
+        : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListVaccinationsResponse): unknown {
+    const obj: any = {};
+    if (message.vaccinations?.length) {
+      obj.vaccinations = message.vaccinations.map((e) => Vaccination.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const Prescription: MessageFns<Prescription> = {
+  fromJSON(object: any): Prescription {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      recordId: isSet(object.recordId)
+        ? globalThis.String(object.recordId)
+        : isSet(object.record_id)
+        ? globalThis.String(object.record_id)
+        : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      medicationName: isSet(object.medicationName)
+        ? globalThis.String(object.medicationName)
+        : isSet(object.medication_name)
+        ? globalThis.String(object.medication_name)
+        : "",
+      dosage: isSet(object.dosage) ? globalThis.String(object.dosage) : "",
+      frequency: isSet(object.frequency) ? globalThis.String(object.frequency) : "",
+      durationDays: isSet(object.durationDays)
+        ? globalThis.Number(object.durationDays)
+        : isSet(object.duration_days)
+        ? globalThis.Number(object.duration_days)
+        : 0,
+      instructions: isSet(object.instructions) ? globalThis.String(object.instructions) : "",
+      prescribedAt: isSet(object.prescribedAt)
+        ? globalThis.String(object.prescribedAt)
+        : isSet(object.prescribed_at)
+        ? globalThis.String(object.prescribed_at)
+        : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+    };
+  },
+
+  toJSON(message: Prescription): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.recordId !== "") {
+      obj.recordId = message.recordId;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.medicationName !== "") {
+      obj.medicationName = message.medicationName;
+    }
+    if (message.dosage !== "") {
+      obj.dosage = message.dosage;
+    }
+    if (message.frequency !== "") {
+      obj.frequency = message.frequency;
+    }
+    if (message.durationDays !== 0) {
+      obj.durationDays = Math.round(message.durationDays);
+    }
+    if (message.instructions !== "") {
+      obj.instructions = message.instructions;
+    }
+    if (message.prescribedAt !== "") {
+      obj.prescribedAt = message.prescribedAt;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    return obj;
+  },
+};
+
+export const ListPrescriptionsRequest: MessageFns<ListPrescriptionsRequest> = {
+  fromJSON(object: any): ListPrescriptionsRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      onlyActive: isSet(object.onlyActive)
+        ? globalThis.Boolean(object.onlyActive)
+        : isSet(object.only_active)
+        ? globalThis.Boolean(object.only_active)
+        : undefined,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListPrescriptionsRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.onlyActive !== undefined) {
+      obj.onlyActive = message.onlyActive;
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ListPrescriptionsResponse: MessageFns<ListPrescriptionsResponse> = {
+  fromJSON(object: any): ListPrescriptionsResponse {
+    return {
+      prescriptions: globalThis.Array.isArray(object?.prescriptions)
+        ? object.prescriptions.map((e: any) => Prescription.fromJSON(e))
+        : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListPrescriptionsResponse): unknown {
+    const obj: any = {};
+    if (message.prescriptions?.length) {
+      obj.prescriptions = message.prescriptions.map((e) => Prescription.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const LabResult: MessageFns<LabResult> = {
+  fromJSON(object: any): LabResult {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      recordId: isSet(object.recordId)
+        ? globalThis.String(object.recordId)
+        : isSet(object.record_id)
+        ? globalThis.String(object.record_id)
+        : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      testName: isSet(object.testName)
+        ? globalThis.String(object.testName)
+        : isSet(object.test_name)
+        ? globalThis.String(object.test_name)
+        : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+      unit: isSet(object.unit) ? globalThis.String(object.unit) : "",
+      referenceRange: isSet(object.referenceRange)
+        ? globalThis.String(object.referenceRange)
+        : isSet(object.reference_range)
+        ? globalThis.String(object.reference_range)
+        : "",
+      flag: isSet(object.flag) ? labResultFlagFromJSON(object.flag) : 0,
+      sampledAt: isSet(object.sampledAt)
+        ? globalThis.String(object.sampledAt)
+        : isSet(object.sampled_at)
+        ? globalThis.String(object.sampled_at)
+        : "",
+    };
+  },
+
+  toJSON(message: LabResult): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.recordId !== "") {
+      obj.recordId = message.recordId;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.testName !== "") {
+      obj.testName = message.testName;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    if (message.unit !== "") {
+      obj.unit = message.unit;
+    }
+    if (message.referenceRange !== "") {
+      obj.referenceRange = message.referenceRange;
+    }
+    if (message.flag !== 0) {
+      obj.flag = labResultFlagToJSON(message.flag);
+    }
+    if (message.sampledAt !== "") {
+      obj.sampledAt = message.sampledAt;
+    }
+    return obj;
+  },
+};
+
+export const ListLabResultsRequest: MessageFns<ListLabResultsRequest> = {
+  fromJSON(object: any): ListLabResultsRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      testName: isSet(object.testName)
+        ? globalThis.String(object.testName)
+        : isSet(object.test_name)
+        ? globalThis.String(object.test_name)
+        : undefined,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListLabResultsRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.testName !== undefined) {
+      obj.testName = message.testName;
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ListLabResultsResponse: MessageFns<ListLabResultsResponse> = {
+  fromJSON(object: any): ListLabResultsResponse {
+    return {
+      labResults: globalThis.Array.isArray(object?.labResults)
+        ? object.labResults.map((e: any) => LabResult.fromJSON(e))
+        : globalThis.Array.isArray(object?.lab_results)
+        ? object.lab_results.map((e: any) =>
+          LabResult.fromJSON(e)
+        )
+        : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListLabResultsResponse): unknown {
+    const obj: any = {};
+    if (message.labResults?.length) {
+      obj.labResults = message.labResults.map((e) => LabResult.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const DraftReview: MessageFns<DraftReview> = {
+  fromJSON(object: any): DraftReview {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      sourceFiles: globalThis.Array.isArray(object?.sourceFiles)
+        ? object.sourceFiles.map((e: any) => FileReference.fromJSON(e))
+        : globalThis.Array.isArray(object?.source_files)
+        ? object.source_files.map((e: any) => FileReference.fromJSON(e))
+        : [],
+      status: isSet(object.status) ? draftReviewStatusFromJSON(object.status) : 0,
+      reviewNote: isSet(object.reviewNote)
+        ? globalThis.String(object.reviewNote)
+        : isSet(object.review_note)
+        ? globalThis.String(object.review_note)
+        : "",
+      createdRecordId: isSet(object.createdRecordId)
+        ? globalThis.String(object.createdRecordId)
+        : isSet(object.created_record_id)
+        ? globalThis.String(object.created_record_id)
+        : "",
+      createdAt: isSet(object.createdAt)
+        ? globalThis.String(object.createdAt)
+        : isSet(object.created_at)
+        ? globalThis.String(object.created_at)
+        : "",
+      reviewedAt: isSet(object.reviewedAt)
+        ? globalThis.String(object.reviewedAt)
+        : isSet(object.reviewed_at)
+        ? globalThis.String(object.reviewed_at)
+        : "",
+      reviewedByClinicId: isSet(object.reviewedByClinicId)
+        ? globalThis.String(object.reviewedByClinicId)
+        : isSet(object.reviewed_by_clinic_id)
+        ? globalThis.String(object.reviewed_by_clinic_id)
+        : "",
+      documentId: isSet(object.documentId)
+        ? globalThis.String(object.documentId)
+        : isSet(object.document_id)
+        ? globalThis.String(object.document_id)
+        : "",
+      proposal: isSet(object.proposal) ? RecordContent.fromJSON(object.proposal) : undefined,
+      approvedContent: isSet(object.approvedContent)
+        ? RecordContent.fromJSON(object.approvedContent)
+        : isSet(object.approved_content)
+        ? RecordContent.fromJSON(object.approved_content)
+        : undefined,
+      modelVersion: isSet(object.modelVersion)
+        ? globalThis.String(object.modelVersion)
+        : isSet(object.model_version)
+        ? globalThis.String(object.model_version)
+        : "",
+      confidence: isSet(object.confidence) ? globalThis.Number(object.confidence) : 0,
+    };
+  },
+
+  toJSON(message: DraftReview): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.sourceFiles?.length) {
+      obj.sourceFiles = message.sourceFiles.map((e) => FileReference.toJSON(e));
+    }
+    if (message.status !== 0) {
+      obj.status = draftReviewStatusToJSON(message.status);
+    }
+    if (message.reviewNote !== "") {
+      obj.reviewNote = message.reviewNote;
+    }
+    if (message.createdRecordId !== "") {
+      obj.createdRecordId = message.createdRecordId;
+    }
+    if (message.createdAt !== "") {
+      obj.createdAt = message.createdAt;
+    }
+    if (message.reviewedAt !== "") {
+      obj.reviewedAt = message.reviewedAt;
+    }
+    if (message.reviewedByClinicId !== "") {
+      obj.reviewedByClinicId = message.reviewedByClinicId;
+    }
+    if (message.documentId !== "") {
+      obj.documentId = message.documentId;
+    }
+    if (message.proposal !== undefined) {
+      obj.proposal = RecordContent.toJSON(message.proposal);
+    }
+    if (message.approvedContent !== undefined) {
+      obj.approvedContent = RecordContent.toJSON(message.approvedContent);
+    }
+    if (message.modelVersion !== "") {
+      obj.modelVersion = message.modelVersion;
+    }
+    if (message.confidence !== 0) {
+      obj.confidence = message.confidence;
+    }
+    return obj;
+  },
+};
+
+export const ListDraftReviewsRequest: MessageFns<ListDraftReviewsRequest> = {
+  fromJSON(object: any): ListDraftReviewsRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : undefined,
+      status: isSet(object.status) ? draftReviewStatusFromJSON(object.status) : undefined,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListDraftReviewsRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== undefined) {
+      obj.petId = message.petId;
+    }
+    if (message.status !== undefined) {
+      obj.status = draftReviewStatusToJSON(message.status);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ListDraftReviewsResponse: MessageFns<ListDraftReviewsResponse> = {
+  fromJSON(object: any): ListDraftReviewsResponse {
+    return {
+      draftReviews: globalThis.Array.isArray(object?.draftReviews)
+        ? object.draftReviews.map((e: any) => DraftReview.fromJSON(e))
+        : globalThis.Array.isArray(object?.draft_reviews)
+        ? object.draft_reviews.map((e: any) =>
+          DraftReview.fromJSON(e)
+        )
+        : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListDraftReviewsResponse): unknown {
+    const obj: any = {};
+    if (message.draftReviews?.length) {
+      obj.draftReviews = message.draftReviews.map((e) => DraftReview.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ReviewDraftRequest: MessageFns<ReviewDraftRequest> = {
+  fromJSON(object: any): ReviewDraftRequest {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      approved: isSet(object.approved) ? globalThis.Boolean(object.approved) : false,
+      reviewNote: isSet(object.reviewNote)
+        ? globalThis.String(object.reviewNote)
+        : isSet(object.review_note)
+        ? globalThis.String(object.review_note)
+        : "",
+      editedContent: isSet(object.editedContent)
+        ? RecordContent.fromJSON(object.editedContent)
+        : isSet(object.edited_content)
+        ? RecordContent.fromJSON(object.edited_content)
+        : undefined,
+    };
+  },
+
+  toJSON(message: ReviewDraftRequest): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.approved !== false) {
+      obj.approved = message.approved;
+    }
+    if (message.reviewNote !== "") {
+      obj.reviewNote = message.reviewNote;
+    }
+    if (message.editedContent !== undefined) {
+      obj.editedContent = RecordContent.toJSON(message.editedContent);
+    }
+    return obj;
+  },
+};
+
+export const DraftReviewResponse: MessageFns<DraftReviewResponse> = {
+  fromJSON(object: any): DraftReviewResponse {
+    return {
+      draftReview: isSet(object.draftReview)
+        ? DraftReview.fromJSON(object.draftReview)
+        : isSet(object.draft_review)
+        ? DraftReview.fromJSON(object.draft_review)
+        : undefined,
+    };
+  },
+
+  toJSON(message: DraftReviewResponse): unknown {
+    const obj: any = {};
+    if (message.draftReview !== undefined) {
+      obj.draftReview = DraftReview.toJSON(message.draftReview);
+    }
+    return obj;
+  },
+};
+
 /**
  * Tıbbi geçmiş yönetimi, dosya referansı ve klinik onaylı (human-in-the-loop) taslak akışı.
  *
@@ -416,3 +1955,12 @@ export function MedicalRecordServiceControllerMethods() {
 }
 
 export const MEDICAL_RECORD_SERVICE_NAME = "MedicalRecordService";
+
+function isSet(value: any): boolean {
+  return value !== null && value !== undefined;
+}
+
+export interface MessageFns<T> {
+  fromJSON(object: any): T;
+  toJSON(message: T): unknown;
+}
