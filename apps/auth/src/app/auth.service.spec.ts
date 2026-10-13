@@ -245,6 +245,7 @@ describe('AuthService', () => {
       expect(response.expiresIn).toBe(ACCESS_TOKEN_TTL_SECONDS);
       expect(response.refreshToken).toBeTruthy();
       expect(response.userId).toMatch(UUID_V4);
+      expect(response.clinicId).toBe('');
     });
 
     it('users kaydini kendi urettigi UUID v4 ile acar', async () => {
@@ -618,6 +619,22 @@ describe('AuthService', () => {
         tokenType: 'Bearer',
         expiresIn: ACCESS_TOKEN_TTL_SECONDS,
         userId: CREDENTIAL_USER_ID,
+        clinicId: '',
+      });
+    });
+
+    it('klinik hesabinda clinicId yanita eklenir', async () => {
+      usersClient.getUserAuthInfo.mockReturnValue(
+        of(
+          authInfoResponse({
+            role: users.UserRole.CLINIC,
+            clinicId: CLINIC_ID,
+          }),
+        ),
+      );
+
+      await expect(service.login(loginDto)).resolves.toMatchObject({
+        clinicId: CLINIC_ID,
       });
     });
 
@@ -842,6 +859,22 @@ describe('AuthService', () => {
         tokenType: 'Bearer',
         expiresIn: ACCESS_TOKEN_TTL_SECONDS,
         userId: CREDENTIAL_USER_ID,
+        clinicId: '',
+      });
+    });
+
+    it('klinik hesabinda clinicId yanita eklenir', async () => {
+      usersClient.getUserAuthInfo.mockReturnValue(
+        of(
+          authInfoResponse({
+            role: users.UserRole.CLINIC,
+            clinicId: CLINIC_ID,
+          }),
+        ),
+      );
+
+      await expect(service.refreshToken(refreshDto)).resolves.toMatchObject({
+        clinicId: CLINIC_ID,
       });
     });
 

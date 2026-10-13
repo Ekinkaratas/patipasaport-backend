@@ -1,0 +1,9 @@
+{
+  "fluent_host": "fluent-bit",
+  "fluent_port": 24224,
+  "fluent_network": "tcp",
+  "buffer_limit": 8192,
+  "retry_wait": 500,
+  "max_retry": 13,
+  "max_retry_wait": 60000
+}

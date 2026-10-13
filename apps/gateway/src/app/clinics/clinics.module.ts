@@ -10,6 +10,7 @@ import {
 } from '@libs/common';
 import { ApiClinicsService } from './clinics.service';
 import { ApiClinicsController } from './clinics.controller';
+import { DocumentStorageService } from '../storage/document-storage.service';
 
 @Module({
   imports: [
@@ -37,6 +38,6 @@ import { ApiClinicsController } from './clinics.controller';
     ]),
   ],
   controllers: [ApiClinicsController],
-  providers: [ApiClinicsService],
+  providers: [ApiClinicsService, DocumentStorageService],
 })
 export class ApiClinicsModule {}

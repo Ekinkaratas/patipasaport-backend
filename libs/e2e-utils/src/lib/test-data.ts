@@ -8,6 +8,13 @@ import {
   validVkn,
 } from './fixtures';
 import { DatabaseName } from './ports';
+import {
+  AI_UPLOADED_QUEUE,
+  DOCUMENT_EVENTS_DLQ,
+  EventBus,
+  messageSubject,
+} from './rabbitmq';
+import { ObjectStore } from './storage';
 
 export interface SeededClinic {
   id: string;
@@ -24,11 +31,20 @@ export interface SeededUser {
   fullName: string;
 }
 
+const OUTBOX_DRAIN_TIMEOUT_MS = 10_000;
+
+export interface TestDataOptions {
+  medicalRecord?: boolean;
+}
+
 export class TestData {
   private readonly connections = new Map<DatabaseName, Promise<Client>>();
+  private readonly messageIds = new Set<string>();
   private readonly clinicIds = new Set<string>();
   private readonly userIds = new Set<string>();
   private readonly petIds = new Set<string>();
+
+  constructor(private readonly options: TestDataOptions = {}) {}
 
   db(name: DatabaseName): Promise<Client> {
     let connection = this.connections.get(name);
@@ -49,6 +65,10 @@ export class TestData {
 
   trackPet(id: string): void {
     this.petIds.add(id);
+  }
+
+  trackMessage(id: string): void {
+    this.messageIds.add(id);
   }
 
   async insertClinic(
@@ -127,6 +147,10 @@ export class TestData {
     );
     const petIds = [...new Set([...this.petIds, ...petRows.map((row) => row.id)])];
 
+    if (this.options.medicalRecord) {
+      await this.cleanupMedicalRecord(petIds);
+    }
+
     const access = await this.db('access');
     await access.query('BEGIN');
     try {
@@ -168,6 +192,92 @@ export class TestData {
     await users.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [
       userIds,
     ]);
+  }
+
+  private async cleanupMedicalRecord(petIds: string[]): Promise<void> {
+    const medical = await this.db('medical_record');
+    const { rows: documents } = await medical.query<{
+      id: string;
+      storage_path: string;
+    }>('SELECT id, storage_path FROM documents WHERE pet_id = ANY($1::uuid[])', [
+      petIds,
+    ]);
+    const documentIds = documents.map((row) => row.id);
+
+    const deadline = Date.now() + OUTBOX_DRAIN_TIMEOUT_MS;
+    while (documentIds.length > 0 && Date.now() < deadline) {
+      const { rows } = await medical.query<{ pending: number }>(
+        "SELECT count(*)::int AS pending FROM outbox WHERE payload->>'subject' = ANY($1::text[]) AND published_at IS NULL",
+        [documentIds],
+      );
+      if (rows[0].pending === 0) break;
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+    }
+
+    if (documentIds.length > 0 || this.messageIds.size > 0) {
+      const bus = new EventBus();
+      const tracked = (message: Parameters<typeof messageSubject>[0]) =>
+        documentIds.includes(messageSubject(message) ?? '') ||
+        this.messageIds.has(String(message.properties.messageId));
+      try {
+        await bus.takeWhere(AI_UPLOADED_QUEUE, tracked);
+        await bus.takeWhere(DOCUMENT_EVENTS_DLQ, tracked);
+      } finally {
+        await bus.close();
+      }
+    }
+
+    if (documents.length > 0) {
+      const store = new ObjectStore();
+      try {
+        for (const document of documents) {
+          await store.remove(document.storage_path).catch(() => undefined);
+        }
+      } finally {
+        store.close();
+      }
+    }
+
+    await medical.query('BEGIN');
+    try {
+      await medical.query('SET LOCAL session_replication_role = replica');
+      const { rows: records } = await medical.query<{ id: string }>(
+        'SELECT id FROM medical_records WHERE pet_id = ANY($1::uuid[])',
+        [petIds],
+      );
+      const recordIds = records.map((row) => row.id);
+      for (const table of [
+        'record_attachments',
+        'lab_results',
+        'prescriptions',
+        'vaccinations',
+      ]) {
+        await medical.query(
+          `DELETE FROM ${table} WHERE record_id = ANY($1::uuid[])`,
+          [recordIds],
+        );
+      }
+      await medical.query(
+        'DELETE FROM draft_reviews WHERE pet_id = ANY($1::uuid[])',
+        [petIds],
+      );
+      await medical.query(
+        'DELETE FROM medical_records WHERE id = ANY($1::uuid[])',
+        [recordIds],
+      );
+      await medical.query(
+        "DELETE FROM outbox WHERE payload->>'subject' = ANY($1::text[])",
+        [documentIds],
+      );
+      await medical.query(
+        'DELETE FROM documents WHERE pet_id = ANY($1::uuid[])',
+        [petIds],
+      );
+      await medical.query('COMMIT');
+    } catch (e) {
+      await medical.query('ROLLBACK');
+      throw e;
+    }
   }
 
   async close(): Promise<void> {

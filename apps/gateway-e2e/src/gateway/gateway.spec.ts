@@ -3,24 +3,32 @@ import {
   callGrpc,
   DOCKER_GRPC_PORTS,
   DOCKER_REDIS_PORTS,
+  EventBus,
   expectOk,
   grpcClient,
   GrpcResult,
   httpGet,
   httpRequest,
   HttpResponse,
+  httpUpload,
+  istanbulToday,
   JwtIssuer,
+  ObjectStore,
+  pdfOfSize,
   requireEnv,
   RunningService,
+  samplePdf,
+  samplePng,
   SeededClinic,
   SeededUser,
+  shiftDays,
   startService,
   TestData,
   uniqueEmail,
   uniqueMobilePhone,
 } from '@libs/e2e-utils';
-import { access, clinics, pets, users } from '@libs/proto';
-import { randomUUID } from 'crypto';
+import { access, clinics, medicalRecord, pets, users } from '@libs/proto';
+import { createHash, randomUUID } from 'crypto';
 import { Redis } from 'ioredis';
 
 const UUID_V4 =
@@ -1023,7 +1031,7 @@ describe('gateway (e2e)', () => {
       ).toMatchObject({
         pet: { petId, name: 'Boncuk Yeni', ownerUserId: owner.id },
         owner: { userId: owner.id, fullName: 'Ayşe Kaya', phone: owner.phone },
-        unavailableSources: ['medical_record'],
+        unavailableSources: [],
       });
     });
 
@@ -1069,6 +1077,385 @@ describe('gateway (e2e)', () => {
           status: (await call(method, path, ownerToken, {})).status,
         }).toEqual({ route: `${method} ${path}`, status: 404 });
       }
+    });
+  });
+
+  // ---Amaç: belge yükleme ucunun dosya türü/boyut/rıza kurallarını, depoya etkisini ve tıbbi kayıt uçlarını doğrulamak ---
+  describe('belge yükleme ve tıbbi kayıt uçları', () => {
+    const data = new TestData({ medicalRecord: true });
+    const store = new ObjectStore();
+    const bus = new EventBus();
+    const opaqueTokens: string[] = [];
+    const today = istanbulToday();
+    const MAX = 10 * 1024 * 1024;
+
+    let accessClient: Client;
+    let owner: SeededUser;
+    let clinic: SeededClinic;
+    let foreignClinic: SeededClinic;
+    let ownerToken: string;
+    let clinicToken: string;
+    let foreignToken: string;
+    let petId: string;
+    let documentId: string;
+
+    const opaqueTokenFor = async (
+      role: 'PET_OWNER' | 'CLINIC',
+      userId: string,
+      clinicId = '',
+    ) => {
+      const created = expectOk(
+        await callGrpc<access.CreateTokenResponse>(
+          accessClient,
+          'CreateOpaqueToken',
+          {
+            userId,
+            role,
+            clinicId,
+            clientType: access.ClientType.WEB,
+            ttlSeconds: 0,
+          },
+        ),
+        'access.CreateOpaqueToken',
+      );
+      opaqueTokens.push(created.opaqueToken);
+      return created.opaqueToken;
+    };
+
+    const call = (
+      method: string,
+      path: string,
+      token: string,
+      body?: unknown,
+    ) =>
+      httpRequest(service.port, method, path, {
+        headers: { authorization: `Bearer ${token}`, ...WEB },
+        body,
+      });
+
+    const upload = (
+      token: string | null,
+      file?: { filename: string; contentType: string; content: Buffer },
+      note?: string,
+      clinicId = clinic.id,
+    ) =>
+      httpUpload(service.port, `/clinics/${clinicId}/pets/${petId}/documents`, {
+        headers: token ? { authorization: `Bearer ${token}`, ...WEB } : WEB,
+        fields: note === undefined ? {} : { note },
+        file: file && { field: 'file', ...file },
+      });
+
+    const documentOf = async (id: string) =>
+      (
+        await (
+          await data.db('medical_record')
+        ).query<{
+          storage_path: string;
+          original_name: string;
+          mime_type: string;
+          size_bytes: number;
+          sha256: string;
+          note: string | null;
+        }>(
+          'SELECT storage_path, original_name, mime_type, size_bytes, sha256, note FROM documents WHERE id = $1',
+          [id],
+        )
+      ).rows[0];
+
+    beforeAll(async () => {
+      accessClient = grpcClient('access', DOCKER_GRPC_PORTS.access);
+      owner = await data.insertUser({ fullName: 'Ayşe Yılmaz' });
+      clinic = await data.insertClinic({ name: 'Yükleme Kliniği' });
+      foreignClinic = await data.insertClinic({ name: 'Rızasız Klinik' });
+      ownerToken = await opaqueTokenFor('PET_OWNER', owner.id);
+      clinicToken = await opaqueTokenFor('CLINIC', randomUUID(), clinic.id);
+      foreignToken = await opaqueTokenFor(
+        'CLINIC',
+        randomUUID(),
+        foreignClinic.id,
+      );
+
+      const created = await call('POST', '/pets', ownerToken, {
+        name: 'Pamuk',
+        species: 'CAT',
+        breed: 'TURKISH_VAN',
+        sex: pets.PetSex.FEMALE,
+        ownerUserId: owner.id,
+      });
+      petId = parse<pets.PetResponse>(created).data?.pet?.id ?? '';
+      data.trackPet(petId);
+      const granted = await call('POST', '/consents', ownerToken, {
+        clinicId: clinic.id,
+        petId,
+        scopes: [
+          'medical_read',
+          'medical_write',
+          'vaccination_read',
+          'prescription_read',
+        ],
+        expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+      });
+      expect(granted.status).toBe(200);
+    });
+
+    afterAll(async () => {
+      try {
+        for (const opaqueToken of opaqueTokens) {
+          await callGrpc(accessClient, 'RevokeToken', { opaqueToken });
+        }
+        await data.cleanup();
+      } finally {
+        await data.close();
+        await bus.close();
+        store.close();
+        accessClient?.close();
+      }
+    });
+
+    it('PDF yükleme 201 döner; Türkçe dosya adı, gerçek tür, sha256 ve kırpılmış not saklanır, dosya depoya yazılır', async () => {
+      const pdf = samplePdf();
+      const name = 'Kan Tahlili ğüşiöç İ.pdf';
+      const response = await upload(
+        clinicToken,
+        { filename: name, contentType: 'application/pdf', content: pdf },
+        '  Açlık kan şekeri  ',
+      );
+      expect(response.status).toBe(201);
+      const body = parse<clinics.UploadPetResultResponse>(response);
+      expect(body).toMatchObject({
+        message: 'CREATED',
+        data: { status: 'QUEUED' },
+      });
+      documentId = body.data?.documentId ?? '';
+
+      const row = await documentOf(documentId);
+      expect(row).toMatchObject({
+        original_name: name,
+        mime_type: 'application/pdf',
+        size_bytes: pdf.length,
+        sha256: createHash('sha256').update(pdf).digest('hex'),
+        note: 'Açlık kan şekeri',
+      });
+      expect(row.storage_path).toMatch(/^[0-9a-f-]{36}\.pdf$/);
+      expect(await store.head(row.storage_path)).toMatchObject({
+        ContentLength: pdf.length,
+        ContentType: 'application/pdf',
+      });
+    });
+
+    it('içerik PNG ise istemcinin bildirdiği tür yerine image/png saklanır', async () => {
+      const response = await upload(clinicToken, {
+        filename: 'aslinda-png.pdf',
+        contentType: 'application/pdf',
+        content: samplePng(),
+      });
+      expect(response.status).toBe(201);
+      const row = await documentOf(
+        parse<clinics.UploadPetResultResponse>(response).data?.documentId ??
+          '',
+      );
+      expect(row.mime_type).toBe('image/png');
+      expect(row.storage_path.endsWith('.png')).toBe(true);
+    });
+
+    it.each([
+      [
+        'metin dosyası',
+        {
+          filename: 'not.pdf',
+          contentType: 'application/pdf',
+          content: Buffer.from('düz metin'),
+        },
+        'MIME_TYPE_NOT_VALID',
+      ],
+      ['dosya yok', undefined, 'FILE_NOT_EMPTY'],
+      [
+        '10 MB + 1 bayt',
+        {
+          filename: 'buyuk.pdf',
+          contentType: 'application/pdf',
+          content: pdfOfSize(MAX + 1),
+        },
+        'SIZE_BYTES_MAX|10485760',
+      ],
+    ])('%s → 400 %s, depoya yazılmaz', async (_n, file, message) => {
+      const before = await store.keyCount();
+      const response = await upload(clinicToken, file);
+      expect(response.status).toBe(400);
+      expect(parse(response).message).toBe(message);
+      expect(await store.keyCount()).toBe(before);
+    });
+
+    it('tam 10 MB kabul edilir', async () => {
+      const response = await upload(clinicToken, {
+        filename: 'tam10mb.pdf',
+        contentType: 'application/pdf',
+        content: pdfOfSize(MAX),
+      });
+      expect(response.status).toBe(201);
+    });
+
+    it('rızası olmayan klinik 403 alır ve yüklenen dosya depodan geri silinir; token yoksa 401', async () => {
+      const before = await store.keyCount();
+      const response = await upload(
+        foreignToken,
+        {
+          filename: 'rizasiz.pdf',
+          contentType: 'application/pdf',
+          content: samplePdf(),
+        },
+        undefined,
+        foreignClinic.id,
+      );
+      expect(response.status).toBe(403);
+      expect(parse(response).message).toBe('FORBIDDEN');
+      expect(await store.keyCount()).toBe(before);
+      const anonymous = await upload(null, {
+        filename: 'a.pdf',
+        contentType: 'application/pdf',
+        content: samplePdf(),
+      });
+      expect(anonymous.status).toBe(401);
+    });
+
+    it('POST /pets/:petId/records 201 döner (sayısal enum, ek); listeler hasta sahibine ve rızalı kliniğe açıktır', async () => {
+      const created = await call('POST', `/pets/${petId}/records`, clinicToken, {
+        content: {
+          type: medicalRecord.RecordType.VACCINATION,
+          title: 'Kuduz aşısı',
+          recordedAt: today,
+          vaccination: {
+            vaccineName: 'Kuduz',
+            administeredAt: today,
+            nextDueAt: shiftDays(today, 365),
+          },
+        },
+        attachments: [{ documentId }],
+      });
+      expect(created.status).toBe(201);
+      expect(
+        parse<medicalRecord.RecordResponse>(created).data?.record,
+      ).toMatchObject({
+        type: medicalRecord.RecordType.VACCINATION,
+        attachments: [expect.objectContaining({ documentId })],
+      });
+
+      const records = await call(
+        'GET',
+        `/pets/${petId}/records?page=1&pageSize=8`,
+        ownerToken,
+      );
+      expect(records.status).toBe(200);
+      expect(parse<medicalRecord.ListRecordsResponse>(records).data?.total).toBe(
+        1,
+      );
+      const vaccinations = await call(
+        'GET',
+        `/pets/${petId}/vaccinations?page=1&pageSize=8&onlyUpcoming=true`,
+        clinicToken,
+      );
+      expect(
+        parse<medicalRecord.ListVaccinationsResponse>(vaccinations).data?.total,
+      ).toBe(1);
+      expect(
+        (
+          await call(
+            'GET',
+            `/pets/${petId}/prescriptions?page=1&pageSize=8&onlyActive=false`,
+            clinicToken,
+          )
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await call(
+            'GET',
+            `/pets/${petId}/lab-results?page=1&pageSize=8&testName=hemo`,
+            ownerToken,
+          )
+        ).status,
+      ).toBe(200);
+      expect(
+        (
+          await call(
+            'GET',
+            `/pets/${petId}/records?page=1&pageSize=10`,
+            ownerToken,
+          )
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await call(
+            'GET',
+            `/pets/${petId}/records?page=1&pageSize=8`,
+            foreignToken,
+          )
+        ).status,
+      ).toBe(403);
+    });
+
+    it('GET /documents/:id yalnızca yükleyen kliniğe açıktır', async () => {
+      const own = await call('GET', `/documents/${documentId}`, clinicToken);
+      expect(own.status).toBe(200);
+      expect(
+        parse<medicalRecord.DocumentResponse>(own).data?.document?.status,
+      ).toBe(medicalRecord.DocumentStatus.QUEUED);
+      expect(
+        (await call('GET', `/documents/${documentId}`, foreignToken)).status,
+      ).toBe(404);
+    });
+
+    it('AI taslağı listelenir; notsuz red 400, notlu red 200; hasta sahibi taslak göremez', async () => {
+      await bus.publishAiEvent('analyzed', {
+        documentId,
+        modelVersion: 'fake-ai-1',
+        confidence: 0.8,
+        proposal: { type: 'EXAMINATION', title: 'Kontrol', recordedAt: today },
+      });
+
+      let draftId = '';
+      const deadline = Date.now() + 10_000;
+      while (!draftId && Date.now() < deadline) {
+        const drafts = await call(
+          'GET',
+          '/draft-reviews?status=1&page=1&pageSize=8',
+          clinicToken,
+        );
+        draftId =
+          parse<medicalRecord.ListDraftReviewsResponse>(
+            drafts,
+          ).data?.draftReviews.find((d) => d.documentId === documentId)?.id ??
+          '';
+        if (!draftId) {
+          await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+        }
+      }
+      expect(draftId).toMatch(UUID_V4);
+
+      const missingNote = await call(
+        'POST',
+        `/draft-reviews/${draftId}/review`,
+        clinicToken,
+        { approved: false },
+      );
+      expect(missingNote.status).toBe(400);
+      expect(parse(missingNote).message).toBe('REVIEW_NOTE_NOT_EMPTY');
+      const rejected = await call(
+        'POST',
+        `/draft-reviews/${draftId}/review`,
+        clinicToken,
+        { approved: false, reviewNote: 'Yanlış belge' },
+      );
+      expect(rejected.status).toBe(200);
+      expect(
+        parse<medicalRecord.DraftReviewResponse>(rejected).data?.draftReview
+          ?.status,
+      ).toBe(medicalRecord.DraftReviewStatus.REJECTED);
+      expect(
+        (await call('GET', '/draft-reviews?page=1&pageSize=8', ownerToken))
+          .status,
+      ).toBe(403);
     });
   });
 });

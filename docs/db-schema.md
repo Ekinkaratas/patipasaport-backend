@@ -9,7 +9,7 @@ Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL fore
 | Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `GetClinicPetOverview`). `UploadPetResult` Medical Record tasarımını bekliyor (şimdilik `UNIMPLEMENTED` döner) |
 | Pets | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`) |
 | Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor |
-| Medical Record | 🚧 Uygulanıyor — proto, DTO'lar, CloudEvents yardımcısı, Prisma schema + init migration (trigger'larla), senkron gRPC metotları (9 RPC), outbox gönderimi ve RabbitMQ tüketicisi hazır; clinics.UploadPetResult, gateway uçları ve AI sözleşme dokümanı henüz yok |
+| Medical Record | ✅ Uygulandı — proto, DTO'lar, CloudEvents, Prisma schema + migration (trigger'larla), 9 gRPC metodu, outbox + RabbitMQ, clinics.UploadPetResult ve gateway uçları (yükleme dahil); unit testler (medical_record 172, gateway 15) ve e2e testler (medical_record-e2e 11, gateway-e2e yükleme ve kayıt uçları) yazıldı. AI sözleşme dokümanı henüz yok |
 
 ---
 
@@ -280,16 +280,25 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
 - Diskte şifreleme: `-filer.encryptVolumeData` ile volume verisi şifrelenir; anahtarlar filer meta verisinde tutulur. Aynı makinede durdukları için ek koruma olarak sunucu diski de şifrelenmelidir (LUKS/BitLocker).
 - S3 portu yalnızca dev ortamında `127.0.0.1:8333`'e açılır (`docker-compose.override.yml`); dışarıya açık tek kapı gateway'dir.
 - Periyodik saklama/imha görevi ve hesap silme işlemi yoktur (proje kararı). Dosya yalnızca yükleme geri alındığında silinir (Yükleme akışı, 5. madde).
-- Erişim denetim logu SeaweedFS'in `-s3.auditLogConfig` seçeneğiyle açılacak; henüz yapılandırılmadı.
+- Erişim denetim logu: SeaweedFS her S3 isteğini `-s3.auditLogConfig` (`tools/seaweedfs/audit.json`) ile Fluent protokolüyle `fluent-bit` container'ına gönderir (`fluent/fluent-bit:5.1.3`, `tools/fluent-bit/audit.yaml`, yalnızca iç ağ). Kayıtlar `seaweedfs_audit` volume'ünde günlük dosyalara (`s3-access-YYYY-AA-GG.log`, satır başına bir JSON) yazılır; saklama/imha kararı gereği eski dosyalar silinmez.
+  - Alanlar: `time` (unix sn), `requester` (S3 kullanıcısı: `gateway` / `ai`), `operation` (örn. `REST.PUT.OBJECT`), `bucket`, `key` (`<uuid>.<uzantı>`), `status`, `error_code`, `remote_ip`, `user_agent`, `request_id`, `signature_version`. Kişisel veri yoktur.
+  - `audit.json`'a `timeout` / `write_timeout` yazılmaz: Fluent istemcisi bunları nanosaniye okur (SeaweedFS wiki'sindeki `3000` = 3 µs) ve bağlantı hiç kurulmaz; boş bırakılınca varsayılan 3 sn kullanılır.
+  - Gönderim SeaweedFS tarafından zorunlu olarak asenkrondur: S3 istekleri hiç beklemez, ancak Fluent Bit kapalıyken yapılan isteklerin kaydı kaybolabilir (en iyi çaba).
+  - Okumak için: `docker run --rm -v patipasaport_seaweedfs_audit:/a alpine cat /a/s3-access-<tarih>.log`.
 - Anahtar değiştirme: `.env`'deki bir anahtar sonradan değiştirilirse init betiği var olan kullanıcıyı güncellemez; değişiklik `weed shell` içinde `s3.accesskey.rotate` ile yapılır.
 
 ### Yükleme akışı
 
-1. Klinik `POST /clinics/:clinicId/pets/:petId/documents` ile dosyayı gateway'e yükler (multipart). Dosya en fazla 10 MB; pdf, jpg/jpeg veya png (`PET_RESULT_*` sabitleri).
-2. Gateway gerçek türü dosya imzasından (`file-type`) doğrular; istemcinin bildirdiği MIME tipine güvenmez. Dosyayı diske yazmadan SeaweedFS'e (S3) aktarır.
-3. Gateway `clinics.UploadPetResult` ile yalnızca referansı iletir; clinics bunu `medical_record.RegisterDocument`'a aktarır.
-4. medical-record `CheckAccess` ile `medical_write` rızasını kontrol eder. Aynı transaction içinde `documents` satırını (`QUEUED`) ve `outbox` satırını (`document.uploaded.v1`) yazar.
-5. **Geri alma:** kayıt başarısız olursa (rıza yok vb.) gateway **yalnızca bu istekte yüklediği dosyayı** SeaweedFS'ten siler. Daha önce yüklenmiş bir dosyaya ilişkin istek erişim engeline takılırsa o dosya silinmez.
+1. Klinik `POST /clinics/:clinicId/pets/:petId/documents` ile dosyayı gateway'e yükler (multipart: `file` alanı ve isteğe bağlı `note`). Dosya en fazla 10 MB (10 MB dahil); pdf, jpg/jpeg veya png (`PET_RESULT_*` sabitleri). Bellekte tutulur, diske yazılmaz; Türkçe dosya adları için multer `defParamCharset: utf8` kullanılır, dosya adındaki klasör kısmı atılır.
+2. Gateway gerçek türü dosya imzasından doğrular: NestJS'in yerleşik `FileTypeValidator`'ı (`@nestjs/common` ile gelen `file-type`, ESM yüklemesi `load-esm` ile) istemcinin bildirdiği türün yerine tespit edilen türü yazar. Ayrı bir `file-type` paketi kurulmadı.
+3. Gateway sha256'yı hesaplar, nesne anahtarını `<uuid>.<uzantı>` olarak üretir (uzantı tespit edilen türden) ve isteğin tamamını `UploadPetResultRequestDto` ile doğrular. Doğrulama hatasında depoya hiçbir şey yazılmaz.
+4. Dosya `@aws-sdk/client-s3` ile SeaweedFS'e yazılır (`gateway` kullanıcısı). Ardından `clinics.UploadPetResult` ile yalnızca referans iletilir; clinics klinik aktif ve kendisi mi diye bakar, isteği JWT ile `medical_record.RegisterDocument`'a aktarır.
+5. medical-record `CheckAccess` ile `medical_write` rızasını kontrol eder. Aynı transaction içinde `documents` satırını (`QUEUED`) ve `outbox` satırını (`document.uploaded.v1`) yazar. Yanıt `201` ve `{ documentId, uploadedAt, status }`.
+6. **Geri alma:** kayıt başarısız olursa (rıza yok vb.) gateway **yalnızca bu istekte yüklediği dosyayı** SeaweedFS'ten siler. Daha önce yüklenmiş bir dosyaya ilişkin istek erişim engeline takılırsa o dosya silinmez. clinics çağrısı zaman aşımına uğrarsa (`DEADLINE_EXCEEDED`) belge kaydı oluşmuş olabileceği için dosya silinmez, hata log'u yazılır.
+
+**Hata yanıtları:** dosya yok → `FILE_NOT_EMPTY`; tür desteklenmiyor → `MIME_TYPE_NOT_VALID`; 10 MB'tan büyük → `SIZE_BYTES_MAX|10485760` (hepsi `400`); rıza yok / başka klinik / pasif klinik → `403 FORBIDDEN`; depoya yazılamazsa → `503 SERVICE_UNAVAILABLE`.
+
+**Gateway'deki medical-record uçları:** `GET /pets/:petId/records|vaccinations|prescriptions|lab-results` (hasta sahibi ve klinik); `POST /pets/:petId/records` (201), `GET /documents/:id`, `GET /draft-reviews`, `POST /draft-reviews/:id/review` (yalnızca klinik). `RegisterDocument` dışarıya açık değildir.
 
 
 ### Olaylar — CloudEvents + RabbitMQ

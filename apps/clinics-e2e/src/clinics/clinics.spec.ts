@@ -29,7 +29,7 @@ const code = (result: GrpcResult<unknown>): string =>
 const PASSWORD = 'Klinik1!sifre';
 
 describe('clinics servisi (e2e)', () => {
-  const data = new TestData();
+  const data = new TestData({ medicalRecord: true });
   const tokens = new JwtIssuer();
   const clinicUserIds = new Map<string, string>();
 
@@ -424,7 +424,7 @@ describe('clinics servisi (e2e)', () => {
       );
     });
 
-    it('owner_contact_read yokken sahip bloğu boş; medical_record yazılmadığı için kullanılamıyor sayılır', async () => {
+    it('owner_contact_read yokken sahip bloğu boş; kayıt ve bekleyen taslak yok', async () => {
       const result = expectOk(await overview(), 'GetClinicPetOverview');
       expect(result.pet).toMatchObject({
         petId,
@@ -434,7 +434,7 @@ describe('clinics servisi (e2e)', () => {
       expect(result.owner).toBeNull();
       expect(result.recentRecords).toEqual([]);
       expect(result.pendingDraftReviewCount).toBe(0);
-      expect(result.unavailableSources).toEqual(['medical_record']);
+      expect(result.unavailableSources).toEqual([]);
     });
 
     it('owner_contact_read verilince sahibin adı ve telefonu gelir', async () => {
@@ -448,7 +448,7 @@ describe('clinics servisi (e2e)', () => {
         fullName: owner.fullName,
         phone: owner.phone,
       });
-      expect(result.unavailableSources).toEqual(['medical_record']);
+      expect(result.unavailableSources).toEqual([]);
     });
 
     it('rızası olmayan klinik, başka klinik adına istek ve olmayan hayvan reddedilir', async () => {
@@ -466,26 +466,64 @@ describe('clinics servisi (e2e)', () => {
       expect(code(await overview({ petId: randomUUID() }))).toBe('NOT_FOUND');
     });
 
-    it('UploadPetResult tasarım beklediği için UNIMPLEMENTED; sahiplik ve yol kuralları korunur', async () => {
+    it('UploadPetResult medical_write rızası olmadan reddedilir, rızayla belgeyi kaydeder; sahiplik ve yol kuralları korunur', async () => {
       const upload = async (override: object = {}) =>
-        callClinics('UploadPetResult', {
-          clinicId: active.id,
-          petId,
-          storagePath: `${randomUUID()}.pdf`,
-          originalName: 'Kan Tahlili.pdf',
-          mimeType: 'application/pdf',
-          sizeBytes: 2048,
-          note: '',
-          sha256: 'a'.repeat(64),
-          ...override,
-        }, await clinicToken(active.id));
+        callClinics<clinics.UploadPetResultResponse>(
+          'UploadPetResult',
+          {
+            clinicId: active.id,
+            petId,
+            storagePath: `${randomUUID()}.pdf`,
+            originalName: 'Kan Tahlili.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: 2048,
+            note: '',
+            sha256: 'a'.repeat(64),
+            ...override,
+          },
+          await clinicToken(active.id),
+        );
 
-      expect(outcome(await upload())).toBe('UNIMPLEMENTED/METHOD_NOT_ALLOWED');
+      expect(outcome(await upload())).toBe('PERMISSION_DENIED/FORBIDDEN');
       expect(code(await upload({ clinicId: passive.id }))).toBe(
         'PERMISSION_DENIED',
       );
       expect(outcome(await upload({ storagePath: '../etc/passwd' }))).toBe(
         'INVALID_ARGUMENT/STORAGE_PATH_WRONG DATA FORMAT',
+      );
+
+      expectOk(
+        await grant(active.id, [
+          'medical_read',
+          'owner_contact_read',
+          'medical_write',
+        ]),
+        'GrantConsent',
+      );
+      const storagePath = `${randomUUID()}.pdf`;
+      const uploaded = expectOk(
+        await upload({ storagePath }),
+        'UploadPetResult',
+      );
+      expect(uploaded.status).toBe('QUEUED');
+      expect(Number.isNaN(Date.parse(uploaded.uploadedAt))).toBe(false);
+
+      const { rows } = await (
+        await data.db('medical_record')
+      ).query(
+        'SELECT clinic_id, pet_id, storage_path, status::text FROM documents WHERE id = $1',
+        [uploaded.documentId],
+      );
+      expect(rows).toEqual([
+        {
+          clinic_id: active.id,
+          pet_id: petId,
+          storage_path: storagePath,
+          status: 'QUEUED',
+        },
+      ]);
+      expect(outcome(await upload({ storagePath }))).toBe(
+        'ALREADY_EXISTS/CONFLICT',
       );
     });
   });

@@ -8,12 +8,14 @@ import {
   DatabaseName,
   DOCKER_DB_PORTS,
   DOCKER_GRPC_PORTS,
+  DOCKER_RABBITMQ_PORT,
   DOCKER_REDIS_PORTS,
+  DOCKER_S3_PORT,
   E2E_PORTS,
   GrpcServiceName,
   ServiceName,
 } from './ports';
-import { requireEnv, WORKSPACE_ROOT } from './workspace';
+import { requireEnv, rootEnv, WORKSPACE_ROOT } from './workspace';
 
 export interface RunningService {
   name: ServiceName;
@@ -53,6 +55,10 @@ function serviceEnv(name: ServiceName): Record<string, string> {
         MEDICAL_RECORD_GRPC_URL: grpcUrl('medical_record'),
         PETS_GRPC_URL: grpcUrl('pets'),
         USERS_GRPC_URL: grpcUrl('users'),
+        S3_ENDPOINT: `http://127.0.0.1:${DOCKER_S3_PORT}`,
+        S3_BUCKET: rootEnv()['S3_BUCKET'] || 'medical-documents',
+        S3_ACCESS_KEY: requireEnv('S3_GATEWAY_ACCESS_KEY'),
+        S3_SECRET_KEY: requireEnv('S3_GATEWAY_SECRET_KEY'),
       };
     case 'access':
       return {
@@ -93,6 +99,17 @@ function serviceEnv(name: ServiceName): Record<string, string> {
         PETS_CHIP_ENCRYPTION_KEY: requireEnv('PETS_CHIP_ENCRYPTION_KEY'),
         PETS_CHIP_INDEX_KEY: requireEnv('PETS_CHIP_INDEX_KEY'),
       };
+    case 'medical_record':
+      return {
+        ...databaseEnv('medical_record'),
+        JWT_PUBLIC_KEY_PATH: jwtPublicKeyPath(),
+        ACCESS_GRPC_URL: grpcUrl('access'),
+        PETS_GRPC_URL: grpcUrl('pets'),
+        RABBITMQ_HOST: '127.0.0.1',
+        RABBITMQ_PORT: String(DOCKER_RABBITMQ_PORT),
+        RABBITMQ_USER: requireEnv('RABBITMQ_USER'),
+        RABBITMQ_PASSWORD: requireEnv('RABBITMQ_PASSWORD'),
+      };
     case 'users':
       return {
         ...databaseEnv('users'),
@@ -109,7 +126,10 @@ function dockerDependencies(name: ServiceName): Record<string, number> {
     );
   switch (name) {
     case 'gateway':
-      return grpc('access', 'auth', 'clinics', 'pets', 'users');
+      return {
+        ...grpc('access', 'auth', 'clinics', 'medical_record', 'pets', 'users'),
+        seaweedfs: DOCKER_S3_PORT,
+      };
     case 'access':
       return {
         'postgres-access': DOCKER_DB_PORTS.access,
@@ -126,6 +146,12 @@ function dockerDependencies(name: ServiceName): Record<string, number> {
       return {
         'postgres-clinics': DOCKER_DB_PORTS.clinics,
         ...grpc('access', 'auth', 'medical_record', 'pets', 'users'),
+      };
+    case 'medical_record':
+      return {
+        'postgres-medical-record': DOCKER_DB_PORTS.medical_record,
+        rabbitmq: DOCKER_RABBITMQ_PORT,
+        ...grpc('access', 'pets'),
       };
     case 'pets':
       return {

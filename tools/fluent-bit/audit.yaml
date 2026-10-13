@@ -1,0 +1,19 @@
+service:
+  flush: 1
+  log_level: info
+
+pipeline:
+  inputs:
+    - name: forward
+      listen: 0.0.0.0
+      port: 24224
+
+  outputs:
+    - name: file
+      match: 's3.*'
+      path: /audit
+      file: s3-access-%Y-%m-%d.log
+      enable_strftime: true
+      fallback_file: s3-access-fallback.log
+      format: plain
+      mkdir: true

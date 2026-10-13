@@ -6,6 +6,7 @@ const DB_ENV_PREFIX: Record<DatabaseName, string> = {
   access: 'ACCESS',
   auth: 'AUTH',
   clinics: 'CLINICS',
+  medical_record: 'MEDICAL',
   pets: 'PETS',
   users: 'USERS',
 };

@@ -1,18 +1,47 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  ServiceUnavailableException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
+import { status } from '@grpc/grpc-js';
+import { createHash, randomUUID } from 'crypto';
 import { firstValueFrom } from 'rxjs';
 import { clinics } from '@libs/proto';
 import {
   BaseResponse,
   getCorrelationId,
+  PET_RESULT_FILE_EXTENSIONS,
+  PetResultMimeType,
   ResponseMessages,
 } from '@libs/common';
+import { UploadPetResultRequestDto } from '@libs/dto';
+import { DocumentStorageService } from '../storage/document-storage.service';
+import { UploadedPetResultFile } from './pet-result-upload';
+
+export interface PetResultUploadForm {
+  clinicId: string;
+  petId: string;
+  note?: string;
+}
 
 @Injectable()
 export class ApiClinicsService implements OnModuleInit {
+  private readonly logger = new Logger(ApiClinicsService.name);
+  private readonly uploadValidation = new ValidationPipe({
+    whitelist: true,
+    transform: true,
+    stopAtFirstError: true,
+  });
   private clinicsClient!: clinics.ClinicsServiceClient;
 
-  constructor(@Inject('CLINICS_SERVICE') private readonly client: ClientGrpc) {}
+  constructor(
+    @Inject('CLINICS_SERVICE') private readonly client: ClientGrpc,
+    private readonly storage: DocumentStorageService,
+  ) {}
 
   onModuleInit() {
     this.clinicsClient = this.client.getService<clinics.ClinicsServiceClient>(
@@ -86,5 +115,70 @@ export class ApiClinicsService implements OnModuleInit {
       true,
       getCorrelationId(),
     );
+  }
+
+  async uploadPetResult(
+    form: PetResultUploadForm,
+    file: UploadedPetResultFile,
+  ): Promise<BaseResponse<clinics.UploadPetResultResponse>> {
+    const extension =
+      PET_RESULT_FILE_EXTENSIONS[file.mimetype as PetResultMimeType][0];
+
+    const request: UploadPetResultRequestDto =
+      await this.uploadValidation.transform(
+        {
+          clinicId: form.clinicId,
+          petId: form.petId,
+          storagePath: `${randomUUID()}.${extension}`,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          sizeBytes: file.size,
+          note: form.note,
+          sha256: createHash('sha256').update(file.buffer).digest('hex'),
+        },
+        { type: 'body', metatype: UploadPetResultRequestDto },
+      );
+
+    try {
+      await this.storage.put(
+        request.storagePath,
+        file.buffer,
+        request.mimeType,
+      );
+    } catch (e) {
+      this.logger.error(
+        `uploadPetResult: dosya depoya yazılamadı (storagePath=${request.storagePath}): ${e instanceof Error ? e.message : String(e)}`,
+      );
+      throw new ServiceUnavailableException(
+        ResponseMessages.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    try {
+      const data = await firstValueFrom(
+        this.clinicsClient.uploadPetResult(request),
+      );
+      return new BaseResponse(
+        data,
+        ResponseMessages.CREATED,
+        true,
+        getCorrelationId(),
+      );
+    } catch (e) {
+      if ((e as { code?: unknown } | null)?.code === status.DEADLINE_EXCEEDED) {
+        this.logger.error(
+          `uploadPetResult: clinics.uploadPetResult zaman aşımına uğradı, belge kaydı oluşmuş olabileceği için dosya silinmedi (storagePath=${request.storagePath})`,
+        );
+        throw e;
+      }
+      await this.storage
+        .delete(request.storagePath)
+        .catch((deleteError) =>
+          this.logger.error(
+            `uploadPetResult: kayıt başarısız, yüklenen dosya silinemedi (storagePath=${request.storagePath}): ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+          ),
+        );
+      throw e;
+    }
   }
 }

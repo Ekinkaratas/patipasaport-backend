@@ -20,6 +20,10 @@ import { ApiMedicalRecordController } from './medical-record.controller';
         options: {
           url: process.env.MEDICAL_RECORD_GRPC_URL ?? '0.0.0.0:3004',
           package: MEDICAL_RECORD_PACKAGE_NAME,
+          loader: {
+            defaults: true,
+            arrays: true,
+          },
           channelOptions: {
             interceptors: [
               grpcCorrelationClientInterceptor,

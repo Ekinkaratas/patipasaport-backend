@@ -12,8 +12,7 @@
         "{workspaceRoot}/coverage/{e2eProjectRoot}"
       ],
       "dependsOn": [
-        "medical_record:build",
-        "medical_record:serve"
+        "medical_record:build"
       ],
       "options": {
         "jestConfig": "apps/medical_record-e2e/jest.config.cts",

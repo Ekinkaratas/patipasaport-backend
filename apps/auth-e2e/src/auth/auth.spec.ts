@@ -183,6 +183,7 @@ describe('auth servisi (e2e)', () => {
       expect(registered.tokenType).toBe('Bearer');
       expect(registered.expiresIn).toBe(900);
       expect(registered.userId).toMatch(UUID_V4);
+      expect(registered.clinicId).toBe('');
       expect(registered.refreshToken).not.toBe('');
 
       const users = await data.db('users');
@@ -298,6 +299,7 @@ describe('auth servisi (e2e)', () => {
       expect(sessionRows[0].n).toBe(0);
 
       const loggedIn = expectOk(await login(email), 'Login');
+      expect(loggedIn.clinicId).toBe(clinic.id);
       const exchanged = expectOk(
         await exchange(loggedIn.accessToken),
         'ExchangeToken',
@@ -307,6 +309,11 @@ describe('auth servisi (e2e)', () => {
         role: 'CLINIC',
         clinicId: clinic.id,
       });
+      const refreshed = expectOk(
+        await refresh(loggedIn.refreshToken),
+        'Refresh',
+      );
+      expect(refreshed.clinicId).toBe(clinic.id);
     });
 
     it('kayıtlı e-posta ve telefon yönetici yolunda ayrı ayrı bildirilir, yarım kayıt kalmaz', async () => {

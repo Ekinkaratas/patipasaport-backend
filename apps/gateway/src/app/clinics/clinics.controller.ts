@@ -1,10 +1,13 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   Post,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { BaseResponse, RequestWithParams } from '@libs/common';
 import {
@@ -16,6 +19,11 @@ import {
 } from '@libs/dto';
 import { clinics } from '@libs/proto';
 import { ApiClinicsService } from './clinics.service';
+import {
+  PetResultFileInterceptor,
+  petResultFilePipe,
+  UploadedPetResultFile,
+} from './pet-result-upload';
 
 @Controller('clinics')
 export class ApiClinicsController {
@@ -55,5 +63,16 @@ export class ApiClinicsController {
     @Param() request: GetClinicPetOverviewRequestDto,
   ): Promise<BaseResponse<clinics.GetClinicPetOverviewResponse>> {
     return this.clinicsService.getClinicPetOverview(request);
+  }
+
+  @Post(':clinicId/pets/:petId/documents')
+  @UseInterceptors(PetResultFileInterceptor)
+  uploadPetResult(
+    @Param('clinicId') clinicId: string,
+    @Param('petId') petId: string,
+    @Body('note') note: string | undefined,
+    @UploadedFile(petResultFilePipe()) file: UploadedPetResultFile,
+  ): Promise<BaseResponse<clinics.UploadPetResultResponse>> {
+    return this.clinicsService.uploadPetResult({ clinicId, petId, note }, file);
   }
 }

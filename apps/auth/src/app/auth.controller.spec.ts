@@ -26,6 +26,7 @@ describe('AuthController', () => {
     tokenType: 'Bearer',
     expiresIn: 900,
     userId: '3f1c2b4a-8d6e-4f7a-9b0c-1d2e3f4a5b6c',
+    clinicId: '',
   };
 
   const requests = {

@@ -92,6 +92,27 @@ const petMessage = (over: Partial<pets.Pet> = {}): pets.Pet => ({
   ...over,
 });
 
+// ---Amaç: medical_record.RegisterDocument yanıtındaki belgeyi üretmek ---
+const documentMessage = (
+  over: Partial<medicalRecord.Document> = {},
+): medicalRecord.Document => ({
+  id: 'belge-1',
+  petId: PET_ID,
+  clinicId: CLINIC_ID,
+  storagePath: '3f1c2b4a-8d6e-4f7a-9b0c-1d2e3f4a5b6c.pdf',
+  originalName: 'Kan Tahlili.pdf',
+  mimeType: 'application/pdf',
+  sizeBytes: 2048,
+  sha256: 'a'.repeat(64),
+  note: '',
+  status: medicalRecord.DocumentStatus.QUEUED,
+  failureReason: '',
+  draftReviewId: '',
+  createdAt: '2026-10-13T10:00:00.000Z',
+  updatedAt: '2026-10-13T10:00:00.000Z',
+  ...over,
+});
+
 // ---Amaç: Prisma'nın bilinen hata kodlarını adapter kısıt bilgisiyle taklit etmek ---
 const prismaError = (code: string, index?: string) =>
   new Prisma.PrismaClientKnownRequestError('test hatası', {
@@ -147,6 +168,7 @@ describe('ClinicsService', () => {
   let medicalRecordClient: {
     listRecordsByPet: jest.Mock;
     listDraftReviews: jest.Mock;
+    registerDocument: jest.Mock;
   };
   let authClient: { registerClinicAccount: jest.Mock };
 
@@ -209,6 +231,9 @@ describe('ClinicsService', () => {
         .mockReturnValue(
           of({ draftReviews: [], total: 3, page: 1, pageSize: 8 }),
         ),
+      registerDocument: jest
+        .fn()
+        .mockReturnValue(of({ document: documentMessage() })),
     };
     authClient = {
       registerClinicAccount: jest
@@ -752,30 +777,126 @@ describe('ClinicsService', () => {
     });
   });
 
-  // ---Amaç: sonuç yüklemenin tasarım beklerken sahiplik kontrolünden sonra UNIMPLEMENTED döndüğünü doğrulamak ---
+  // ---Amaç: sonuç yüklemenin klinik kontrolünden sonra belge referansını medical_record'a ilettiğini ve hataları doğru aktardığını doğrulamak ---
   describe('uploadPetResult', () => {
     const request: clinics.UploadPetResultRequest = {
       clinicId: CLINIC_ID,
       petId: PET_ID,
-      storagePath: 'dosya.pdf',
+      storagePath: '3f1c2b4a-8d6e-4f7a-9b0c-1d2e3f4a5b6c.pdf',
       sha256: 'a'.repeat(64),
       originalName: 'Kan Tahlili.pdf',
       mimeType: 'application/pdf',
       sizeBytes: 2048,
-      note: '',
+      note: 'Açlık kan şekeri',
     };
 
-    it('başka kliniğin adına FORBIDDEN', async () => {
+    it('belge referansını clinicId olmadan iletir ve yanıtı eşler', async () => {
+      await expect(service.uploadPetResult(request, CLINIC)).resolves.toEqual({
+        documentId: 'belge-1',
+        uploadedAt: '2026-10-13T10:00:00.000Z',
+        status: 'QUEUED',
+      });
+      expect(medicalRecordClient.registerDocument).toHaveBeenCalledWith({
+        petId: PET_ID,
+        storagePath: request.storagePath,
+        originalName: request.originalName,
+        mimeType: request.mimeType,
+        sizeBytes: request.sizeBytes,
+        sha256: request.sha256,
+        note: request.note,
+      });
+    });
+
+    it('not gelmezse boş string iletilir', async () => {
+      await service.uploadPetResult(
+        { ...request, note: undefined as unknown as string },
+        CLINIC,
+      );
+      expect(medicalRecordClient.registerDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ note: '' }),
+      );
+    });
+
+    it('başka kliniğin adına FORBIDDEN, medical_record çağrılmaz', async () => {
+      jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
       expect(
         await rejectionMessage(service.uploadPetResult(request, OTHER_CLINIC)),
       ).toBe(ResponseMessages.FORBIDDEN);
+      expect(medicalRecordClient.registerDocument).not.toHaveBeenCalled();
     });
 
-    it('kendi kliniğinde METHOD_NOT_ALLOWED (UNIMPLEMENTED)', async () => {
-      jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    it.each([
+      ['pasif', clinicRow({ isActive: false }), ResponseMessages.FORBIDDEN],
+      ['kayıtsız', null, ResponseMessages.NOT_FOUND],
+    ])(
+      '%s klinik reddedilir, medical_record çağrılmaz',
+      async (_n, row, expected) => {
+        jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+        jest
+          .spyOn(Logger.prototype, 'warn')
+          .mockImplementation(() => undefined);
+        prisma.clinic.findUnique.mockResolvedValueOnce(row);
+        expect(
+          await rejectionMessage(service.uploadPetResult(request, CLINIC)),
+        ).toBe(expected);
+        expect(medicalRecordClient.registerDocument).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      [ResponseMessages.FORBIDDEN, status.PERMISSION_DENIED],
+      [ResponseMessages.CONFLICT, status.ALREADY_EXISTS],
+    ])(
+      'medical_record %s döndürürse aynen aktarılır',
+      async (details, code) => {
+        medicalRecordClient.registerDocument.mockReturnValue(
+          throwError(() => grpcError(code, details)),
+        );
+        expect(
+          await rejectionMessage(service.uploadPetResult(request, CLINIC)),
+        ).toBe(details);
+      },
+    );
+
+    it("medical_record'a ulaşılamazsa SERVICE_UNAVAILABLE", async () => {
+      jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      medicalRecordClient.registerDocument.mockReturnValue(
+        throwError(() => grpcError(status.UNAVAILABLE)),
+      );
       expect(
         await rejectionMessage(service.uploadPetResult(request, CLINIC)),
-      ).toBe(ResponseMessages.METHOD_NOT_ALLOWED);
+      ).toBe(ResponseMessages.SERVICE_UNAVAILABLE);
+    });
+
+    it('zaman aşımında belge oluşmuş olabileceği loglanır', async () => {
+      const error = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      medicalRecordClient.registerDocument.mockReturnValue(
+        throwError(() => grpcError(status.DEADLINE_EXCEEDED)),
+      );
+      expect(
+        await rejectionMessage(service.uploadPetResult(request, CLINIC)),
+      ).toBe(ResponseMessages.SERVICE_UNAVAILABLE);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('belge kaydı oluşmuş olabilir'),
+      );
+    });
+
+    it('beklenmeyen hata ve boş yanıt INTERNAL_SERVER_ERROR', async () => {
+      jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      medicalRecordClient.registerDocument.mockReturnValueOnce(
+        throwError(() =>
+          grpcError(status.INVALID_ARGUMENT, 'SHA256_WRONG DATA FORMAT'),
+        ),
+      );
+      expect(
+        await rejectionMessage(service.uploadPetResult(request, CLINIC)),
+      ).toBe(ResponseMessages.INTERNAL_SERVER_ERROR);
+      medicalRecordClient.registerDocument.mockReturnValueOnce(of({}));
+      expect(
+        await rejectionMessage(service.uploadPetResult(request, CLINIC)),
+      ).toBe(ResponseMessages.INTERNAL_SERVER_ERROR);
     });
   });
 });
