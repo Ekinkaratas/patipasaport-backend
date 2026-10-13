@@ -903,6 +903,33 @@ describe('gateway (e2e)', () => {
       });
     });
 
+    // ---Amaç: RequestWithParams('body') kullanan uçta da 50 seviyeyi aşan gövdenin 500 yerine 400 ve Türkçe mesajla reddedildiğini doğrulamak ---
+    it('PATCH /pets/:id 50 seviyeyi aşan gövdeyi 400 ile reddeder; 50 seviyeye izin verir', async () => {
+      const nested = (levels: number): unknown => {
+        let value: unknown = 1;
+        for (let i = 0; i < levels; i++) value = { a: value };
+        return value;
+      };
+
+      const tooDeep = await call('PATCH', `/pets/${petId}`, ownerToken, {
+        name: 'Boncuk Yeni',
+        extra: nested(50),
+      });
+      expect(tooDeep.status).toBe(400);
+      expect(parse(tooDeep).message).toBe(
+        'İstek gövdesi çok karmaşık (maksimum derinlik sınırı aşıldı).',
+      );
+
+      const allowed = await call('PATCH', `/pets/${petId}`, ownerToken, {
+        name: 'Boncuk Yeni',
+        extra: nested(49),
+      });
+      expect(allowed.status).toBe(200);
+      expect(parse<pets.PetResponse>(allowed).data?.pet?.name).toBe(
+        'Boncuk Yeni',
+      );
+    });
+
     it('GET /pets/search rızalı klinikte sonuç verir; PET_OWNER 403', async () => {
       const granted = await call('POST', '/consents', ownerToken, {
         clinicId: clinic.id,

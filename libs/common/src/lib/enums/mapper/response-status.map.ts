@@ -29,4 +29,5 @@ export const ResponseStatusMap: Record<ResponseMessages, HttpStatus> = {
   [ResponseMessages.VALIDATION_ERROR]: HttpStatus.BAD_REQUEST,
   [ResponseMessages.INVALID_CLIENT_TYPE]: HttpStatus.BAD_REQUEST,
   [ResponseMessages.PERMISSION_DENIED]: HttpStatus.FORBIDDEN,
+  [ResponseMessages.REQUEST_BODY_TOO_DEEP]: HttpStatus.BAD_REQUEST,
 };

@@ -55,6 +55,18 @@ export default [
             "**/*.mjs"
         ],
         // Override or add rules here
-        rules: {}
+        rules: {
+            "no-restricted-properties": [
+                "error",
+                {
+                    property: "$queryRawUnsafe",
+                    message: "SQL injection riski: parametreli $queryRaw tagged template kullanın."
+                },
+                {
+                    property: "$executeRawUnsafe",
+                    message: "SQL injection riski: parametreli $executeRaw tagged template kullanın."
+                }
+            ]
+        }
     }
 ];

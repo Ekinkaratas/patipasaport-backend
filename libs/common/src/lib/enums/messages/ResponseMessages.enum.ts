@@ -26,4 +26,5 @@ export enum ResponseMessages {
   INVALID_CLIENT_TYPE = 'INVALID_CLIENT_TYPE',
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   PERMISSION_DENIED = 'PERMISSION_DENIED',
+  REQUEST_BODY_TOO_DEEP = 'İstek gövdesi çok karmaşık (maksimum derinlik sınırı aşıldı).',
 }

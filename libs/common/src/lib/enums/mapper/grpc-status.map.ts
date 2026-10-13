@@ -9,6 +9,7 @@ export const GrpcStatusMap: Record<ResponseMessages, status> = {
   [ResponseMessages.UNPROCESSABLE_ENTITY]: status.INVALID_ARGUMENT,
   [ResponseMessages.VALIDATION_ERROR]: status.INVALID_ARGUMENT,
   [ResponseMessages.INVALID_CLIENT_TYPE]: status.INVALID_ARGUMENT,
+  [ResponseMessages.REQUEST_BODY_TOO_DEEP]: status.INVALID_ARGUMENT,
 
   [ResponseMessages.UNAUTH]: status.UNAUTHENTICATED,
   [ResponseMessages.TOKEN_EXPIRED]: status.UNAUTHENTICATED,

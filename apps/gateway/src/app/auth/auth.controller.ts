@@ -19,6 +19,7 @@ import {
   RegisterRequestDto,
 } from '@libs/dto';
 import { auth } from '@libs/proto';
+import { RateLimit } from '../security/rate-limit';
 import { ApiAuthService } from './auth.service';
 
 @Controller('auth')
@@ -26,6 +27,7 @@ export class ApiAuthController {
   constructor(private readonly authService: ApiAuthService) {}
 
   @Public()
+  @RateLimit('auth')
   @Post('register')
   @UseInterceptors(ClientTypeHeaderInterceptor)
   register(
@@ -35,6 +37,7 @@ export class ApiAuthController {
   }
 
   @Public()
+  @RateLimit('auth')
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(ClientTypeHeaderInterceptor)
@@ -45,6 +48,7 @@ export class ApiAuthController {
   }
 
   @Public()
+  @RateLimit('auth')
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(ClientTypeHeaderInterceptor)

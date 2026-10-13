@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { TokenExchangeGuard } from '@libs/common';
 import { AppController } from './app.controller';
 import { ApiAccessModule } from './access/access.module';
@@ -9,9 +10,18 @@ import { ApiMedicalRecordModule } from './medical-record/medical-record.module';
 import { ApiPetsModule } from './pets/pets.module';
 import { ApiUsersModule } from './users/users.module';
 import { CorrelationMiddleware } from './middleware/correlation.middleware';
+import {
+  createThrottlerOptions,
+  GatewayThrottlerGuard,
+  readRateLimitConfig,
+} from './security/rate-limit';
 
 @Module({
   imports: [
+    ThrottlerModule.forRootAsync({
+      useFactory: () =>
+        createThrottlerOptions(readRateLimitConfig(process.env)),
+    }),
     ApiAccessModule,
     ApiAuthModule,
     ApiClinicsModule,
@@ -20,7 +30,10 @@ import { CorrelationMiddleware } from './middleware/correlation.middleware';
     ApiUsersModule,
   ],
   controllers: [AppController],
-  providers: [{ provide: APP_GUARD, useClass: TokenExchangeGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: GatewayThrottlerGuard },
+    { provide: APP_GUARD, useClass: TokenExchangeGuard },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

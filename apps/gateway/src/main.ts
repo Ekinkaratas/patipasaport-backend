@@ -1,6 +1,7 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
+import { applyHttpSecurity } from './app/security/http-security';
 import {
   createWinstonLogger,
   HttpsExceptionFilter,
@@ -12,6 +13,7 @@ async function bootstrap() {
     logger: createWinstonLogger('gateway'),
   });
 
+  applyHttpSecurity(app);
   app.useGlobalPipes(
     new TrimPipe(),
     new ValidationPipe({

@@ -396,6 +396,11 @@ services:
       S3_BUCKET:               ${S3_BUCKET:-medical-documents}
       S3_ACCESS_KEY:           ${S3_GATEWAY_ACCESS_KEY}
       S3_SECRET_KEY:           ${S3_GATEWAY_SECRET_KEY}
+      CORS_ORIGINS:            ${CORS_ORIGINS:-}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-}
+      RATE_LIMIT_GLOBAL:       ${RATE_LIMIT_GLOBAL:-}
+      RATE_LIMIT_AUTH:         ${RATE_LIMIT_AUTH:-}
+      RATE_LIMIT_UPLOAD:       ${RATE_LIMIT_UPLOAD:-}
     ports:
       - "${GATEWAY_PORT:-3000}:3000"
     healthcheck:

@@ -18,6 +18,7 @@ import {
   ListStockItemsRequestDto,
 } from '@libs/dto';
 import { clinics } from '@libs/proto';
+import { RateLimit } from '../security/rate-limit';
 import { ApiClinicsService } from './clinics.service';
 import {
   PetResultFileInterceptor,
@@ -65,6 +66,7 @@ export class ApiClinicsController {
     return this.clinicsService.getClinicPetOverview(request);
   }
 
+  @RateLimit('upload')
   @Post(':clinicId/pets/:petId/documents')
   @UseInterceptors(PetResultFileInterceptor)
   uploadPetResult(

@@ -42,7 +42,7 @@ WORKDIR /workspace
 COPY package.json package-lock.json ./
 
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
-    npm ci --omit=dev
+    npm ci --omit=dev --omit=optional
 
 FROM node:${NODE_VERSION} AS runtime
 ARG APP

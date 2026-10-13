@@ -27,6 +27,7 @@ export interface RunningService {
 const STARTUP_TIMEOUT_MS = 60_000;
 const STOP_TIMEOUT_MS = 10_000;
 const LOG_DIR = resolve(WORKSPACE_ROOT, 'tmp/e2e-logs');
+const E2E_RATE_LIMIT = '100000';
 
 const grpcUrl = (service: GrpcServiceName): string =>
   `127.0.0.1:${DOCKER_GRPC_PORTS[service]}`;
@@ -59,6 +60,11 @@ function serviceEnv(name: ServiceName): Record<string, string> {
         S3_BUCKET: rootEnv()['S3_BUCKET'] || 'medical-documents',
         S3_ACCESS_KEY: requireEnv('S3_GATEWAY_ACCESS_KEY'),
         S3_SECRET_KEY: requireEnv('S3_GATEWAY_SECRET_KEY'),
+        CORS_ORIGINS: '',
+        RATE_LIMIT_WINDOW_SECONDS: '60',
+        RATE_LIMIT_GLOBAL: E2E_RATE_LIMIT,
+        RATE_LIMIT_AUTH: E2E_RATE_LIMIT,
+        RATE_LIMIT_UPLOAD: E2E_RATE_LIMIT,
       };
     case 'access':
       return {
@@ -230,7 +236,10 @@ const logTail = (logFile: string): string =>
     ? readFileSync(logFile, 'utf8').split('\n').slice(-30).join('\n')
     : '';
 
-export async function startService(name: ServiceName): Promise<RunningService> {
+export async function startService(
+  name: ServiceName,
+  envOverrides: Record<string, string> = {},
+): Promise<RunningService> {
   const port = E2E_PORTS[name];
   const mainFile = resolve(WORKSPACE_ROOT, `dist/apps/${name}/main.js`);
 
@@ -250,7 +259,12 @@ export async function startService(name: ServiceName): Promise<RunningService> {
 
   const child = spawn(process.execPath, [mainFile], {
     cwd: WORKSPACE_ROOT,
-    env: { ...process.env, ...serviceEnv(name), PORT: String(port) },
+    env: {
+      ...process.env,
+      ...serviceEnv(name),
+      ...envOverrides,
+      PORT: String(port),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout?.pipe(log);

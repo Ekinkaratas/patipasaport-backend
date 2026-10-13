@@ -11,10 +11,15 @@ export function httpRequest(
   port: number,
   method: string,
   path: string,
-  options: { headers?: Record<string, string>; body?: unknown } = {},
+  options: {
+    headers?: Record<string, string>;
+    body?: unknown;
+    rawJson?: string;
+  } = {},
 ): Promise<HttpResponse> {
   const payload =
-    options.body === undefined ? undefined : JSON.stringify(options.body);
+    options.rawJson ??
+    (options.body === undefined ? undefined : JSON.stringify(options.body));
   const headers: Record<string, string> = { ...(options.headers ?? {}) };
   if (payload !== undefined) {
     headers['content-type'] = 'application/json';
