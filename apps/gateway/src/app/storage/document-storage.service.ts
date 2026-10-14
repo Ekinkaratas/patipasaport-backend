@@ -4,16 +4,9 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { requiredEnv } from '@libs/common';
 
 const S3_REGION = 'us-east-1';
-
-const requiredEnv = (name: string): string => {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} ortam değişkeni tanımlı değil`);
-  }
-  return value;
-};
 
 @Injectable()
 export class DocumentStorageService implements OnModuleDestroy {

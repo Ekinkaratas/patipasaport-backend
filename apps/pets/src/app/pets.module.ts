@@ -6,6 +6,7 @@ import {
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
   GrpcJwtGuard,
+  requiredEnv,
 } from '@libs/common';
 import { PetsController } from './pets.controller';
 import { PetsService } from './pets.service';
@@ -25,7 +26,7 @@ import { ChipCryptoService } from './crypto/chip-crypto.service';
         name: 'ACCESS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.ACCESS_GRPC_URL ?? '0.0.0.0:3001',
+          url: requiredEnv('ACCESS_GRPC_URL'),
           package: ACCESS_PACKAGE_NAME,
           channelOptions: {
             interceptors: [

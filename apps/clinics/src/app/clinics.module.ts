@@ -8,6 +8,7 @@ import {
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
   GrpcJwtGuard,
+  requiredEnv,
 } from '@libs/common';
 import {
   AUTH_PACKAGE_NAME,
@@ -50,7 +51,7 @@ const grpcClientOptions = (
         name: 'PETS_SERVICE',
         transport: Transport.GRPC,
         options: grpcClientOptions(
-          process.env.PETS_GRPC_URL ?? '0.0.0.0:3005',
+          requiredEnv('PETS_GRPC_URL'),
           PETS_PACKAGE_NAME,
           'pets/pets.proto',
         ),
@@ -59,7 +60,7 @@ const grpcClientOptions = (
         name: 'USERS_SERVICE',
         transport: Transport.GRPC,
         options: grpcClientOptions(
-          process.env.USERS_GRPC_URL ?? '0.0.0.0:3006',
+          requiredEnv('USERS_GRPC_URL'),
           USERS_PACKAGE_NAME,
           'users/users.proto',
         ),
@@ -68,7 +69,7 @@ const grpcClientOptions = (
         name: 'MEDICAL_RECORD_SERVICE',
         transport: Transport.GRPC,
         options: grpcClientOptions(
-          process.env.MEDICAL_RECORD_GRPC_URL ?? '0.0.0.0:3004',
+          requiredEnv('MEDICAL_RECORD_GRPC_URL'),
           MEDICAL_RECORD_PACKAGE_NAME,
           'medical_record/medical_record.proto',
         ),
@@ -77,7 +78,7 @@ const grpcClientOptions = (
         name: 'AUTH_SERVICE',
         transport: Transport.GRPC,
         options: grpcClientOptions(
-          process.env.AUTH_GRPC_URL ?? '0.0.0.0:3002',
+          requiredEnv('AUTH_GRPC_URL'),
           AUTH_PACKAGE_NAME,
           'auth/auth.proto',
         ),

@@ -14,6 +14,7 @@ import {
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
   GrpcJwtGuard,
+  requiredEnv,
 } from '@libs/common';
 
 @Module({
@@ -26,7 +27,7 @@ import {
         name: 'ACCESS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.ACCESS_GRPC_URL ?? '0.0.0.0:3001',
+          url: requiredEnv('ACCESS_GRPC_URL'),
           package: ACCESS_PACKAGE_NAME,
           channelOptions: {
             interceptors: [
@@ -42,7 +43,7 @@ import {
         name: 'USERS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.USERS_GRPC_URL ?? '0.0.0.0:3006',
+          url: requiredEnv('USERS_GRPC_URL'),
           package: USERS_PACKAGE_NAME,
           channelOptions: {
             interceptors: [

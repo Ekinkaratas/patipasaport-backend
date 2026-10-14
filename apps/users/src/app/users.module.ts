@@ -8,6 +8,7 @@ import {
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
   GrpcJwtGuard,
+  requiredEnv,
 } from '@libs/common';
 import { ACCESS_PACKAGE_NAME } from '@libs/proto';
 import { UsersController } from './users.controller';
@@ -24,7 +25,7 @@ import { PrismaModule } from './prisma/prisma.module';
         name: 'ACCESS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.ACCESS_GRPC_URL ?? '0.0.0.0:3001',
+          url: requiredEnv('ACCESS_GRPC_URL'),
           package: ACCESS_PACKAGE_NAME,
           protoPath: join(__dirname, 'proto/access/access.proto'),
           loader: {

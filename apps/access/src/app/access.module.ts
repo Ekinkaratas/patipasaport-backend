@@ -6,6 +6,7 @@ import {
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
   GrpcJwtGuard,
+  requiredEnv,
 } from '@libs/common';
 import { AccessController } from './access.controller';
 import { AccessService } from './access.service';
@@ -53,7 +54,7 @@ import { CLINICS_PACKAGE_NAME, PETS_PACKAGE_NAME } from '@libs/proto';
         name: 'PETS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.PETS_GRPC_URL ?? '0.0.0.0:3005',
+          url: requiredEnv('PETS_GRPC_URL'),
           package: PETS_PACKAGE_NAME,
           channelOptions: {
             interceptors: [
@@ -69,7 +70,7 @@ import { CLINICS_PACKAGE_NAME, PETS_PACKAGE_NAME } from '@libs/proto';
         name: 'CLINIC_SERVİCE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.CLINICS_GRPC_URL ?? '0.0.0.0:3003',
+          url: requiredEnv('CLINICS_GRPC_URL'),
           package: CLINICS_PACKAGE_NAME,
           channelOptions: {
             interceptors: [

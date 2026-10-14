@@ -1,4 +1,5 @@
 export { BaseResponse } from './base/base.response';
+export * from './config';
 export * from './decorator';
 export * from './enums';
 export * from './events';

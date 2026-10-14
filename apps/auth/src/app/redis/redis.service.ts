@@ -15,7 +15,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   constructor(private readonly configService: ConfigService) {
     const options: RedisOptions = {
-      host: this.configService.get<string>('REDIS_HOST', 'localhost'),
+      host: this.configService.getOrThrow<string>('REDIS_HOST'),
       port: Number(this.configService.get<string>('REDIS_PORT', '6380')),
       password: this.configService.get<string>('REDIS_PASSWORD'),
       db: Number(this.configService.get<string>('REDIS_DB', '0')),

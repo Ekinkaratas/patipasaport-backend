@@ -7,6 +7,7 @@ import {
   GRPC_GATEWAY_TIMEOUT_MS,
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
+  requiredEnv,
 } from '@libs/common';
 import { ApiPetsService } from './pets.service';
 import { ApiPetsController } from './pets.controller';
@@ -18,7 +19,7 @@ import { ApiPetsController } from './pets.controller';
         name: 'PETS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.PETS_GRPC_URL ?? '0.0.0.0:3005',
+          url: requiredEnv('PETS_GRPC_URL'),
           package: PETS_PACKAGE_NAME,
           loader: {
             defaults: true,

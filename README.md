@@ -1,197 +1,153 @@
-# Nx NestJS API Template
+# PatiPasaport
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+A pet health passport platform: pet owners keep their animals' medical history in one place and decide, per clinic, who may see or add to it. Clinics upload lab results and images, an AI service (planned) drafts structured records from them, and a clinic reviews every draft before it becomes part of the permanent record.
 
-A production-ready NestJS REST API starter powered by Nx - built for teams who want a solid monorepo foundation with shared types, module boundaries, and Docker support from day one.
+This is a graduation project. The backend is complete; the AI service is the only part still to be built. Its integration points (events, queues, storage access) are already in place, and its contract document is the next update (see [Roadmap](#roadmap)).
 
-The API builds with the oxc toolchain (tsdown, powered by rolldown + the oxc transformer), orchestrated by Nx. tsdown reads `apps/api/tsconfig.app.json`, so `experimentalDecorators` and `emitDecoratorMetadata` are honored - NestJS dependency injection and route reflection keep working with `reflect-metadata`.
-🚀 If you haven't connected to Nx Cloud yet, [complete your setup here](https://cloud.nx.app/get-started). Get faster builds with remote caching, distributed task execution, and self-healing CI. [See how your workspace can benefit](#nx-cloud).
+## Architecture
 
-## Quick Start
+```
+                      HTTP :3000 (the only published port)
+                               │
+                          ┌────▼────┐
+   Browser / mobile ────► │ gateway │  helmet · CORS · rate limiting · validation
+                          └────┬────┘
+        gRPC (internal network only, zero-trust JWT between services)
+   ┌────────┬───────┬─────────┼──────────┬────────┬───────┐
+   ▼        ▼       ▼         ▼          ▼        ▼       ▼
+ access    auth   users    clinics     pets   medical-record
+ (Redis)  (Redis)                                   │
+                                          outbox ──► RabbitMQ ──► AI service (planned)
+                                          files  ──► SeaweedFS (S3)
+```
 
-Clone this template into a new workspace:
+| Service | Responsibility | Storage |
+|---|---|---|
+| `gateway` | Only public entry point. HTTP/JSON API, request validation, token exchange, file upload | SeaweedFS (write) |
+| `access` | Opaque token ⇄ short-lived JWT exchange, consents (who may access which pet), access checks | PostgreSQL, Redis |
+| `auth` | Registration, login, refresh-token rotation, login lockout | PostgreSQL, Redis |
+| `users` | User profiles | PostgreSQL |
+| `clinics` | Clinics, stock, clinic view of a pet, result upload orchestration | PostgreSQL |
+| `pets` | Pets, owner lookup, encrypted chip numbers | PostgreSQL |
+| `medical-record` | Records, vaccinations, prescriptions, lab results, documents, AI draft reviews | PostgreSQL, RabbitMQ, SeaweedFS |
+
+Design decisions worth knowing:
+
+- **Database per service.** Cross-service relations are checked over gRPC, never with foreign keys.
+- **Zero trust.** Every read and write re-checks access: pet owners through ownership, clinics through an active consent with the right scope.
+- **Phantom tokens.** Clients hold opaque tokens; the gateway exchanges them for short-lived JWTs that internal services verify. Only `access` holds the private key.
+- **Outbox + CloudEvents.** A document upload writes the document and an outbox row in one transaction; a relay publishes CloudEvents to RabbitMQ with retries and a dead-letter queue.
+- **Human in the loop.** AI output is stored as a draft and only becomes a medical record after a clinic approves it.
+- **Access audit log.** Every S3 request is logged through Fluent Bit.
+
+Full database, messaging and storage design: [docs/db-schema.md](docs/db-schema.md).
+
+## Tech stack
+
+Nx monorepo · Node.js 24 · NestJS 11 (gRPC microservices + Express 5 gateway) · TypeScript · Prisma 7 · PostgreSQL 16 · Redis · RabbitMQ 4.3 · SeaweedFS (S3) · Fluent Bit · Protocol Buffers (buf + ts-proto) · Jest · Docker Compose.
+
+## Getting started
+
+Requirements: Node.js 24, Docker with Compose, and OpenSSL.
 
 ```sh
-npx create-nx-workspace@latest my-workspace --template nrwl/nestjs-template
-cd my-workspace
+npm ci
+
+cp .env.example .env
+# fill in every "change-me" value, e.g. with: openssl rand -base64 18
+
+openssl genrsa -out access_jwt_private.pem 2048
+openssl rsa -in access_jwt_private.pem -pubout -out access_jwt_public.pem
+
+docker compose up -d --build
+curl http://localhost:3000/health
 ```
 
-### Dev server (hot reload)
+The default compose file publishes **only the gateway** on port 3000. Databases, Redis, RabbitMQ, SeaweedFS and the gRPC services are reachable only inside the Docker network.
+
+### Local development
+
+`docker-compose.dev.yml` additionally publishes the infrastructure and gRPC ports on `127.0.0.1`. Use it for migrations, Prisma Studio, e2e tests and tools such as grpcurl. Never use it in production.
 
 ```sh
-npx nx run api:serve
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+
+# apply database migrations (requires the dev ports)
+npx nx run-many -t prisma-migrate-deploy
 ```
 
-The API starts at `http://localhost:3000/api`.
+### Configuration
 
-Endpoints available out of the box:
+All secrets live in `.env` (git-ignored); `.env.example` documents every variable. Services fail fast: a missing service address (`*_GRPC_URL`, database, Redis or RabbitMQ host) stops the service at startup with an error that names the variable.
 
-- `GET /api` - hello message
-- `GET /api/health` - health check with uptime + timestamp
-- `GET /api/todos` - list todos
-- `POST /api/todos` - create a todo `{ "title": "..." }`
-- `GET /api/todos/:id` - get one todo
-- `PATCH /api/todos/:id` - update a todo
-- `DELETE /api/todos/:id` - delete a todo
+Gateway settings:
 
-### Build for production
+| Variable | Default | Meaning |
+|---|---|---|
+| `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API, e.g. `https://app.example.com`. Empty allows none. |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
+| `RATE_LIMIT_GLOBAL` | `100` | Requests per IP per window across all routes |
+| `RATE_LIMIT_AUTH` | `10` | Shared limit for login, register and refresh |
+| `RATE_LIMIT_UPLOAD` | `20` | Limit for document upload |
+
+## API overview
+
+Every route except `/health` and `/auth/logout` needs `X-Client-Type: 1` (web) or `2` (mobile). Every route except `/health` and `/auth/*` also needs `Authorization: Bearer <access token>`. Responses use one envelope: `{ data, message, success, correlationId }`; errors carry a stable code in `message`.
+
+| Area | Routes |
+|---|---|
+| Health | `GET /health` |
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` |
+| Consents | `POST /consents`, `POST /consents/:consentId/revoke`, `GET /consents`, `GET /consents/status` |
+| Users | `GET` / `PATCH /users/me`, `POST /users/me/deactivate`, `POST /users/display-names` |
+| Pets | `POST /pets`, `GET /pets`, `GET /pets/search`, `GET` / `PATCH /pets/:id` |
+| Clinics | `GET /clinics/:id`, `POST /clinics/:clinicId/deactivate`, `POST` / `GET /clinics/:clinicId/stock-items`, `GET /clinics/:clinicId/pets/:petId/overview` |
+| Documents | `POST /clinics/:clinicId/pets/:petId/documents` (multipart: `file` PDF/JPEG/PNG up to 10 MB, optional `note`), `GET /documents/:id` |
+| Medical records | `GET /pets/:petId/records`, `/vaccinations`, `/prescriptions`, `/lab-results`, `POST /pets/:petId/records` |
+| AI draft review | `GET /draft-reviews`, `POST /draft-reviews/:id/review` |
+
+## Security
+
+- **Transport headers:** helmet (strict CSP, `X-Frame-Options: DENY`, HSTS, `nosniff`, no `X-Powered-By`) and `Cache-Control: no-store` on every response.
+- **CORS:** explicit origin allow-list, no wildcard, no credentials.
+- **Rate limiting:** per IP, with stricter limits for authentication and uploads; `429` with `Retry-After`.
+- **Input handling:** whitelist validation, string trimming, JSON depth limit (50), removal of prototype-pollution keys, magic-byte file type detection.
+- **Injection:** all SQL goes through Prisma; raw queries are parameterized and `$queryRawUnsafe` / `$executeRawUnsafe` are banned by ESLint. The API returns JSON only and never reflects input in error messages.
+- **Authentication:** argon2 password hashing, login lockout, rotating refresh tokens, opaque access tokens.
+- **Network:** only the gateway is published; services talk over an internal Docker network.
+- **Dependencies:** production images contain no known vulnerabilities (`npm audit --omit=dev --omit=optional`).
+
+TLS is not terminated by this stack. In production, put a reverse proxy (Caddy or Nginx) in front of the gateway and enable Express `trust proxy`; otherwise every client shares the proxy's IP in the rate limiter.
+
+## Testing
 
 ```sh
-npx nx run api:build
+npx nx run-many -t lint build                    # static checks and builds
+npx nx run-many -t test --output-style=static    # unit tests
+
+# end-to-end tests run the built service on the host against the Docker stack
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+npx nx run-many -t e2e --parallel=1 --output-style=static
 ```
 
-This runs tsdown (the oxc toolchain) via Nx and emits `dist/apps/api/main.cjs`. Run it directly with `node dist/apps/api/main.cjs`.
-
-### Run all builds
-
-```sh
-npx nx run-many -t build
-```
-
-### Run tests
-
-```sh
-npx nx run-many -t test
-```
-
-### Lint
-
-```sh
-npx nx run-many -t lint
-```
-
-### Visualize the project graph
-
-```sh
-npx nx graph
-```
-
----
-
-## What's Inside
+## Project layout
 
 ```
-nestjs-template/
-|- apps/
-|  |- api/                 # NestJS application (oxc/tsdown build orchestrated by Nx)
-|     |- tsdown.config.mts # oxc toolchain build config (decorators + metadata)
-|     |- src/app/
-|        |- app.module.ts  # Root module wiring controllers + providers
-|        |- health.controller.ts  # GET /api/health
-|        |- todos.controller.ts   # CRUD /api/todos
-|        |- todos.service.ts      # In-memory todos store (replace with DB)
-|     |- Dockerfile         # Multi-stage Docker build
-|- packages/
-   |- types/               # Shared DTOs and interfaces (scope:shared tag)
-      |- src/lib/types.ts  # HealthResponse, Todo, CreateTodoDto, UpdateTodoDto
+apps/        gateway and the six microservices, each with a *-e2e project
+libs/common  shared guards, pipes, filters, logging, CloudEvents helpers
+libs/dto     request DTOs and validation rules shared by gateway and services
+libs/proto   .proto contracts and generated TypeScript
+libs/e2e-utils  helpers for end-to-end tests
+tools/       SeaweedFS bucket setup and audit-log, Fluent Bit configuration
+docs/        database, messaging and storage design
 ```
 
-### Module Boundary Tags
+## Roadmap
 
-| Project | Tags                   | May depend on |
-| ------- | ---------------------- | ------------- |
-| api     | scope:api, type:app    | scope:shared  |
-| types   | scope:shared, type:lib | scope:shared  |
+1. **Next update: AI service contract** (`docs/ai-service-contract.md`). It will define the event types and payloads, the queue and retry topology, storage access and error handling that the AI service must follow.
+2. **AI service:** consumes `document-uploaded` events from RabbitMQ, reads the file from SeaweedFS with read-only credentials and publishes the analysis result as an event.
+3. **Deployment:** TLS reverse proxy and production configuration.
 
-`@nx/enforce-module-boundaries` is configured in `eslint.config.mjs` so violations are caught at lint time, not at runtime.
+## License
 
----
-
-## Featured Nx Capabilities
-
-### Smart Computation Caching
-
-Every build, test, and lint result is cached locally (and remotely via Nx Cloud). Re-running unchanged tasks is instant.
-
-```sh
-npx nx run api:build   # second run: < 100 ms from cache
-```
-
-### Affected Commands
-
-Only run what actually changed since your last commit or PR base:
-
-```sh
-npx nx affected -t build,test,lint
-```
-
-### Code Generation
-
-Scaffold new resources without boilerplate:
-
-```sh
-# New NestJS app
-npx nx g @nx/nest:app my-service
-
-# New shared library
-npx nx g @nx/js:lib packages/my-lib --bundler=tsc
-
-# NestJS resource (CRUD module, controller, service, DTOs)
-npx nx g @nx/nest:resource --project=api --name=users
-```
-
-### Module Boundaries
-
-Enforce architectural rules at lint time. A `scope:api` library can never accidentally import from another app - only from `scope:shared` libs. Configure the rules in `eslint.config.mjs`.
-
-### Docker
-
-The `apps/api/Dockerfile` uses a multi-stage build:
-
-1. **builder** - installs all deps, builds with `nx run api:prune` (the oxc/tsdown build plus a pruned lockfile and workspace modules)
-2. **runner** - minimal Node 22 Alpine image with only production deps
-
-```sh
-docker build -f apps/api/Dockerfile -t nestjs-api .
-docker run -p 3000:3000 nestjs-api
-```
-
----
-
-## Nx Cloud
-
-[Nx Cloud](https://nx.dev/nx-cloud) makes distributed CI simple:
-
-- **Remote cache** - Shares the computation cache across all machines - one build warms the cache for everyone else.
-- **Distributed task execution (DTE)** - Splits tasks across N CI agents automatically - no manual job matrix required.
-- **Flaky task detection** - Tracks pass/fail history per task, reruns flaky tasks so one bad agent doesn't fail the PR.
-- **PR insights** - Shows exactly which tasks ran, which were cache hits, and what slowed down your pipeline.
-
-Docs -> https://nx.dev/nx-cloud
-
----
-
-## Replacing the In-Memory Store
-
-`TodosService` uses a plain array. Drop in any persistence layer:
-
-- **TypeORM** - `npx nx add @nx/typeorm` (or install manually + `TypeOrmModule.forRoot(...)`)
-- **Prisma** - add `prisma` + `@prisma/client`, generate, inject `PrismaService`
-- **MikroORM**, **Mongoose**, **Drizzle** - follow the same pattern
-
----
-
-## Install Nx Console
-
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
-
-[Install Nx Console &raquo;](https://nx.dev/docs/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## 🔗 Learn More
-
-- [Nx Documentation](https://nx.dev/docs)
-- [Crafting Your Workspace Tutorial](https://nx.dev/docs/getting-started/tutorials/crafting-your-workspace)
-- [Module Boundaries](https://nx.dev/docs/features/enforce-module-boundaries)
-- [NestJS Documentation](https://docs.nestjs.com)
-- [Docker Integration](https://nx.dev/docs/guides/nx-release/release-docker-images)
-- [Nx Cloud](https://nx.dev/nx-cloud)
-
-## 💬 Community
-
-Join the Nx community:
-
-- [Discord](https://go.nx.dev/community)
-- [X (Twitter)](https://twitter.com/nxdevtools)
-- [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [YouTube](https://www.youtube.com/@nxdevtools)
-- [Blog](https://nx.dev/blog)
+[MIT](LICENSE)

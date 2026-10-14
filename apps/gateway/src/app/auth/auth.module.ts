@@ -7,6 +7,7 @@ import {
   GRPC_GATEWAY_TIMEOUT_MS,
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
+  requiredEnv,
 } from '@libs/common';
 import { ApiAuthService } from './auth.service';
 import { ApiAuthController } from './auth.controller';
@@ -18,7 +19,7 @@ import { ApiAuthController } from './auth.controller';
         name: 'AUTH_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.AUTH_GRPC_URL ?? '0.0.0.0:3002',
+          url: requiredEnv('AUTH_GRPC_URL'),
           package: AUTH_PACKAGE_NAME,
           loader: {
             defaults: true,

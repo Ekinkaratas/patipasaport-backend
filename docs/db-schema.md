@@ -278,7 +278,7 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
 - Bucket **özeldir**; anonim erişim kapalıdır.
 - Erişim en az yetkiyle (bucket'a özel politika): `gateway` kullanıcısı `readwrite` (yazma/okuma/silme), `ai` kullanıcısı `readonly`. Uygulamalar admin kimliği kullanmaz.
 - Diskte şifreleme: `-filer.encryptVolumeData` ile volume verisi şifrelenir; anahtarlar filer meta verisinde tutulur. Aynı makinede durdukları için ek koruma olarak sunucu diski de şifrelenmelidir (LUKS/BitLocker).
-- S3 portu yalnızca dev ortamında `127.0.0.1:8333`'e açılır (`docker-compose.override.yml`); dışarıya açık tek kapı gateway'dir.
+- S3 portu yalnızca dev ortamında `127.0.0.1:8333`'e açılır (`docker-compose.dev.yml`); dışarıya açık tek kapı gateway'dir.
 - Periyodik saklama/imha görevi ve hesap silme işlemi yoktur (proje kararı). Dosya yalnızca yükleme geri alındığında silinir (Yükleme akışı, 5. madde).
 - Erişim denetim logu: SeaweedFS her S3 isteğini `-s3.auditLogConfig` (`tools/seaweedfs/audit.json`) ile Fluent protokolüyle `fluent-bit` container'ına gönderir (`fluent/fluent-bit:5.1.3`, `tools/fluent-bit/audit.yaml`, yalnızca iç ağ). Kayıtlar `seaweedfs_audit` volume'ünde günlük dosyalara (`s3-access-YYYY-AA-GG.log`, satır başına bir JSON) yazılır; saklama/imha kararı gereği eski dosyalar silinmez.
   - Alanlar: `time` (unix sn), `requester` (S3 kullanıcısı: `gateway` / `ai`), `operation` (örn. `REST.PUT.OBJECT`), `bucket`, `key` (`<uuid>.<uzantı>`), `status`, `error_code`, `remote_ip`, `user_agent`, `request_id`, `signature_version`. Kişisel veri yoktur.

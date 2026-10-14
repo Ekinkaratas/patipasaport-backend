@@ -7,6 +7,7 @@ import {
   GRPC_GATEWAY_TIMEOUT_MS,
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
+  requiredEnv,
 } from '@libs/common';
 import { ApiClinicsService } from './clinics.service';
 import { ApiClinicsController } from './clinics.controller';
@@ -19,7 +20,7 @@ import { DocumentStorageService } from '../storage/document-storage.service';
         name: 'CLINICS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.CLINICS_GRPC_URL ?? '0.0.0.0:3003',
+          url: requiredEnv('CLINICS_GRPC_URL'),
           package: CLINICS_PACKAGE_NAME,
           loader: {
             defaults: true,

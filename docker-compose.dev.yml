@@ -1,5 +1,6 @@
 # ============================================================
-# docker-compose.override.yml  —  SADECE GELİŞTİRME ORTAMI İÇİN
+# docker-compose.dev.yml  —  SADECE GELİŞTİRME ORTAMI İÇİN
+# Kullanım: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 # ============================================================
 
 services:

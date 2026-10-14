@@ -8,6 +8,7 @@ import {
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
   GrpcJwtGuard,
+  requiredEnv,
 } from '@libs/common';
 import { ACCESS_PACKAGE_NAME, PETS_PACKAGE_NAME } from '@libs/proto';
 import { MedicalRecordController } from './medical-record.controller';
@@ -48,7 +49,7 @@ const grpcClientOptions = (
         name: 'ACCESS_SERVICE',
         transport: Transport.GRPC,
         options: grpcClientOptions(
-          process.env.ACCESS_GRPC_URL ?? '0.0.0.0:3001',
+          requiredEnv('ACCESS_GRPC_URL'),
           ACCESS_PACKAGE_NAME,
           'access/access.proto',
         ),
@@ -57,7 +58,7 @@ const grpcClientOptions = (
         name: 'PETS_SERVICE',
         transport: Transport.GRPC,
         options: grpcClientOptions(
-          process.env.PETS_GRPC_URL ?? '0.0.0.0:3005',
+          requiredEnv('PETS_GRPC_URL'),
           PETS_PACKAGE_NAME,
           'pets/pets.proto',
         ),

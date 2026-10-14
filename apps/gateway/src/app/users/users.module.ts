@@ -7,6 +7,7 @@ import {
   GRPC_GATEWAY_TIMEOUT_MS,
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
+  requiredEnv,
 } from '@libs/common';
 import { ApiUserService } from './users.service';
 import { ApiUserController } from './users.controller';
@@ -18,7 +19,7 @@ import { ApiUserController } from './users.controller';
         name: 'USERS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.USERS_GRPC_URL ?? '0.0.0.0:3006',
+          url: requiredEnv('USERS_GRPC_URL'),
           package: USERS_PACKAGE_NAME,
           loader: {
             defaults: true,

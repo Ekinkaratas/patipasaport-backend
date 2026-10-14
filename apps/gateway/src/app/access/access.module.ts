@@ -7,6 +7,7 @@ import {
   GRPC_GATEWAY_TIMEOUT_MS,
   grpcAuthClientInterceptor,
   grpcCorrelationClientInterceptor,
+  requiredEnv,
 } from '@libs/common';
 import { ApiAccessController } from './access.controller';
 import { ApiAccessService } from './access.service';
@@ -18,7 +19,7 @@ import { ApiAccessService } from './access.service';
         name: 'ACCESS_SERVICE',
         transport: Transport.GRPC,
         options: {
-          url: process.env.ACCESS_GRPC_URL ?? '0.0.0.0:3001',
+          url: requiredEnv('ACCESS_GRPC_URL'),
           package: ACCESS_PACKAGE_NAME,
           loader: {
             defaults: true,
