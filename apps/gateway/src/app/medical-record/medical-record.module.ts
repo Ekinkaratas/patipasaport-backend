@@ -11,9 +11,11 @@ import {
 } from '@libs/common';
 import { ApiMedicalRecordService } from './medical-record.service';
 import { ApiMedicalRecordController } from './medical-record.controller';
+import { DocumentStorageModule } from '../storage/document-storage.module';
 
 @Module({
   imports: [
+    DocumentStorageModule,
     ClientsModule.register([
       {
         name: 'MEDICAL_RECORD_SERVICE',

@@ -55,6 +55,7 @@ model Document {
   attachedTo  RecordAttachment[]
 
   @@index([clinicId, status])
+  @@index([petId, createdAt])
   @@map("documents")
 }
 

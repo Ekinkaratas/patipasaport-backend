@@ -102,6 +102,15 @@ const DOCUMENT_STATUS_TO_PROTO: Record<
   [DocumentStatus.FAILED]: medicalRecord.DocumentStatus.FAILED,
 };
 
+export const DOCUMENT_STATUS_TO_DB: Partial<
+  Record<medicalRecord.DocumentStatus, DocumentStatus>
+> = {
+  [medicalRecord.DocumentStatus.QUEUED]: DocumentStatus.QUEUED,
+  [medicalRecord.DocumentStatus.PROCESSING]: DocumentStatus.PROCESSING,
+  [medicalRecord.DocumentStatus.DRAFT_READY]: DocumentStatus.DRAFT_READY,
+  [medicalRecord.DocumentStatus.FAILED]: DocumentStatus.FAILED,
+};
+
 const DRAFT_STATUS_TO_PROTO: Record<
   DraftReviewStatus,
   medicalRecord.DraftReviewStatus

@@ -342,6 +342,20 @@ export interface DocumentResponse {
   document: Document | undefined;
 }
 
+export interface ListDocumentsByPetRequest {
+  petId: string;
+  status?: DocumentStatus | undefined;
+  page: number;
+  pageSize: number;
+}
+
+export interface ListDocumentsResponse {
+  documents: Document[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface Vaccination {
   id: string;
   recordId: string;
@@ -1163,6 +1177,76 @@ export const DocumentResponse: MessageFns<DocumentResponse> = {
   },
 };
 
+export const ListDocumentsByPetRequest: MessageFns<ListDocumentsByPetRequest> = {
+  fromJSON(object: any): ListDocumentsByPetRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+      status: isSet(object.status) ? documentStatusFromJSON(object.status) : undefined,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListDocumentsByPetRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    if (message.status !== undefined) {
+      obj.status = documentStatusToJSON(message.status);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ListDocumentsResponse: MessageFns<ListDocumentsResponse> = {
+  fromJSON(object: any): ListDocumentsResponse {
+    return {
+      documents: globalThis.Array.isArray(object?.documents)
+        ? object.documents.map((e: any) => Document.fromJSON(e))
+        : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListDocumentsResponse): unknown {
+    const obj: any = {};
+    if (message.documents?.length) {
+      obj.documents = message.documents.map((e) => Document.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
 export const Vaccination: MessageFns<Vaccination> = {
   fromJSON(object: any): Vaccination {
     return {
@@ -1880,6 +1964,8 @@ export interface MedicalRecordServiceClient {
 
   getDocument(request: GetDocumentRequest): Observable<DocumentResponse>;
 
+  listDocumentsByPet(request: ListDocumentsByPetRequest): Observable<ListDocumentsResponse>;
+
   /** Kliniğin onay bekleyen taslakları görmesi sebebiyle yazıldı. */
 
   listDraftReviews(request: ListDraftReviewsRequest): Observable<ListDraftReviewsResponse>;
@@ -1918,6 +2004,10 @@ export interface MedicalRecordServiceController {
 
   getDocument(request: GetDocumentRequest): Promise<DocumentResponse> | Observable<DocumentResponse> | DocumentResponse;
 
+  listDocumentsByPet(
+    request: ListDocumentsByPetRequest,
+  ): Promise<ListDocumentsResponse> | Observable<ListDocumentsResponse> | ListDocumentsResponse;
+
   /** Kliniğin onay bekleyen taslakları görmesi sebebiyle yazıldı. */
 
   listDraftReviews(
@@ -1939,6 +2029,7 @@ export function MedicalRecordServiceControllerMethods() {
       "listLabResults",
       "registerDocument",
       "getDocument",
+      "listDocumentsByPet",
       "listDraftReviews",
       "reviewDraft",
     ];

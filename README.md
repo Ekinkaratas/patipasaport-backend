@@ -7,10 +7,10 @@ This is a graduation project. The backend is complete; the AI service is the onl
 ## Architecture
 
 ```
-                      HTTP :3000 (the only published port)
-                               │
+   Browser / mobile ──HTTPS──► nginx (TLS, the only public entry; frontend repo)
+                               │  /api → http://gateway:3000 (internal network)
                           ┌────▼────┐
-   Browser / mobile ────► │ gateway │  helmet · CORS · rate limiting · validation
+                          │ gateway │  helmet · CORS · rate limiting · validation
                           └────┬────┘
         gRPC (internal network only, zero-trust JWT between services)
    ┌────────┬───────┬─────────┼──────────┬────────┬───────┐
@@ -27,7 +27,7 @@ This is a graduation project. The backend is complete; the AI service is the onl
 | `access` | Opaque token ⇄ short-lived JWT exchange, consents (who may access which pet), access checks | PostgreSQL, Redis |
 | `auth` | Registration, login, refresh-token rotation, login lockout | PostgreSQL, Redis |
 | `users` | User profiles | PostgreSQL |
-| `clinics` | Clinics, stock, clinic view of a pet, result upload orchestration | PostgreSQL |
+| `clinics` | Clinics, stock with purchase and sale prices, sales and monthly sales reports, clinic view of a pet, result upload orchestration | PostgreSQL |
 | `pets` | Pets, owner lookup, encrypted chip numbers | PostgreSQL |
 | `medical-record` | Records, vaccinations, prescriptions, lab results, documents, AI draft reviews | PostgreSQL, RabbitMQ, SeaweedFS |
 
@@ -59,22 +59,22 @@ cp .env.example .env
 openssl genrsa -out access_jwt_private.pem 2048
 openssl rsa -in access_jwt_private.pem -pubout -out access_jwt_public.pem
 
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+npx nx run-many -t prisma-migrate-deploy   # apply database migrations
 curl http://localhost:3000/health
 ```
 
-The default compose file publishes **only the gateway** on port 3000. Databases, Redis, RabbitMQ, SeaweedFS and the gRPC services are reachable only inside the Docker network.
-
 ### Local development
 
-`docker-compose.dev.yml` additionally publishes the infrastructure and gRPC ports on `127.0.0.1`. Use it for migrations, Prisma Studio, e2e tests and tools such as grpcurl. Never use it in production.
+`docker-compose.dev.yml` publishes the gateway on port 3000 and the infrastructure and gRPC ports on `127.0.0.1`. Use it for the frontend dev server, migrations, Prisma Studio, e2e tests and tools such as grpcurl. Never use it in production.
 
-```sh
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+### Production
 
-# apply database migrations (requires the dev ports)
-npx nx run-many -t prisma-migrate-deploy
-```
+The default compose file (`docker compose up -d --build`) publishes **no ports at all**. A reverse proxy is the only public entry:
+
+- Run nginx (it lives in the frontend repository) on the Compose network `patipasaport_backend` and proxy `/api/` to `http://gateway:3000/`.
+- Terminate TLS in nginx and set `TRUST_PROXY=1` so rate limiting sees the real client IP.
+- Keep the gateway unpublished; a client that could reach it directly could forge `X-Forwarded-For`.
 
 ### Configuration
 
@@ -89,6 +89,8 @@ Gateway settings:
 | `RATE_LIMIT_GLOBAL` | `100` | Requests per IP per window across all routes |
 | `RATE_LIMIT_AUTH` | `10` | Shared limit for login, register and refresh |
 | `RATE_LIMIT_UPLOAD` | `20` | Limit for document upload |
+| `TRUST_PROXY` | empty | Number of reverse proxies in front of the gateway. Empty for local development, `1` behind nginx, `2` if another layer (e.g. Cloudflare or a load balancer) sits in front of nginx. `true` is rejected, because it would let clients forge their IP. |
+| `REFRESH_COOKIE_PATH` | `/api/auth` | Browser-visible path of the refresh-token cookie. It must match the prefix the reverse proxy uses in front of `/auth`. |
 
 ## API overview
 
@@ -97,14 +99,18 @@ Every route except `/health` and `/auth/logout` needs `X-Client-Type: 1` (web) o
 | Area | Routes |
 |---|---|
 | Health | `GET /health` |
-| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` |
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` (web: refresh token only in an httpOnly cookie; mobile: in the JSON body) |
 | Consents | `POST /consents`, `POST /consents/:consentId/revoke`, `GET /consents`, `GET /consents/status` |
 | Users | `GET` / `PATCH /users/me`, `POST /users/me/deactivate`, `POST /users/display-names` |
 | Pets | `POST /pets`, `GET /pets`, `GET /pets/search`, `GET` / `PATCH /pets/:id` |
-| Clinics | `GET /clinics/:id`, `POST /clinics/:clinicId/deactivate`, `POST` / `GET /clinics/:clinicId/stock-items`, `GET /clinics/:clinicId/pets/:petId/overview` |
-| Documents | `POST /clinics/:clinicId/pets/:petId/documents` (multipart: `file` PDF/JPEG/PNG up to 10 MB, optional `note`), `GET /documents/:id` |
+| Clinics | `GET /clinics/:id`, `POST /clinics/:clinicId/deactivate`, `GET /clinics/:clinicId/pets/:petId/overview` |
+| Stock | `POST` / `GET /clinics/:clinicId/stock-items`, `PATCH` / `DELETE /clinics/:clinicId/stock-items/:itemId`, `POST /clinics/:clinicId/stock-items/:itemId/adjust` (atomic `{ delta }`) |
+| Stock sales | `POST /clinics/:clinicId/stock-items/:itemId/sales` (`{ quantity, unitPrice? }`), `GET /clinics/:clinicId/stock-sales` (`fromDate`, `toDate`, paging), `POST /clinics/:clinicId/stock-sales/:saleId/cancel` (same month only), `GET /clinics/:clinicId/stock-sales/summary?month=YYYY-MM` (totals, daily, weekly, per product) |
+| Documents | `POST /clinics/:clinicId/pets/:petId/documents` (multipart: `file` PDF/JPEG/PNG up to 10 MB, optional `note`), `GET /pets/:petId/documents` (optional `status`, paging), `GET /documents/:id`, `GET /documents/:id/file` (opens in the browser; `?download=1` downloads; content is checked against the stored SHA-256) |
 | Medical records | `GET /pets/:petId/records`, `/vaccinations`, `/prescriptions`, `/lab-results`, `POST /pets/:petId/records` |
 | AI draft review | `GET /draft-reviews`, `POST /draft-reviews/:id/review` |
+
+Money is an integer number of kuruş (`14990` = 149.90 TL). A sale stores the item's name and its purchase and sale prices as they were at the time of sale, so later price changes do not alter past profit. Days, weeks (Monday to Sunday, cut at the month's edges) and months in sales reports follow Istanbul time.
 
 ## Security
 
@@ -114,10 +120,11 @@ Every route except `/health` and `/auth/logout` needs `X-Client-Type: 1` (web) o
 - **Input handling:** whitelist validation, string trimming, JSON depth limit (50), removal of prototype-pollution keys, magic-byte file type detection.
 - **Injection:** all SQL goes through Prisma; raw queries are parameterized and `$queryRawUnsafe` / `$executeRawUnsafe` are banned by ESLint. The API returns JSON only and never reflects input in error messages.
 - **Authentication:** argon2 password hashing, login lockout, rotating refresh tokens, opaque access tokens.
-- **Network:** only the gateway is published; services talk over an internal Docker network.
+- **Refresh token on the web:** never exposed to JavaScript. It lives in the `pp_refresh` cookie (`HttpOnly`, `Secure`, `SameSite=Strict`, scoped to `/api/auth`) whose lifetime matches the token (12 hours, 30 days with "remember me"). CSRF is blocked by `SameSite=Strict` plus the required `X-Client-Type` header, which another site cannot send without CORS approval. Mobile clients keep the token in the body and store it in secure device storage.
+- **Network:** no service is published in production; nginx is the only public entry and every service, the gateway included, is reachable only on the internal Docker network.
 - **Dependencies:** production images contain no known vulnerabilities (`npm audit --omit=dev --omit=optional`).
 
-TLS is not terminated by this stack. In production, put a reverse proxy (Caddy or Nginx) in front of the gateway and enable Express `trust proxy`; otherwise every client shares the proxy's IP in the rate limiter.
+TLS terminates at the reverse proxy (nginx), not in this stack. Behind it, `TRUST_PROXY=1` makes the gateway take the client IP from the last `X-Forwarded-For` entry, the one nginx appends, so every client gets its own rate-limit quota and forged entries are ignored.
 
 ## Testing
 

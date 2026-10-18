@@ -3,6 +3,7 @@ import {
   HeadObjectCommand,
   HeadObjectCommandOutput,
   ListObjectsV2Command,
+  PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { DOCKER_S3_PORT } from './ports';
@@ -41,6 +42,17 @@ export class ObjectStore {
       new ListObjectsV2Command({ Bucket: this.bucket }),
     );
     return result.KeyCount ?? 0;
+  }
+
+  async put(key: string, body: Buffer, contentType: string): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
   }
 
   async remove(key: string): Promise<void> {

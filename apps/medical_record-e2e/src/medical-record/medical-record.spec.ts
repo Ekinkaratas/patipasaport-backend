@@ -234,27 +234,127 @@ describe('medical_record servisi (e2e)', () => {
       );
     });
 
-    it('GetDocument yalnızca yükleyen kliniğe açıktır', async () => {
+    it('GetDocument yükleyen kliniğe ve hayvanın sahibine açıktır', async () => {
       const document = await registered();
+      for (const token of [await clinicToken(clinicA.id), await ownerToken()]) {
+        expect(
+          expectOk(
+            await call<medicalRecord.DocumentResponse>(
+              'GetDocument',
+              { id: document.id },
+              token,
+            ),
+            'GetDocument',
+          ).document?.id,
+        ).toBe(document.id);
+      }
+      for (const token of [
+        await clinicToken(clinicB.id),
+        await tokens.jwtFor({ role: 'PET_OWNER', userId: stranger.id }),
+      ]) {
+        expect(
+          outcome(await call('GetDocument', { id: document.id }, token)),
+        ).toBe('NOT_FOUND/NOT_FOUND');
+      }
+    });
+
+    it('ListDocumentsByPet: klinik yalnızca kendi yüklediklerini, hasta sahibi tüm kliniklerin belgelerini en yeni önce görür', async () => {
+      const ownerJwt = await ownerToken();
+      const listedPetId =
+        expectOk(
+          await callGrpc<pets.PetResponse>(
+            petsClient,
+            'CreatePet',
+            {
+              name: 'Tarçın',
+              species: 'DOG',
+              breed: 'KANGAL',
+              sex: pets.PetSex.MALE,
+              birthDate: '',
+              isBirthDateEstimated: false,
+              isNeutered: false,
+              chipNumber: '',
+              ownerUserId: owner.id,
+            },
+            ownerJwt,
+          ),
+          'pets.CreatePet',
+        ).pet?.id ?? '';
+      data.trackPet(listedPetId);
+      const expiresAt = new Date(Date.now() + 30 * 86_400_000).toISOString();
+      for (const clinicId of [clinicA.id, clinicB.id]) {
+        expectOk(
+          await callGrpc<access.ConsentResponse>(
+            accessClient,
+            'GrantConsent',
+            {
+              clinicId,
+              petId: listedPetId,
+              scopes: ['medical_read', 'medical_write'],
+              expiresAt,
+            },
+            ownerJwt,
+          ),
+          'access.GrantConsent',
+        );
+      }
+      const registerFor = async (clinicId: string) =>
+        expectOk(
+          await register(await clinicToken(clinicId), { petId: listedPetId }),
+          'RegisterDocument',
+        ).document as medicalRecord.Document;
+      const firstA = await registerFor(clinicA.id);
+      const fromB = await registerFor(clinicB.id);
+      const secondA = await registerFor(clinicA.id);
+
+      const list = (token: string, override: object = {}) =>
+        call<medicalRecord.ListDocumentsResponse>(
+          'ListDocumentsByPet',
+          { petId: listedPetId, page: 1, pageSize: 8, ...override },
+          token,
+        );
+      const idsOf = (result: GrpcResult<medicalRecord.ListDocumentsResponse>) =>
+        expectOk(result, 'ListDocumentsByPet').documents.map((d) => d.id);
+
+      expect(idsOf(await list(await clinicToken(clinicA.id)))).toEqual([
+        secondA.id,
+        firstA.id,
+      ]);
+      expect(idsOf(await list(await clinicToken(clinicB.id)))).toEqual([
+        fromB.id,
+      ]);
+      expect(idsOf(await list(ownerJwt))).toEqual([
+        secondA.id,
+        fromB.id,
+        firstA.id,
+      ]);
+      expect(
+        idsOf(
+          await list(ownerJwt, { status: medicalRecord.DocumentStatus.FAILED }),
+        ),
+      ).toEqual([]);
       expect(
         expectOk(
-          await call<medicalRecord.DocumentResponse>(
-            'GetDocument',
-            { id: document.id },
-            await clinicToken(clinicA.id),
-          ),
-          'GetDocument',
-        ).document?.id,
-      ).toBe(document.id);
+          await list(ownerJwt, { page: 2, pageSize: 8 }),
+          'ListDocumentsByPet',
+        ),
+      ).toMatchObject({ documents: [], total: 3, page: 2, pageSize: 8 });
       expect(
         outcome(
-          await call(
-            'GetDocument',
-            { id: document.id },
-            await clinicToken(clinicB.id),
+          await list(
+            await tokens.jwtFor({ role: 'PET_OWNER', userId: stranger.id }),
           ),
         ),
       ).toBe('NOT_FOUND/NOT_FOUND');
+      expect(
+        outcome(
+          await call(
+            'ListDocumentsByPet',
+            { petId, page: 1, pageSize: 8 },
+            await clinicToken(clinicB.id),
+          ),
+        ),
+      ).toBe('PERMISSION_DENIED/FORBIDDEN');
     });
   });
 

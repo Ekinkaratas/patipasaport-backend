@@ -14,6 +14,7 @@ service MedicalRecordService {
 
   rpc RegisterDocument (RegisterDocumentRequest) returns (DocumentResponse);
   rpc GetDocument (GetDocumentRequest) returns (DocumentResponse);
+  rpc ListDocumentsByPet (ListDocumentsByPetRequest) returns (ListDocumentsResponse);
 
   // Kliniğin onay bekleyen taslakları görmesi sebebiyle yazıldı.
   rpc ListDraftReviews (ListDraftReviewsRequest) returns (ListDraftReviewsResponse);
@@ -188,6 +189,20 @@ message GetDocumentRequest {
 
 message DocumentResponse {
   Document document = 1;
+}
+
+message ListDocumentsByPetRequest {
+  string pet_id = 1;
+  optional DocumentStatus status = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ListDocumentsResponse {
+  repeated Document documents = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
 }
 
 // ---------- Aşı ----------

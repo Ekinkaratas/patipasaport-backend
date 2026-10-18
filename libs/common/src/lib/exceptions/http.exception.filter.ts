@@ -35,6 +35,8 @@ export class HttpsExceptionFilter implements ExceptionFilter {
     [status.DEADLINE_EXCEEDED]: HttpStatus.GATEWAY_TIMEOUT,
   };
 
+  private static readonly NESTED_PROPERTY_PATH = /^(?:[A-Za-z0-9_$]+\.)+/;
+
   catch(exception: unknown, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse<Response>();
     const correlationId = getCorrelationId();
@@ -72,9 +74,9 @@ export class HttpsExceptionFilter implements ExceptionFilter {
     const messages = this.extractMessages(exception);
 
     const prefixes: DtoPrefix[] = Object.values(DtoPrefix);
-    const validationMessage = messages.find((m) =>
-      prefixes.some((p) => m.startsWith(p)),
-    );
+    const validationMessage = messages
+      .map((m) => m.replace(HttpsExceptionFilter.NESTED_PROPERTY_PATH, ''))
+      .find((m) => prefixes.some((p) => m.startsWith(p)));
     if (validationMessage) {
       return { httpStatus, message: validationMessage };
     }

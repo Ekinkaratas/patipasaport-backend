@@ -6,10 +6,10 @@ Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL fore
 |---|---|
 | Auth | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`Register`, `RegisterClinicAccount`, `Login`, `RefreshToken`, `Logout`) |
 | Users | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`CreateUser`, `CreateClinicUser`, `DeleteUser`, `GetMe`, `UpdateMe`, `DeactivateMe`, `DeactivateClinicUsers`, `GetUserRole`, `GetUserAuthInfo`, `GetUserDisplayNames`, `GetUserContact`). `ListUsersByClinic` proto'dan kaldırıldı — `STAFF` rolü kaldırıldığı için işlevsiz kalmıştı |
-| Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `GetClinicPetOverview`). `UploadPetResult` Medical Record tasarımını bekliyor (şimdilik `UNIMPLEMENTED` döner) |
+| Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`, `stock_sales`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `UpdateStockItem`, `AdjustStockItem`, `DeleteStockItem`, `CreateStockSale`, `ListStockSales`, `CancelStockSale`, `GetStockSalesSummary`, `GetClinicPetOverview`). `UploadPetResult` uygulandı: gateway dosyayı SeaweedFS'e yazar, clinics belge referansını medical_record `RegisterDocument`'a iletir (bkz. Medical Record bölümü) |
 | Pets | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`) |
 | Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor |
-| Medical Record | ✅ Uygulandı — proto, DTO'lar, CloudEvents, Prisma schema + migration (trigger'larla), 9 gRPC metodu, outbox + RabbitMQ, clinics.UploadPetResult ve gateway uçları (yükleme dahil); unit testler (medical_record 172, gateway 15) ve e2e testler (medical_record-e2e 11, gateway-e2e yükleme ve kayıt uçları) yazıldı. AI sözleşme dokümanı henüz yok |
+| Medical Record | ✅ Uygulandı — proto, DTO'lar, CloudEvents, Prisma schema + migration (trigger'larla), 10 gRPC metodu, outbox + RabbitMQ, clinics.UploadPetResult ve gateway uçları (yükleme dahil); unit testler (medical_record 172, gateway 15) ve e2e testler (medical_record-e2e 11, gateway-e2e yükleme ve kayıt uçları) yazıldı. AI sözleşme dokümanı henüz yok |
 
 ---
 
@@ -49,6 +49,7 @@ Prisma: `apps/auth/prisma/schema.prisma`
 - **Tekrar kullanım tespiti:** iptal edilmiş token iptalden **10 saniye sonra** tekrar gelirse çalınmış sayılır ve ailenin tamamı iptal edilir. 10 saniye içinde gelirse eşzamanlı yenileme yarışı sayılır, yalnızca 401 döner.
 - **Logout:** oturumun ailesi silinir; istemci gönderdiyse access token da iptal edilir.
 - Refresh token'ın içinde veri yoktur (32 bayt rastgele değer); kullanıcı bilgisi oturum satırından, rol ve klinik bilgisi her yenilemede users servisinden taze alınır.
+- **Taşıma:** `TokenResponse.refresh_expires_in` token'ın kalan ömrünü saniye olarak verir (12 saat ya da "beni hatırla" ile 30 gün). Web istemcisinde (X-Client-Type 1) gateway refresh token'ı yanıt gövdesinden çıkarır ve `pp_refresh` çerezine yazar (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/auth`, `Max-Age` = bu süre). Refresh ve logout token'ı çerezden okur; çerez yoksa `401 UNAUTH`, logout çerezi siler. Mobil istemci token'ı gövdede almaya ve göndermeye devam eder.
 
 > `user_id` üzerinde index yok (ayrı migration ile kaldırıldı). "Tüm cihazlardan çıkış" eklenirse geri eklenmeli.
 
@@ -125,6 +126,8 @@ Prisma: `apps/clinics/prisma/schema.prisma`
 | quantity | integer | 0–100.000 (DTO) |
 | critical_level | integer | 0–100.000 (DTO); `0` = uyarı yok |
 | expires_at | date, nullable | Son kullanma tarihi; boşsa yok |
+| purchase_price | integer, nullable | Alış fiyatı, kuruş (`14990` = 149,90 TL); tam sayı, 0–1.000.000.000 (DTO + CHECK). Yeni kalemde zorunlu: gönderilmezse, `null` ya da boş metin (`""`) gelirse `400 PURCHASE_PRICE_MUST_BE_NUMBER` / `SALE_PRICE_MUST_BE_NUMBER`; boş değer hiçbir durumda 0 sayılmaz. Fiyatlar eklenmeden önce girilmiş kalemlerde boştur ve iki fiyat da girilene kadar satılamaz |
+| sale_price | integer, nullable | Varsayılan satış fiyatı, kuruş; kuralları `purchase_price` ile aynı |
 | created_by | UUID | Kaydı giren kullanıcının `users.id`'si — JWT'den alınır, istemciden değil |
 | created_at | timestamp | |
 | updated_at | timestamp | |
@@ -133,7 +136,56 @@ Prisma: `apps/clinics/prisma/schema.prisma`
 
 `is_below_critical` saklanmaz; okurken `quantity < critical_level` olarak hesaplanır.
 
+**Güncelleme, artış/azalış ve silme** (`UpdateStockItem`, `AdjustStockItem`, `DeleteStockItem`; yalnızca CLINIC rolü ve kendi kliniği):
+
+| Gateway ucu | Kural |
+|---|---|
+| `PATCH /clinics/:clinicId/stock-items/:itemId` | Yalnızca gönderilen alanlar değişir: `name`, `quantity`, `criticalLevel`, `expiresAt`, `purchasePrice`, `salePrice`. Kategori ve birim değiştirilemez. `expiresAt: null` tarihi kaldırır; yeni tarih geçmişte olamaz. Gönderilmeyen fiyat değişmez; fiyat kaldırılamaz ve boş bırakılamaz (`null` ya da boş metin → `400 *_PRICE_MUST_BE_NUMBER`, mevcut fiyat korunur); fiyat değişikliği geçmiş satışları etkilemez. Hiç alan yoksa `400 BAD_REQUEST`. |
+| `POST /clinics/:clinicId/stock-items/:itemId/adjust` | Gövde `{ delta }`: sıfırdan farklı tam sayı, -100.000…100.000 (`DELTA_*`). Tek koşullu `UPDATE` ile atomik uygulanır. Sonuç 0'ın altına düşecekse `400 QUANTITY_MIN\|0`, 100.000'i geçecekse `400 QUANTITY_MAX\|100000`; stok değişmez. Satış dışı hareketler (fire, sayım düzeltmesi, mal kabul) için kullanılır. |
+| `DELETE /clinics/:clinicId/stock-items/:itemId` | Kalıcı silme; yanıtta silinen kalem döner. Kalemin satışları silinmez, `stock_sales.stock_item_id` boşalır. |
+
+Yoldaki klinik token'daki klinik değilse `403 FORBIDDEN`; kalem yoksa ya da başka kliniğe aitse `404 NOT_FOUND`; pasif klinik işlem yapamaz. PATCH ve adjust güncel kalemi döner (200). `updated_by` tutulmaz (klinikler tek hesabı paylaşır).
+
 > Kategori veya birim listesine yeni kod eklemek hem `libs/common` listesini hem enum migration'ını gerektirir.
+
+### stock_sales
+
+| Kolon | Tip | Not |
+|---|---|---|
+| id | UUID (PK) | |
+| clinic_id | UUID, FK → `clinics.id` | `ON DELETE RESTRICT` |
+| stock_item_id | UUID, FK → `stock_items.id`, nullable, index | `ON DELETE SET NULL` — kalem silinse de satış ve rapordaki yeri korunur |
+| item_name | varchar(64) | Satış anındaki kalem adı (kopya) |
+| category | enum `StockCategory` | Satış anındaki kategori (kopya) |
+| unit | enum `StockUnit` | Satış anındaki birim (kopya) |
+| quantity | integer | 1–100.000 (DTO + CHECK) |
+| unit_sale_price | integer | Birim satış fiyatı, kuruş. İstekte `unitPrice` varsa o, yoksa kalemin o anki `sale_price` değeri; 0–1.000.000.000 (DTO + CHECK). `unitPrice` `null` ya da boş metin olarak gelirse `400 UNIT_PRICE_MUST_BE_NUMBER` |
+| unit_purchase_price | integer | Satış anındaki alış fiyatı (birim maliyet), kuruş; 0–1.000.000.000 (CHECK) |
+| sold_at | timestamp(3) | UTC |
+| cancelled_at | timestamp(3), nullable | Doluysa satış iptal edilmiştir ve raporlara girmez |
+| created_by | UUID | Satışı giren kullanıcının `users.id`'si — JWT'den alınır |
+
+**Index:** `(clinic_id, sold_at)` — satış listesi ve aylık rapor için; `(stock_item_id)` — FK için.
+
+Toplam satış, toplam maliyet ve kâr saklanmaz; okurken `quantity × birim fiyat` olarak hesaplanır (proto'da int64). Fiyatlar satış anında kopyalandığı için kalemin fiyatı sonradan değişse de eski satışların kârı değişmez. Satış hasta ya da hasta sahibine bağlanmaz.
+
+**Uçlar** (`CreateStockSale`, `ListStockSales`, `CancelStockSale`, `GetStockSalesSummary`; yalnızca CLINIC rolü ve kendi kliniği, pasif klinik işlem yapamaz):
+
+| Gateway ucu | Kural |
+|---|---|
+| `POST /clinics/:clinicId/stock-items/:itemId/sales` | Gövde `{ quantity, unitPrice? }`. Stok aynı transaction içinde tek koşullu `UPDATE` ile düşer; yetmiyorsa `400 QUANTITY_MIN\|0` ve satış yazılmaz, eşzamanlı satışlar stoku eksiye düşüremez. Alış ya da satış fiyatı boş kalemde `400 PURCHASE_PRICE_NOT_EMPTY` / `SALE_PRICE_NOT_EMPTY`. `201` yanıtında satış ve güncel kalem döner. |
+| `GET /clinics/:clinicId/stock-sales` | `fromDate`, `toDate` (YYYY-AA-GG, İstanbul günü, ikisi de dahil ve isteğe bağlı; bitiş başlangıçtan önce olamaz), `page`, `pageSize` (8/16/32/64/128). Yeniden eskiye sıralıdır; iptal edilen satışlar `cancelledAt` dolu olarak listelenir. |
+| `POST /clinics/:clinicId/stock-sales/:saleId/cancel` | Yalnızca satışın yapıldığı İstanbul takvim ayı içinde; daha eski ya da zaten iptal edilmiş satış `409 CONFLICT`. Satılan miktar aynı transaction içinde stoka geri eklenir; stok 100.000'i aşacaksa `400 QUANTITY_MAX\|100000` ve iptal yapılmaz. Kalem silinmişse stoka dokunmadan iptal edilir (`item` boş döner). |
+| `GET /clinics/:clinicId/stock-sales/summary?month=YYYY-AA` | İstanbul takvim ayı. `month` yoksa içinde bulunulan ay; gelecek ay sıfır döner; geçersiz biçim `400 MONTH_WRONG DATA FORMAT`. İptal edilen satışlar hariçtir. |
+
+**Aylık rapor yanıtı:**
+
+- `totals`: ciro, maliyet, kâr, satış sayısı, satılan miktar.
+- `daily`: ayın her günü; satış olmayan gün sıfırdır.
+- `weekly`: Pazartesi–Pazar; ayın ilk ve son haftası aya kırpılır (Ekim 2026: 1–4, 5–11, 12–18, 19–25, 26–31).
+- `products`: kalem başına toplamlar, ciroya göre azalan; ad olarak kalemin aydaki son satışındaki ad gösterilir. Silinmiş kalemlerin satışları satıştaki ada göre gruplanır ve boş `stockItemId` ile döner (kalem bağı silmede kalktığı için aynı adlı iki silinmiş kalem tek satırda görünür).
+
+Gün ve ay sınırları `sold_at` İstanbul saatine çevrilerek belirlenir (`(sold_at AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Istanbul'`). Tutarlar proto'da int64'tür; gateway bunları JSON'da sayı olarak döndürür (`longs: Number`).
 
 ---
 
@@ -278,7 +330,7 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
 - Bucket **özeldir**; anonim erişim kapalıdır.
 - Erişim en az yetkiyle (bucket'a özel politika): `gateway` kullanıcısı `readwrite` (yazma/okuma/silme), `ai` kullanıcısı `readonly`. Uygulamalar admin kimliği kullanmaz.
 - Diskte şifreleme: `-filer.encryptVolumeData` ile volume verisi şifrelenir; anahtarlar filer meta verisinde tutulur. Aynı makinede durdukları için ek koruma olarak sunucu diski de şifrelenmelidir (LUKS/BitLocker).
-- S3 portu yalnızca dev ortamında `127.0.0.1:8333`'e açılır (`docker-compose.dev.yml`); dışarıya açık tek kapı gateway'dir.
+- S3 portu yalnızca dev ortamında `127.0.0.1:8333`'e açılır (`docker-compose.dev.yml`); dışarıya açık tek kapı gateway'in önündeki nginx'tir (gateway de yalnızca iç ağdadır).
 - Periyodik saklama/imha görevi ve hesap silme işlemi yoktur (proje kararı). Dosya yalnızca yükleme geri alındığında silinir (Yükleme akışı, 5. madde).
 - Erişim denetim logu: SeaweedFS her S3 isteğini `-s3.auditLogConfig` (`tools/seaweedfs/audit.json`) ile Fluent protokolüyle `fluent-bit` container'ına gönderir (`fluent/fluent-bit:5.1.3`, `tools/fluent-bit/audit.yaml`, yalnızca iç ağ). Kayıtlar `seaweedfs_audit` volume'ünde günlük dosyalara (`s3-access-YYYY-AA-GG.log`, satır başına bir JSON) yazılır; saklama/imha kararı gereği eski dosyalar silinmez.
   - Alanlar: `time` (unix sn), `requester` (S3 kullanıcısı: `gateway` / `ai`), `operation` (örn. `REST.PUT.OBJECT`), `bucket`, `key` (`<uuid>.<uzantı>`), `status`, `error_code`, `remote_ip`, `user_agent`, `request_id`, `signature_version`. Kişisel veri yoktur.
@@ -298,7 +350,16 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
 
 **Hata yanıtları:** dosya yok → `FILE_NOT_EMPTY`; tür desteklenmiyor → `MIME_TYPE_NOT_VALID`; 10 MB'tan büyük → `SIZE_BYTES_MAX|10485760` (hepsi `400`); rıza yok / başka klinik / pasif klinik → `403 FORBIDDEN`; depoya yazılamazsa → `503 SERVICE_UNAVAILABLE`.
 
-**Gateway'deki medical-record uçları:** `GET /pets/:petId/records|vaccinations|prescriptions|lab-results` (hasta sahibi ve klinik); `POST /pets/:petId/records` (201), `GET /documents/:id`, `GET /draft-reviews`, `POST /draft-reviews/:id/review` (yalnızca klinik). `RegisterDocument` dışarıya açık değildir.
+**Gateway'deki medical-record uçları:** `GET /pets/:petId/records|vaccinations|prescriptions|lab-results`, `GET /pets/:petId/documents`, `GET /documents/:id`, `GET /documents/:id/file` (hasta sahibi ve klinik); `POST /pets/:petId/records` (201), `GET /draft-reviews`, `POST /draft-reviews/:id/review` (yalnızca klinik). `RegisterDocument` dışarıya açık değildir.
+
+### Belge listesi ve dosya gönderimi
+
+- `GET /pets/:petId/documents?status=&page=&pageSize=`: en yeni önce, sayfalı (8/16/32/64/128). `status` isteğe bağlı sayısal filtre (`1` QUEUED, `2` PROCESSING, `3` DRAFT_READY, `4` FAILED; geçersiz değer `400 DOCUMENT_STATUS_NOT_VALID`). Klinik yalnızca kendi yüklediği belgeleri `medical_write` rızasıyla görür; hasta sahibi kendi hayvanının tüm kliniklerden gelen belgelerini görür.
+- `GET /documents/:id/file`: gateway önce `medical_record.GetDocument` ile yetkiyi sorar (klinik: yükleyen klinik + `medical_write`; hasta sahibi: sahiplik). Ardından dosyayı SeaweedFS'ten `gateway` kullanıcısıyla okur, boyutu ve sha256'yı kayıtla karşılaştırır, uyuşursa gönderir.
+  - Varsayılan `Content-Disposition: inline` (tarayıcıda açılır); `?download=1` ile `attachment` (indirilir). Başka değer `400 DOWNLOAD_NOT_VALID`.
+  - `Content-Type` kayıttaki doğrulanmış türdür; dosya adı Türkçe karakterleri koruyacak şekilde `filename*=UTF-8''…` ile, eski tarayıcılar için ASCII yedeğiyle yazılır. Yanıt da `Cache-Control: no-store` taşır.
+  - Hatalar: yetki yoksa `403` / belge yoksa ya da başkasınınsa `404`; kayıt var ama dosya depoda yoksa `404 NOT_FOUND`; boyut ya da sha256 uyuşmazsa dosya gönderilmez, `500 INTERNAL_SERVER_ERROR` (error log'u yazılır); depoya ulaşılamazsa `503 SERVICE_UNAVAILABLE`.
+  - Uç `Authorization` başlığı istediği için tarayıcıda düz bağlantıyla açılamaz; istemci dosyayı token'la indirip blob olarak gösterir ya da kaydeder.
 
 
 ### Olaylar — CloudEvents + RabbitMQ
@@ -378,6 +439,8 @@ AI önerisi doğrulanmamış ve biçimi değişken olduğu için **taslakta json
 | status | enum `DocumentStatus`, default `QUEUED` | `QUEUED` / `PROCESSING` / `DRAFT_READY` / `FAILED` |
 | failure_reason | varchar(64), nullable | AI hata kodu |
 | created_at / updated_at | timestamp | |
+
+**Index:** `(clinic_id, status)`; `(pet_id, created_at)` — `ListDocumentsByPet` için.
 
 #### draft_reviews
 
@@ -460,7 +523,8 @@ Her okuma ve yazmada erişim yeniden kontrol edilir. Klinik için `access.CheckA
 | `ListVaccinations` | hasta sahibi, klinik | sahiplik / `vaccination_read` |
 | `ListPrescriptions` | hasta sahibi, klinik | sahiplik / `prescription_read` |
 | `RegisterDocument` (yalnızca clinics çağırır), `CreateRecord` | klinik | `medical_write` |
-| `GetDocument` | klinik | belgeyi yükleyen klinik + `medical_write` |
+| `GetDocument` | hasta sahibi, klinik | sahiplik / belgeyi yükleyen klinik + `medical_write` |
+| `ListDocumentsByPet` | hasta sahibi, klinik | sahiplik (hayvanın tüm belgeleri) / yalnızca kliniğin kendi yükledikleri + `medical_write` |
 | `ReviewDraft` | klinik | taslağın kliniği + `medical_write` |
 | `ListDraftReviews` | klinik | yalnızca kendi taslakları; `pet_id` verilirse o hayvanda `medical_write`, verilmezse `medical_write` rızası aktif olan hayvanlar (`ListMyConsents`) |
 

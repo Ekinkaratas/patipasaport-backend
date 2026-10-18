@@ -10,6 +10,7 @@ import { AuthUser, IS_PUBLIC_KEY, Roles } from '@libs/common';
 import {
   CreateRecordRequestDto,
   GetDocumentRequestDto,
+  ListDocumentsByPetRequestDto,
   ListDraftReviewsRequestDto,
   ListLabResultsRequestDto,
   ListPrescriptionsRequestDto,
@@ -36,6 +37,7 @@ type HandlerName =
   | 'listLabResults'
   | 'registerDocument'
   | 'getDocument'
+  | 'listDocumentsByPet'
   | 'listDraftReviews'
   | 'reviewDraft';
 
@@ -71,7 +73,18 @@ const HANDLERS: [HandlerName, string, unknown, string[]][] = [
     RegisterDocumentRequestDto,
     ['CLINIC'],
   ],
-  ['getDocument', 'GetDocument', GetDocumentRequestDto, ['CLINIC']],
+  [
+    'getDocument',
+    'GetDocument',
+    GetDocumentRequestDto,
+    ['PET_OWNER', 'CLINIC'],
+  ],
+  [
+    'listDocumentsByPet',
+    'ListDocumentsByPet',
+    ListDocumentsByPetRequestDto,
+    ['PET_OWNER', 'CLINIC'],
+  ],
   [
     'listDraftReviews',
     'ListDraftReviews',

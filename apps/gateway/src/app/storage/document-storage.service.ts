@@ -1,12 +1,16 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { Readable } from 'stream';
 import { requiredEnv } from '@libs/common';
 
 const S3_REGION = 'us-east-1';
+
+export class DocumentIntegrityError extends Error {}
 
 @Injectable()
 export class DocumentStorageService implements OnModuleDestroy {
@@ -35,6 +39,19 @@ export class DocumentStorageService implements OnModuleDestroy {
         ContentLength: body.length,
       }),
     );
+  }
+
+  async get(key: string, expectedSize: number): Promise<Buffer> {
+    const { Body, ContentLength } = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!Body || ContentLength !== expectedSize) {
+      if (Body instanceof Readable) Body.destroy();
+      throw new DocumentIntegrityError(
+        `depodaki boyut kayıttakinden farklı (key=${key} kayıt=${expectedSize} depo=${String(ContentLength)})`,
+      );
+    }
+    return Buffer.from(await Body.transformToByteArray());
   }
 
   async delete(key: string): Promise<void> {

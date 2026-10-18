@@ -143,7 +143,12 @@ const allowed = (value: boolean) => of({ allowed: value });
 describe('MedicalRecordService', () => {
   let service: MedicalRecordService;
   let prisma: {
-    document: { create: jest.Mock; findUnique: jest.Mock; count: jest.Mock };
+    document: {
+      create: jest.Mock;
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+      count: jest.Mock;
+    };
     outbox: { create: jest.Mock };
     medicalRecord: { create: jest.Mock; findMany: jest.Mock; count: jest.Mock };
     vaccination: { findMany: jest.Mock; count: jest.Mock };
@@ -172,6 +177,7 @@ describe('MedicalRecordService', () => {
       document: {
         create: jest.fn().mockResolvedValue(documentRow()),
         findUnique: jest.fn().mockResolvedValue(documentRow()),
+        findMany: jest.fn().mockResolvedValue([documentRow()]),
         count: jest.fn().mockResolvedValue(1),
       },
       outbox: { create: jest.fn().mockResolvedValue({}) },
@@ -320,7 +326,7 @@ describe('MedicalRecordService', () => {
     });
   });
 
-  // ---Amaç: belgeyi yalnızca yükleyen kliniğin medical_write rızasıyla görebildiğini doğrulamak ---
+  // ---Amaç: belgeyi yükleyen kliniğin medical_write rızasıyla, hasta sahibinin ise sahiplikle görebildiğini doğrulamak ---
   describe('getDocument', () => {
     it('yükleyen klinik rızayla görür, taslak id taşınır', async () => {
       prisma.document.findUnique.mockResolvedValue(
@@ -349,6 +355,106 @@ describe('MedicalRecordService', () => {
       expect(
         await rejectionMessage(service.getDocument({ id: DOC_ID }, CLINIC)),
       ).toBe(ResponseMessages.FORBIDDEN);
+    });
+
+    it('hasta sahibi kendi hayvanının başka klinikçe yüklenen belgesini sahiplikle görür, rıza sorulmaz', async () => {
+      prisma.document.findUnique.mockResolvedValue(
+        documentRow({ clinicId: OTHER_CLINIC_ID }),
+      );
+      const response = await service.getDocument({ id: DOC_ID }, OWNER);
+      expect(response.document?.clinicId).toBe(OTHER_CLINIC_ID);
+      expect(petsClient.getPetOwner).toHaveBeenCalledWith({ petId: PET_ID });
+      expect(accessClient.checkAccess).not.toHaveBeenCalled();
+    });
+
+    it('başka sahibin hayvanının belgesi NOT_FOUND; olmayan belgede sahiplik sorulmaz', async () => {
+      petsClient.getPetOwner.mockReturnValue(
+        of({ petId: PET_ID, ownerUserId: 'baska-sahip' }),
+      );
+      expect(
+        await rejectionMessage(service.getDocument({ id: DOC_ID }, OWNER)),
+      ).toBe(ResponseMessages.NOT_FOUND);
+
+      petsClient.getPetOwner.mockClear();
+      prisma.document.findUnique.mockResolvedValue(null);
+      expect(
+        await rejectionMessage(service.getDocument({ id: DOC_ID }, OWNER)),
+      ).toBe(ResponseMessages.NOT_FOUND);
+      expect(petsClient.getPetOwner).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---Amaç: belge listesinde kliniğin yalnızca kendi yüklediklerini medical_write rızasıyla, hasta sahibinin kendi hayvanının tüm belgelerini gördüğünü doğrulamak ---
+  describe('listDocumentsByPet', () => {
+    const request: medicalRecord.ListDocumentsByPetRequest = {
+      petId: PET_ID,
+      page: 2,
+      pageSize: 8,
+    };
+
+    it('klinik medical_write rızasıyla yalnızca kendi yüklediklerini en yeni önce, sayfalı görür', async () => {
+      const response = await service.listDocumentsByPet(request, CLINIC);
+
+      expect(accessClient.checkAccess).toHaveBeenCalledWith({
+        clinicId: CLINIC_ID,
+        petId: PET_ID,
+        requiredScopes: ['medical_write'],
+      });
+      expect(prisma.document.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { petId: PET_ID, clinicId: CLINIC_ID },
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+          skip: 8,
+          take: 8,
+        }),
+      );
+      expect(prisma.document.count).toHaveBeenCalledWith({
+        where: { petId: PET_ID, clinicId: CLINIC_ID },
+      });
+      expect(response).toMatchObject({ total: 1, page: 2, pageSize: 8 });
+      expect(response.documents).toEqual([
+        expect.objectContaining({
+          id: DOC_ID,
+          originalName: 'Kan Tahlili.pdf',
+          status: medicalRecord.DocumentStatus.QUEUED,
+        }),
+      ]);
+    });
+
+    it('hasta sahibi sahiplikle hayvanın tüm kliniklerden belgelerini görür, rıza sorulmaz', async () => {
+      await service.listDocumentsByPet(request, OWNER);
+
+      expect(petsClient.getPetOwner).toHaveBeenCalledWith({ petId: PET_ID });
+      expect(accessClient.checkAccess).not.toHaveBeenCalled();
+      expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
+        petId: PET_ID,
+      });
+    });
+
+    it('durum filtresi veritabanı durumuna çevrilir', async () => {
+      await service.listDocumentsByPet(
+        { ...request, status: medicalRecord.DocumentStatus.FAILED },
+        OWNER,
+      );
+      expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
+        petId: PET_ID,
+        status: DocumentStatus.FAILED,
+      });
+    });
+
+    it('başka sahibin hayvanı NOT_FOUND, rızasız klinik FORBIDDEN; veritabanına gidilmez', async () => {
+      petsClient.getPetOwner.mockReturnValue(
+        of({ petId: PET_ID, ownerUserId: 'baska-sahip' }),
+      );
+      expect(
+        await rejectionMessage(service.listDocumentsByPet(request, OWNER)),
+      ).toBe(ResponseMessages.NOT_FOUND);
+
+      accessClient.checkAccess.mockReturnValue(allowed(false));
+      expect(
+        await rejectionMessage(service.listDocumentsByPet(request, CLINIC)),
+      ).toBe(ResponseMessages.FORBIDDEN);
+      expect(prisma.document.findMany).not.toHaveBeenCalled();
     });
   });
 

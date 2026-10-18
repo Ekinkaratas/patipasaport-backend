@@ -25,6 +25,7 @@ import { DraftReviewStatus, Prisma } from '../generated/prisma/client';
 import { CONSENT_PAGE_SIZE } from './medical-record.constants';
 import {
   DOCUMENT_INCLUDE,
+  DOCUMENT_STATUS_TO_DB,
   DocumentWithDraft,
   DRAFT_INCLUDE,
   DRAFT_STATUS_TO_DB,
@@ -308,7 +309,10 @@ export class MedicalRecordService implements OnModuleInit {
       include: DOCUMENT_INCLUDE,
     });
 
-    if (!document || document.clinicId !== user.clinicId) {
+    if (
+      !document ||
+      (user.role !== 'PET_OWNER' && document.clinicId !== user.clinicId)
+    ) {
       rejectRpc(
         this.logger,
         ResponseMessages.NOT_FOUND,
@@ -317,7 +321,7 @@ export class MedicalRecordService implements OnModuleInit {
       );
     }
 
-    await this.assertClinicScope(
+    await this.assertPetReadable(
       document.petId,
       user,
       'medical_write',
@@ -325,6 +329,47 @@ export class MedicalRecordService implements OnModuleInit {
     );
 
     return { document: toProtoDocument(document) };
+  }
+
+  async listDocumentsByPet(
+    request: medicalRecord.ListDocumentsByPetRequest,
+    user: AuthUser,
+  ): Promise<medicalRecord.ListDocumentsResponse> {
+    await this.assertPetReadable(
+      request.petId,
+      user,
+      'medical_write',
+      'listDocumentsByPet',
+    );
+
+    const status =
+      request.status !== undefined
+        ? DOCUMENT_STATUS_TO_DB[request.status]
+        : undefined;
+
+    const where: Prisma.DocumentWhereInput = {
+      petId: request.petId,
+      ...(user.role === 'PET_OWNER' ? {} : { clinicId: user.clinicId }),
+      ...(status ? { status } : {}),
+    };
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.document.findMany({
+        where,
+        include: DOCUMENT_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        skip: (request.page - 1) * request.pageSize,
+        take: request.pageSize,
+      }),
+      this.prisma.document.count({ where }),
+    ]);
+
+    return {
+      documents: rows.map((row) => toProtoDocument(row)),
+      total,
+      page: request.page,
+      pageSize: request.pageSize,
+    };
   }
 
   async createRecord(

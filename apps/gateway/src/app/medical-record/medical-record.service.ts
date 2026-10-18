@@ -1,16 +1,38 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+  ServiceUnavailableException,
+  StreamableFile,
+} from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
+import { NoSuchKey } from '@aws-sdk/client-s3';
+import { createHash } from 'crypto';
 import { firstValueFrom } from 'rxjs';
 import { medicalRecord } from '@libs/proto';
 import { BaseResponse, getCorrelationId, ResponseMessages } from '@libs/common';
-import { CreateRecordRequestDto, ReviewDraftRequestDto } from '@libs/dto';
+import {
+  CreateRecordRequestDto,
+  GetDocumentFileRequestDto,
+  ReviewDraftRequestDto,
+} from '@libs/dto';
+import {
+  DocumentIntegrityError,
+  DocumentStorageService,
+} from '../storage/document-storage.service';
+import { contentDisposition } from './content-disposition';
 
 @Injectable()
 export class ApiMedicalRecordService implements OnModuleInit {
+  private readonly logger = new Logger(ApiMedicalRecordService.name);
   private medicalRecordClient!: medicalRecord.MedicalRecordServiceClient;
 
   constructor(
     @Inject('MEDICAL_RECORD_SERVICE') private readonly client: ClientGrpc,
+    private readonly storage: DocumentStorageService,
   ) {}
 
   onModuleInit() {
@@ -92,6 +114,87 @@ export class ApiMedicalRecordService implements OnModuleInit {
     return ApiMedicalRecordService.ok(
       await firstValueFrom(this.medicalRecordClient.getDocument(request)),
     );
+  }
+
+  async listDocumentsByPet(
+    request: medicalRecord.ListDocumentsByPetRequest,
+  ): Promise<BaseResponse<medicalRecord.ListDocumentsResponse>> {
+    return ApiMedicalRecordService.ok(
+      await firstValueFrom(
+        this.medicalRecordClient.listDocumentsByPet(request),
+      ),
+    );
+  }
+
+  async getDocumentFile(
+    request: GetDocumentFileRequestDto,
+  ): Promise<StreamableFile> {
+    const { document } = await firstValueFrom(
+      this.medicalRecordClient.getDocument({ id: request.id }),
+    );
+    if (!document) {
+      this.logger.error(
+        `getDocumentFile: medical_record.getDocument boş yanıt döndü (documentId=${request.id})`,
+      );
+      throw new InternalServerErrorException(
+        ResponseMessages.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    const content = await this.readDocument(document);
+    return new StreamableFile(content, {
+      type: document.mimeType,
+      length: content.length,
+      disposition: contentDisposition(
+        request.download ? 'attachment' : 'inline',
+        document.originalName,
+      ),
+    });
+  }
+
+  private async readDocument(
+    document: medicalRecord.Document,
+  ): Promise<Buffer> {
+    let content: Buffer;
+    try {
+      content = await this.storage.get(
+        document.storagePath,
+        document.sizeBytes,
+      );
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      if (e instanceof DocumentIntegrityError) {
+        this.logger.error(
+          `getDocumentFile: belge bütünlüğü bozuk (documentId=${document.id}): ${reason}`,
+        );
+        throw new InternalServerErrorException(
+          ResponseMessages.INTERNAL_SERVER_ERROR,
+        );
+      }
+      if (e instanceof NoSuchKey) {
+        this.logger.error(
+          `getDocumentFile: belge kaydı var ama dosya depoda yok (documentId=${document.id} storagePath=${document.storagePath})`,
+        );
+        throw new NotFoundException(ResponseMessages.NOT_FOUND);
+      }
+      this.logger.error(
+        `getDocumentFile: dosya depodan okunamadı (documentId=${document.id}): ${reason}`,
+      );
+      throw new ServiceUnavailableException(
+        ResponseMessages.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    const sha256 = createHash('sha256').update(content).digest('hex');
+    if (sha256 !== document.sha256) {
+      this.logger.error(
+        `getDocumentFile: belge bütünlüğü bozuk, sha256 uyuşmuyor (documentId=${document.id})`,
+      );
+      throw new InternalServerErrorException(
+        ResponseMessages.INTERNAL_SERVER_ERROR,
+      );
+    }
+    return content;
   }
 
   async listDraftReviews(

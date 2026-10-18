@@ -5,6 +5,7 @@ export interface HttpResponse {
   status: number;
   headers: IncomingHttpHeaders;
   body: string;
+  rawBody: Buffer;
 }
 
 export function httpRequest(
@@ -32,13 +33,15 @@ export function httpRequest(
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('end', () =>
+        res.on('end', () => {
+          const rawBody = Buffer.concat(chunks);
           resolvePromise({
             status: res.statusCode ?? 0,
             headers: res.headers,
-            body: Buffer.concat(chunks).toString('utf8'),
-          }),
-        );
+            body: rawBody.toString('utf8'),
+            rawBody,
+          });
+        });
         res.on('error', reject);
       },
     );
@@ -115,13 +118,15 @@ export function httpUpload(
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('end', () =>
+        res.on('end', () => {
+          const rawBody = Buffer.concat(chunks);
           resolvePromise({
             status: res.statusCode ?? 0,
             headers: res.headers,
-            body: Buffer.concat(chunks).toString('utf8'),
-          }),
-        );
+            body: rawBody.toString('utf8'),
+            rawBody,
+          });
+        });
         res.on('error', reject);
       },
     );

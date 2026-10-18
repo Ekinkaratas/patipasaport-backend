@@ -6,11 +6,14 @@ import {
   Param,
   Post,
   Query,
+  StreamableFile,
 } from '@nestjs/common';
 import { BaseResponse, RequestWithParams } from '@libs/common';
 import {
   CreateRecordRequestDto,
+  GetDocumentFileRequestDto,
   GetDocumentRequestDto,
+  ListDocumentsByPetRequestDto,
   ListDraftReviewsRequestDto,
   ListLabResultsRequestDto,
   ListPrescriptionsRequestDto,
@@ -60,11 +63,25 @@ export class ApiMedicalRecordController {
     return this.medicalRecordService.createRecord(request);
   }
 
+  @Get('pets/:petId/documents')
+  listDocumentsByPet(
+    @RequestWithParams('query') request: ListDocumentsByPetRequestDto,
+  ): Promise<BaseResponse<medicalRecord.ListDocumentsResponse>> {
+    return this.medicalRecordService.listDocumentsByPet(request);
+  }
+
   @Get('documents/:id')
   getDocument(
     @Param() request: GetDocumentRequestDto,
   ): Promise<BaseResponse<medicalRecord.DocumentResponse>> {
     return this.medicalRecordService.getDocument(request);
+  }
+
+  @Get('documents/:id/file')
+  getDocumentFile(
+    @RequestWithParams('query') request: GetDocumentFileRequestDto,
+  ): Promise<StreamableFile> {
+    return this.medicalRecordService.getDocumentFile(request);
   }
 
   @Get('draft-reviews')

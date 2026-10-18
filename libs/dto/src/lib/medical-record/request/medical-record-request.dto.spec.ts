@@ -5,7 +5,11 @@ import { validateSync } from 'class-validator';
 import { msg, UUID_A, UUID_B } from '../../../testing/first-error';
 import { nestedErrors } from '../../../testing/nested-errors';
 import { CreateRecordRequestDto } from './create-record.dto';
-import { GetDocumentRequestDto } from './get-document.dto';
+import {
+  GetDocumentFileRequestDto,
+  GetDocumentRequestDto,
+} from './get-document.dto';
+import { ListDocumentsByPetRequestDto } from './list-documents-by-pet.dto';
 import { ListDraftReviewsRequestDto } from './list-draft-reviews.dto';
 import { ListLabResultsRequestDto } from './list-lab-results.dto';
 import { ListPrescriptionsRequestDto } from './list-prescriptions.dto';
@@ -14,7 +18,8 @@ import { ListVaccinationsRequestDto } from './list-vaccinations.dto';
 import { RegisterDocumentRequestDto } from './register-document.dto';
 import { ReviewDraftRequestDto } from './review-draft.dto';
 
-const { RecordType, LabResultFlag, DraftReviewStatus } = medicalRecord;
+const { RecordType, LabResultFlag, DraftReviewStatus, DocumentStatus } =
+  medicalRecord;
 const FILE_UUID = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
 const SHA = 'a'.repeat(64);
 
@@ -767,6 +772,72 @@ describe('GetDocumentRequestDto', () => {
     ['UUID değil', 'abc', { id: msg(P.DOCUMENT_ID, V.WRONG_DATA_FORMAT) }],
   ])('id %s', (_n, id, expected) =>
     expect(nestedErrors(GetDocumentRequestDto, { id })).toEqual(expected),
+  );
+});
+
+// ---Amaç: dosya isteğinde yalnızca download=1'in indirme anlamına geldiğini, başka değerlerin reddedildiğini doğrulamak ---
+describe('GetDocumentFileRequestDto', () => {
+  const check = (o: object) =>
+    nestedErrors(GetDocumentFileRequestDto, { id: UUID_A, ...o });
+
+  it.each([
+    ['gönderilmedi', {}, undefined],
+    ['"1"', { download: '1' }, true],
+  ])('download %s → geçerli, %p', (_n, o, expected) => {
+    expect(check(o)).toEqual({});
+    expect(
+      plainToInstance(GetDocumentFileRequestDto, { id: UUID_A, ...o }).download,
+    ).toBe(expected);
+  });
+
+  it.each(['0', 'true', '', 'evet'])('download "%s" → NOT_VALID', (download) =>
+    expect(check({ download })).toEqual({
+      download: msg(P.DOWNLOAD, V.NOT_VALID),
+    }),
+  );
+
+  it('bozuk belge kimliği reddedilir', () =>
+    expect(check({ id: 'abc' })).toEqual({
+      id: msg(P.DOCUMENT_ID, V.WRONG_DATA_FORMAT),
+    }));
+});
+
+// ---Amaç: belge listesinde hayvan kimliğinin zorunlu, durum filtresinin isteğe bağlı olduğunu ve sayfalama kurallarını doğrulamak ---
+describe('ListDocumentsByPetRequestDto', () => {
+  const base = { petId: UUID_A, page: 1, pageSize: 8 };
+  const check = (o: object) =>
+    nestedErrors(ListDocumentsByPetRequestDto, { ...base, ...o });
+
+  it.each([
+    ['filtresiz', {}],
+    ['boş durum', { status: '' }],
+    ['durum FAILED', { status: DocumentStatus.FAILED }],
+    ['sorgudan durum "1"', { status: '1' }],
+  ])('%s → geçerli', (_n, o) => expect(check(o)).toEqual({}));
+
+  it.each([
+    ['petId yok', { petId: undefined }, 'petId', msg(P.PET_ID, V.NOT_EMPTY)],
+    [
+      'petId UUID değil',
+      { petId: 'x' },
+      'petId',
+      msg(P.PET_ID, V.WRONG_DATA_FORMAT),
+    ],
+    [
+      'durum UNSPECIFIED',
+      { status: 0 },
+      'status',
+      msg(P.DOCUMENT_STATUS, V.NOT_VALID),
+    ],
+    ['durum 5', { status: '5' }, 'status', msg(P.DOCUMENT_STATUS, V.NOT_VALID)],
+    [
+      'sayfa boyutu 10',
+      { pageSize: 10 },
+      'pageSize',
+      msg(P.PAGE_SIZE, V.NOT_VALID),
+    ],
+  ])('%s → hata', (_n, o, field, expected) =>
+    expect(check(o)).toEqual({ [field]: expected }),
   );
 });
 
