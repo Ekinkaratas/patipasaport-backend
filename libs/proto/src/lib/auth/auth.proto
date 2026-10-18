@@ -67,6 +67,7 @@ message TokenResponse {
   int32 expires_in = 4;      // saniye
   string user_id = 5;
   string clinicId = 6;
+  int32 refresh_expires_in = 7;
 }
 
 

@@ -1,5 +1,5 @@
 import { INestApplication } from '@nestjs/common';
-import { NextFunction, Request, Response } from 'express';
+import { Application, NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 
 const CORS_ALLOWED_HEADERS = [
@@ -38,7 +38,23 @@ export function parseCorsOrigins(raw: string | undefined): string[] {
   return origins;
 }
 
+export function parseTrustProxy(raw: string | undefined): number | undefined {
+  const value = (raw ?? '').trim();
+  if (value === '') return undefined;
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new Error(
+      `TRUST_PROXY geçersiz: "${raw}" (boş bırakın ya da gateway'in önündeki vekil sayısını yazın, ör. 1)`,
+    );
+  }
+  return Number(value);
+}
+
 export function applyHttpSecurity(app: INestApplication): void {
+  const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+  if (trustProxy !== undefined) {
+    const server: Application = app.getHttpAdapter().getInstance();
+    server.set('trust proxy', trustProxy);
+  }
   app.use(
     helmet({
       contentSecurityPolicy: {

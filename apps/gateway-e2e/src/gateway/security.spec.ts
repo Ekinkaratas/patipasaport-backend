@@ -1,4 +1,6 @@
 import {
+  DOCKER_GRPC_PORTS,
+  E2E_PORTS,
   httpGet,
   httpRequest,
   HttpResponse,
@@ -6,8 +8,11 @@ import {
   RunningService,
   samplePdf,
   startService,
+  WORKSPACE_ROOT,
 } from '@libs/e2e-utils';
+import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
+import { resolve } from 'path';
 
 const ALLOWED_ORIGIN = 'http://izinli.example';
 const SECOND_ORIGIN = 'http://ikinci.example';
@@ -39,6 +44,43 @@ const expectThrottled = (response: HttpResponse) => {
   expect(retryAfter).toBeGreaterThan(0);
   expect(retryAfter).toBeLessThanOrEqual(60);
 };
+
+const runGatewayUntilExit = (
+  env: Record<string, string>,
+): Promise<{ code: number | null; output: string }> =>
+  new Promise((resolvePromise) => {
+    const child = spawn(
+      process.execPath,
+      [resolve(WORKSPACE_ROOT, 'dist/apps/gateway/main.js')],
+      {
+        cwd: WORKSPACE_ROOT,
+        env: {
+          ...process.env,
+          PORT: String(E2E_PORTS.gateway),
+          ACCESS_GRPC_URL: `127.0.0.1:${DOCKER_GRPC_PORTS.access}`,
+          AUTH_GRPC_URL: `127.0.0.1:${DOCKER_GRPC_PORTS.auth}`,
+          CLINICS_GRPC_URL: `127.0.0.1:${DOCKER_GRPC_PORTS.clinics}`,
+          MEDICAL_RECORD_GRPC_URL: `127.0.0.1:${DOCKER_GRPC_PORTS.medical_record}`,
+          PETS_GRPC_URL: `127.0.0.1:${DOCKER_GRPC_PORTS.pets}`,
+          USERS_GRPC_URL: `127.0.0.1:${DOCKER_GRPC_PORTS.users}`,
+          S3_ENDPOINT: 'http://127.0.0.1:8333',
+          S3_BUCKET: 'medical-documents',
+          S3_ACCESS_KEY: 'e2e',
+          S3_SECRET_KEY: 'e2e',
+          ...env,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    let output = '';
+    child.stdout?.on('data', (chunk: Buffer) => (output += chunk.toString()));
+    child.stderr?.on('data', (chunk: Buffer) => (output += chunk.toString()));
+    const timer = setTimeout(() => child.kill(), 20_000);
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolvePromise({ code, output });
+    });
+  });
 
 describe('gateway güvenlik katmanı (e2e)', () => {
   describe('güvenlik başlıkları ve CORS', () => {
@@ -279,5 +321,63 @@ describe('gateway güvenlik katmanı (e2e)', () => {
       expect(response.status).toBe(400);
       expect(parse(response).message).not.toBe(DEPTH_MESSAGE);
     });
+  });
+
+  describe('trust proxy', () => {
+    const consents = (port: number, forwardedFor: string) =>
+      httpGet(port, '/consents', { 'x-forwarded-for': forwardedFor });
+
+    describe('TRUST_PROXY=1', () => {
+      let service: RunningService;
+
+      beforeAll(async () => {
+        service = await startService('gateway', {
+          TRUST_PROXY: '1',
+          RATE_LIMIT_GLOBAL: '2',
+        });
+      }, 120_000);
+
+      afterAll(async () => {
+        await service?.stop();
+      });
+
+      // ---Amaç: istemci IP'sinin vekilin eklediği son X-Forwarded-For girdisinden alındığını, başa yazılan sahte IP'nin sınırı aşmaya yaramadığını ve her istemcinin ayrı sayaç aldığını doğrulamak ---
+      it('sayaç son X-Forwarded-For girdisine göre tutulur, sahte ön ek yok sayılır', async () => {
+        expect((await consents(service.port, '203.0.113.10')).status).toBe(401);
+        expect((await consents(service.port, '203.0.113.10')).status).toBe(401);
+        expectThrottled(await consents(service.port, '203.0.113.10'));
+        expectThrottled(
+          await consents(service.port, '198.51.100.99, 203.0.113.10'),
+        );
+        expect((await consents(service.port, '203.0.113.20')).status).toBe(401);
+      });
+    });
+
+    describe('TRUST_PROXY boş', () => {
+      let service: RunningService;
+
+      beforeAll(async () => {
+        service = await startService('gateway', { RATE_LIMIT_GLOBAL: '2' });
+      }, 120_000);
+
+      afterAll(async () => {
+        await service?.stop();
+      });
+
+      // ---Amaç: trust proxy kapalıyken istemcinin gönderdiği X-Forwarded-For başlığının dikkate alınmadığını, isteklerin bağlantı adresine göre tek sayaçta toplandığını doğrulamak ---
+      it('X-Forwarded-For yok sayılır, istekler tek sayaçta toplanır', async () => {
+        expect((await consents(service.port, '203.0.113.10')).status).toBe(401);
+        expect((await consents(service.port, '203.0.113.20')).status).toBe(401);
+        expectThrottled(await consents(service.port, '203.0.113.30'));
+      });
+    });
+
+    // ---Amaç: herkese güvenen TRUST_PROXY=true değerinde gateway'in açılmayıp değişkenin adını içeren hatayla durduğunu doğrulamak ---
+    it('TRUST_PROXY=true ile gateway açılmaz', async () => {
+      const result = await runGatewayUntilExit({ TRUST_PROXY: 'true' });
+      expect(result.code).not.toBeNull();
+      expect(result.code).not.toBe(0);
+      expect(result.output).toContain('TRUST_PROXY geçersiz: "true"');
+    }, 30_000);
   });
 });

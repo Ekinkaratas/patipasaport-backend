@@ -5,6 +5,10 @@
 
 services:
 
+  gateway:
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
+
   # ---- Altyapi: host portları (sadece localhost'a bağlı) ----
   postgres-auth:
     ports: ["127.0.0.1:5433:5432"]

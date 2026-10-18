@@ -21,6 +21,11 @@ import {
 import { auth } from '@libs/proto';
 import { RateLimit } from '../security/rate-limit';
 import { ApiAuthService } from './auth.service';
+import { RefreshCookie } from './refresh-cookie';
+
+const IssueRefreshCookie = RefreshCookie({ read: false, write: 'set' });
+const RotateRefreshCookie = RefreshCookie({ read: true, write: 'set' });
+const ClearRefreshCookie = RefreshCookie({ read: true, write: 'clear' });
 
 @Controller('auth')
 export class ApiAuthController {
@@ -29,7 +34,7 @@ export class ApiAuthController {
   @Public()
   @RateLimit('auth')
   @Post('register')
-  @UseInterceptors(ClientTypeHeaderInterceptor)
+  @UseInterceptors(ClientTypeHeaderInterceptor, IssueRefreshCookie)
   register(
     @Body() request: RegisterRequestDto,
   ): Promise<BaseResponse<auth.TokenResponse>> {
@@ -40,7 +45,7 @@ export class ApiAuthController {
   @RateLimit('auth')
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(ClientTypeHeaderInterceptor)
+  @UseInterceptors(ClientTypeHeaderInterceptor, IssueRefreshCookie)
   login(
     @Body() request: LoginRequestDto,
   ): Promise<BaseResponse<auth.TokenResponse>> {
@@ -51,7 +56,7 @@ export class ApiAuthController {
   @RateLimit('auth')
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(ClientTypeHeaderInterceptor)
+  @UseInterceptors(ClientTypeHeaderInterceptor, RotateRefreshCookie)
   refreshToken(
     @Body() request: RefreshTokenRequestDto,
   ): Promise<BaseResponse<auth.TokenResponse>> {
@@ -61,6 +66,7 @@ export class ApiAuthController {
   @Public()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
+  @UseInterceptors(ClearRefreshCookie)
   logout(
     @Body() request: LogoutRequestDto,
     @Headers('authorization') authorization?: string,

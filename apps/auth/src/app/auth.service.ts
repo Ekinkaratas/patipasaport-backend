@@ -145,6 +145,10 @@ export class AuthService {
     return new Date(Date.now() + refreshTokenTtlSeconds(rememberMe) * 1000);
   }
 
+  private static secondsUntil(date: Date): number {
+    return Math.max(0, Math.round((date.getTime() - Date.now()) / 1000));
+  }
+
   // --- Amaç: eskiyi atomik iptal + yenisini yaz, tek transaction. ---
   private async rotateRefreshToken(oldHash: string, spec: SessionSpec) {
     return this.prisma.$transaction(async (tx) => {
@@ -461,6 +465,7 @@ export class AuthService {
       expiresIn: opaque_token.expiresIn,
       userId,
       clinicId: createdUser.clinicId || '',
+      refreshExpiresIn: AuthService.secondsUntil(refresh.token.expiresAt),
     };
 
     return response;
@@ -642,6 +647,7 @@ export class AuthService {
       expiresIn: access_response_data.expiresIn,
       userId: auth_db_data.userId,
       clinicId: user_db_data.clinicId || '',
+      refreshExpiresIn: AuthService.secondsUntil(refresh_token_data.expiresAt),
     };
 
     this.logger.log('login: metodu başarıyla tamamlandı');
@@ -769,6 +775,7 @@ export class AuthService {
       expiresIn: access_response_data.expiresIn,
       userId: session.userId,
       clinicId: user_db_data.clinicId || '',
+      refreshExpiresIn: AuthService.secondsUntil(refresh_token_data.expiresAt),
     };
 
     this.logger.log('refreshToken: metodu başarıyla tamamlandı');

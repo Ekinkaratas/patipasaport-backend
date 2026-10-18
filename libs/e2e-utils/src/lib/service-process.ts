@@ -61,6 +61,8 @@ function serviceEnv(name: ServiceName): Record<string, string> {
         S3_ACCESS_KEY: requireEnv('S3_GATEWAY_ACCESS_KEY'),
         S3_SECRET_KEY: requireEnv('S3_GATEWAY_SECRET_KEY'),
         CORS_ORIGINS: '',
+        TRUST_PROXY: '',
+        REFRESH_COOKIE_PATH: '',
         RATE_LIMIT_WINDOW_SECONDS: '60',
         RATE_LIMIT_GLOBAL: E2E_RATE_LIMIT,
         RATE_LIMIT_AUTH: E2E_RATE_LIMIT,

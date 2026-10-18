@@ -620,6 +620,7 @@ describe('AuthService', () => {
         expiresIn: ACCESS_TOKEN_TTL_SECONDS,
         userId: CREDENTIAL_USER_ID,
         clinicId: '',
+        refreshExpiresIn: REFRESH_TOKEN_TTL_SECONDS,
       });
     });
 
@@ -689,12 +690,16 @@ describe('AuthService', () => {
       'oturumu hatirla %s ise sure ve kayit dogru ayarlanir',
       async (_label, rememberMe, stored, ttlSeconds) => {
         const before = Date.now();
-        await service.login({ ...loginDto, rememberMe: rememberMe as boolean });
+        const response = await service.login({
+          ...loginDto,
+          rememberMe: rememberMe as boolean,
+        });
         const after = Date.now();
 
         const [{ data }] = prisma.session.create.mock.calls[0];
         expect(Boolean(data.rememberMe)).toBe(stored);
         expectExpiresWithin(data.expiresAt, before, after, ttlSeconds);
+        expect(response.refreshExpiresIn).toBe(ttlSeconds);
       },
     );
 
@@ -860,6 +865,7 @@ describe('AuthService', () => {
         expiresIn: ACCESS_TOKEN_TTL_SECONDS,
         userId: CREDENTIAL_USER_ID,
         clinicId: '',
+        refreshExpiresIn: REMEMBER_ME_REFRESH_TOKEN_TTL_SECONDS,
       });
     });
 

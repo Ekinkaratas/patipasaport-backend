@@ -103,6 +103,7 @@ export interface TokenResponse {
   expiresIn: number;
   userId: string;
   clinicId: string;
+  refreshExpiresIn: number;
 }
 
 export const AUTH_PACKAGE_NAME = "auth";
@@ -342,6 +343,11 @@ export const TokenResponse: MessageFns<TokenResponse> = {
         ? globalThis.String(object.user_id)
         : "",
       clinicId: isSet(object.clinicId) ? globalThis.String(object.clinicId) : "",
+      refreshExpiresIn: isSet(object.refreshExpiresIn)
+        ? globalThis.Number(object.refreshExpiresIn)
+        : isSet(object.refresh_expires_in)
+        ? globalThis.Number(object.refresh_expires_in)
+        : 0,
     };
   },
 
@@ -364,6 +370,9 @@ export const TokenResponse: MessageFns<TokenResponse> = {
     }
     if (message.clinicId !== "") {
       obj.clinicId = message.clinicId;
+    }
+    if (message.refreshExpiresIn !== 0) {
+      obj.refreshExpiresIn = Math.round(message.refreshExpiresIn);
     }
     return obj;
   },

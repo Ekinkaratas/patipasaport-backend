@@ -182,6 +182,7 @@ describe('auth servisi (e2e)', () => {
       const registered = expectOk(await register({ email }), 'Register');
       expect(registered.tokenType).toBe('Bearer');
       expect(registered.expiresIn).toBe(900);
+      expect(registered.refreshExpiresIn).toBe(43_200);
       expect(registered.userId).toMatch(UUID_V4);
       expect(registered.clinicId).toBe('');
       expect(registered.refreshToken).not.toBe('');
@@ -360,6 +361,7 @@ describe('auth servisi (e2e)', () => {
       const current = await session(loggedIn.refreshToken);
       expect(current.remember_me).toBe(true);
       expect(Math.round(current.hours / 24)).toBe(30);
+      expect(loggedIn.refreshExpiresIn).toBe(2_592_000);
       expect(outcome(await exchange(loggedIn.accessToken))).toBe('ok');
       expect(
         code(await exchange(loggedIn.accessToken, access.ClientType.MOBILE)),
@@ -393,6 +395,7 @@ describe('auth servisi (e2e)', () => {
 
       const first = expectOk(await refresh(loggedIn.refreshToken), 'Refresh');
       expect(first.refreshToken).not.toBe(loggedIn.refreshToken);
+      expect(first.refreshExpiresIn).toBe(2_592_000);
       const rotated = await session(first.refreshToken);
       expect(rotated.family_id).toBe(familyId);
       expect(rotated.remember_me).toBe(true);

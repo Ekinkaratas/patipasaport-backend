@@ -3,10 +3,10 @@
 #   cp .env.example .env        
 #   docker compose build        
 #   docker compose up -d
-#   curl http://localhost:3000/health
+#   docker compose ps   (dışarıya port açılmaz; yerel erişim: docker-compose.dev.yml)
 #
 # Mimari:
-#   gateway (HTTP :3000, tek dış kapı)
+#   gateway (HTTP :3000, yalnızca iç ağda; dış kapı önündeki nginx)
 #   ─ gRPC ─> access:3001 | auth:3002 | clinics:3003
 #                medical-record:3004 | pets:3005 | users:3006
 #   Her mikroservisin kendi veritabanı var (database-per-service).
@@ -401,8 +401,8 @@ services:
       RATE_LIMIT_GLOBAL:       ${RATE_LIMIT_GLOBAL:-}
       RATE_LIMIT_AUTH:         ${RATE_LIMIT_AUTH:-}
       RATE_LIMIT_UPLOAD:       ${RATE_LIMIT_UPLOAD:-}
-    ports:
-      - "${GATEWAY_PORT:-3000}:3000"
+      TRUST_PROXY:             ${TRUST_PROXY:-}
+      REFRESH_COOKIE_PATH:     ${REFRESH_COOKIE_PATH:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1 || exit 1"]
       interval: 10s

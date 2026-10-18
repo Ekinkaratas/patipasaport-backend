@@ -11,6 +11,7 @@ import {
 } from '@libs/common';
 import { ApiAuthService } from './auth.service';
 import { ApiAuthController } from './auth.controller';
+import { RefreshCookieService } from './refresh-cookie';
 
 @Module({
   imports: [
@@ -38,6 +39,6 @@ import { ApiAuthController } from './auth.controller';
     ]),
   ],
   controllers: [ApiAuthController],
-  providers: [ApiAuthService],
+  providers: [ApiAuthService, RefreshCookieService],
 })
 export class ApiAuthModule {}
