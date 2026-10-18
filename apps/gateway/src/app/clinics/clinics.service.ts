@@ -103,6 +103,104 @@ export class ApiClinicsService implements OnModuleInit {
     );
   }
 
+  async updateStockItem(
+    request: clinics.UpdateStockItemRequest,
+  ): Promise<BaseResponse<clinics.StockItemResponse>> {
+    const data = await firstValueFrom(
+      this.clinicsClient.updateStockItem(request),
+    );
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
+  }
+
+  async adjustStockItem(
+    request: clinics.AdjustStockItemRequest,
+  ): Promise<BaseResponse<clinics.StockItemResponse>> {
+    const data = await firstValueFrom(
+      this.clinicsClient.adjustStockItem(request),
+    );
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
+  }
+
+  async deleteStockItem(
+    request: clinics.DeleteStockItemRequest,
+  ): Promise<BaseResponse<clinics.StockItemResponse>> {
+    const data = await firstValueFrom(
+      this.clinicsClient.deleteStockItem(request),
+    );
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
+  }
+
+  async createStockSale(
+    request: clinics.CreateStockSaleRequest,
+  ): Promise<BaseResponse<clinics.StockSaleResponse>> {
+    const data = await firstValueFrom(
+      this.clinicsClient.createStockSale(request),
+    );
+    return new BaseResponse(
+      data,
+      ResponseMessages.CREATED,
+      true,
+      getCorrelationId(),
+    );
+  }
+
+  async listStockSales(
+    request: clinics.ListStockSalesRequest,
+  ): Promise<BaseResponse<clinics.ListStockSalesResponse>> {
+    const data = await firstValueFrom(
+      this.clinicsClient.listStockSales(request),
+    );
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
+  }
+
+  async cancelStockSale(
+    request: clinics.CancelStockSaleRequest,
+  ): Promise<BaseResponse<clinics.StockSaleResponse>> {
+    const data = await firstValueFrom(
+      this.clinicsClient.cancelStockSale(request),
+    );
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
+  }
+
+  async getStockSalesSummary(
+    request: clinics.GetStockSalesSummaryRequest,
+  ): Promise<BaseResponse<clinics.StockSalesSummaryResponse>> {
+    const data = await firstValueFrom(
+      this.clinicsClient.getStockSalesSummary(request),
+    );
+    return new BaseResponse(
+      data,
+      ResponseMessages.SUCCESS,
+      true,
+      getCorrelationId(),
+    );
+  }
+
   async getClinicPetOverview(
     request: clinics.GetClinicPetOverviewRequest,
   ): Promise<BaseResponse<clinics.GetClinicPetOverviewResponse>> {

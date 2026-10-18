@@ -26,6 +26,7 @@ import {
   DATE_ONLY_PATTERN,
   todayInBusinessTimeZone,
 } from '../../shared/pet-fields.decorator';
+import { StockPrice } from './stock-price.decorator';
 
 export const STOCK_NAME_PATTERN =
   /^[a-zA-Z0-9çğıöşüâîûÇĞİÖŞÜÂÎÛ.,%()+/-]+(?: [a-zA-Z0-9çğıöşüâîûÇĞİÖŞÜÂÎÛ.,%()+/-]+)*$/;
@@ -189,4 +190,10 @@ export class AddStockItemRequestDto implements clinics.AddStockItemRequest {
     return trimmed === '' ? undefined : trimmed;
   })
   expiresAt!: string;
+
+  @StockPrice(DtoPrefix.PURCHASE_PRICE, 'required')
+  purchasePrice!: number;
+
+  @StockPrice(DtoPrefix.SALE_PRICE, 'required')
+  salePrice!: number;
 }

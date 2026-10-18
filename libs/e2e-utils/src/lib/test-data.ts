@@ -177,6 +177,10 @@ export class TestData {
 
     const clinics = await this.db('clinics');
     await clinics.query(
+      'DELETE FROM stock_sales WHERE clinic_id = ANY($1::uuid[])',
+      [clinicIds],
+    );
+    await clinics.query(
       'DELETE FROM stock_items WHERE clinic_id = ANY($1::uuid[])',
       [clinicIds],
     );

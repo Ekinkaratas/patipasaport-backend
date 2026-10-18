@@ -2,11 +2,18 @@ import { Controller } from '@nestjs/common';
 import { ClinicsService } from './clinics.service';
 import {
   AddStockItemRequestDto,
+  AdjustStockItemRequestDto,
+  CancelStockSaleRequestDto,
   CreateClinicRequestDto,
+  CreateStockSaleRequestDto,
   DeactivateClinicRequestDto,
+  DeleteStockItemRequestDto,
   GetClinicPetOverviewRequestDto,
   GetClinicRequestDto,
+  GetStockSalesSummaryRequestDto,
   ListStockItemsRequestDto,
+  ListStockSalesRequestDto,
+  UpdateStockItemRequestDto,
   UploadPetResultRequestDto,
 } from '@libs/dto';
 import { GrpcMethod, Payload } from '@nestjs/microservices';
@@ -59,6 +66,69 @@ export class ClinicsController {
     @CurrentUser() user: AuthUser,
   ): Promise<clinics.ListStockItemsResponse> {
     return this.clinicsService.listStockItems(request, user);
+  }
+
+  @Roles(['CLINIC'])
+  @GrpcMethod(clinics.CLINICS_SERVICE_NAME, 'UpdateStockItem')
+  async updateStockItem(
+    @Payload() request: UpdateStockItemRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<clinics.StockItemResponse> {
+    return this.clinicsService.updateStockItem(request, user);
+  }
+
+  @Roles(['CLINIC'])
+  @GrpcMethod(clinics.CLINICS_SERVICE_NAME, 'AdjustStockItem')
+  async adjustStockItem(
+    @Payload() request: AdjustStockItemRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<clinics.StockItemResponse> {
+    return this.clinicsService.adjustStockItem(request, user);
+  }
+
+  @Roles(['CLINIC'])
+  @GrpcMethod(clinics.CLINICS_SERVICE_NAME, 'DeleteStockItem')
+  async deleteStockItem(
+    @Payload() request: DeleteStockItemRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<clinics.StockItemResponse> {
+    return this.clinicsService.deleteStockItem(request, user);
+  }
+
+  @Roles(['CLINIC'])
+  @GrpcMethod(clinics.CLINICS_SERVICE_NAME, 'CreateStockSale')
+  async createStockSale(
+    @Payload() request: CreateStockSaleRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<clinics.StockSaleResponse> {
+    return this.clinicsService.createStockSale(request, user);
+  }
+
+  @Roles(['CLINIC'])
+  @GrpcMethod(clinics.CLINICS_SERVICE_NAME, 'ListStockSales')
+  async listStockSales(
+    @Payload() request: ListStockSalesRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<clinics.ListStockSalesResponse> {
+    return this.clinicsService.listStockSales(request, user);
+  }
+
+  @Roles(['CLINIC'])
+  @GrpcMethod(clinics.CLINICS_SERVICE_NAME, 'CancelStockSale')
+  async cancelStockSale(
+    @Payload() request: CancelStockSaleRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<clinics.StockSaleResponse> {
+    return this.clinicsService.cancelStockSale(request, user);
+  }
+
+  @Roles(['CLINIC'])
+  @GrpcMethod(clinics.CLINICS_SERVICE_NAME, 'GetStockSalesSummary')
+  async getStockSalesSummary(
+    @Payload() request: GetStockSalesSummaryRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<clinics.StockSalesSummaryResponse> {
+    return this.clinicsService.getStockSalesSummary(request, user);
   }
 
   @Roles(['CLINIC'])

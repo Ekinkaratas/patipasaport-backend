@@ -39,6 +39,7 @@ model Clinic {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   stockItems StockItem[]
+  stockSales StockSale[]
 
   @@map("clinics")
 }
@@ -52,12 +53,37 @@ model StockItem {
   quantity      Int
   criticalLevel Int           @map("critical_level")
   expiresAt     DateTime?     @map("expires_at") @db.Date
+  purchasePrice Int?          @map("purchase_price")
+  salePrice     Int?          @map("sale_price")
   createdBy     String        @map("created_by") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  clinic Clinic      @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  sales  StockSale[]
 
   @@index([clinicId, category])
   @@map("stock_items")
+}
+
+model StockSale {
+  id                String        @id @default(uuid()) @db.Uuid
+  clinicId          String        @map("clinic_id") @db.Uuid
+  stockItemId       String?       @map("stock_item_id") @db.Uuid
+  itemName          String        @map("item_name") @db.VarChar(64)
+  category          StockCategory
+  unit              StockUnit
+  quantity          Int
+  unitSalePrice     Int           @map("unit_sale_price")
+  unitPurchasePrice Int           @map("unit_purchase_price")
+  soldAt            DateTime      @default(now()) @map("sold_at")
+  cancelledAt       DateTime?     @map("cancelled_at")
+  createdBy         String        @map("created_by") @db.Uuid
+
+  clinic    Clinic     @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  stockItem StockItem? @relation(fields: [stockItemId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, soldAt])
+  @@index([stockItemId])
+  @@map("stock_sales")
 }

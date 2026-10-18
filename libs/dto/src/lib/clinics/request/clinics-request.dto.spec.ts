@@ -34,7 +34,7 @@ const shiftDays = (iso: string, days: number) => {
   return date.toISOString().slice(0, 10);
 };
 
-// ---Amaç: stok kalemi ekleme isteğinin ad, kod listesi, miktar ve son kullanma tarihi kurallarını doğrulamak ---
+// ---Amaç: stok kalemi ekleme isteğinin ad, kod listesi, miktar, kuruş cinsinden fiyat ve son kullanma tarihi kurallarını doğrulamak ---
 describe('AddStockItemRequestDto', () => {
   const valid = {
     clinicId: UUID_A,
@@ -44,6 +44,8 @@ describe('AddStockItemRequestDto', () => {
     quantity: 10,
     criticalLevel: 2,
     expiresAt: shiftDays(istanbulToday(), 30),
+    purchasePrice: 8_000,
+    salePrice: 12_000,
   };
   const check = (o: object) =>
     firstErrors(AddStockItemRequestDto, { ...valid, ...o });
@@ -204,6 +206,40 @@ describe('AddStockItemRequestDto', () => {
       }));
 
     it.each([1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+      '%p → MUST_BE_NUMBER',
+      (value) =>
+        expect(check({ [field]: value })).toEqual({
+          [field]: msg(prefix, V.MUST_BE_NUMBER),
+        }),
+    );
+  });
+
+  describe.each([
+    ['purchasePrice', P.PURCHASE_PRICE],
+    ['salePrice', P.SALE_PRICE],
+  ])('%s (kuruş)', (field, prefix) => {
+    it.each([0, 1, 1_000_000_000])('%p kabul edilir', (value) =>
+      expect(check({ [field]: value })).toEqual({}),
+    );
+
+    it('sayısal metin sayıya dönüşür', () =>
+      expect(
+        plainToInstance(AddStockItemRequestDto, { ...valid, [field]: '14990' })[
+          field as 'purchasePrice' | 'salePrice'
+        ],
+      ).toBe(14_990));
+
+    it('-1 → MIN|0', () =>
+      expect(check({ [field]: -1 })).toEqual({
+        [field]: msg(prefix, V.MIN, 0),
+      }));
+
+    it('1000000001 → MAX|1000000000', () =>
+      expect(check({ [field]: 1_000_000_001 })).toEqual({
+        [field]: msg(prefix, V.MAX, 1_000_000_000),
+      }));
+
+    it.each([undefined, null, '', '   ', true, 149.9, 'fiyat', Number.NaN])(
       '%p → MUST_BE_NUMBER',
       (value) =>
         expect(check({ [field]: value })).toEqual({

@@ -13,6 +13,13 @@ service ClinicsService {
   rpc DeactivateClinic (DeactivateClinicRequest) returns (ClinicResponse);
   rpc ListStockItems (ListStockItemsRequest) returns (ListStockItemsResponse);
   rpc AddStockItem (AddStockItemRequest) returns (StockItemResponse);
+  rpc UpdateStockItem (UpdateStockItemRequest) returns (StockItemResponse);
+  rpc AdjustStockItem (AdjustStockItemRequest) returns (StockItemResponse);
+  rpc DeleteStockItem (DeleteStockItemRequest) returns (StockItemResponse);
+  rpc CreateStockSale (CreateStockSaleRequest) returns (StockSaleResponse);
+  rpc ListStockSales (ListStockSalesRequest) returns (ListStockSalesResponse);
+  rpc CancelStockSale (CancelStockSaleRequest) returns (StockSaleResponse);
+  rpc GetStockSalesSummary (GetStockSalesSummaryRequest) returns (StockSalesSummaryResponse);
   rpc GetClinicPetOverview (GetClinicPetOverviewRequest) returns (GetClinicPetOverviewResponse);
   rpc UploadPetResult (UploadPetResultRequest) returns (UploadPetResultResponse);
 }
@@ -64,6 +71,8 @@ message StockItem {
   bool is_below_critical = 8;
   string expires_at = 9;      // ISO-8601, yoksa boş string
   string updated_at = 10;     // ISO-8601
+  optional int32 purchase_price = 11;
+  optional int32 sale_price = 12;
 }
 
 message ListStockItemsRequest {
@@ -90,10 +99,134 @@ message AddStockItemRequest {
   int32 quantity = 5;
   int32 critical_level = 6;
   string expires_at = 7;
+  int32 purchase_price = 8;
+  int32 sale_price = 9;
 }
 
 message StockItemResponse {
   StockItem item = 1;
+}
+
+message UpdateStockItemRequest {
+  string clinic_id = 1;
+  string item_id = 2;
+  optional string name = 3;
+  optional int32 quantity = 4;
+  optional int32 critical_level = 5;
+  optional string expires_at = 6;
+  optional int32 purchase_price = 7;
+  optional int32 sale_price = 8;
+}
+
+message AdjustStockItemRequest {
+  string clinic_id = 1;
+  string item_id = 2;
+  int32 delta = 3;
+}
+
+message DeleteStockItemRequest {
+  string clinic_id = 1;
+  string item_id = 2;
+}
+
+message StockSale {
+  string id = 1;
+  string clinic_id = 2;
+  string stock_item_id = 3;
+  string item_name = 4;
+  string category = 5;
+  string unit = 6;
+  int32 quantity = 7;
+  int32 unit_sale_price = 8;
+  int32 unit_purchase_price = 9;
+  int64 total_sale = 10;
+  int64 total_cost = 11;
+  int64 profit = 12;
+  string sold_at = 13;
+  string cancelled_at = 14;
+}
+
+message CreateStockSaleRequest {
+  string clinic_id = 1;
+  string item_id = 2;
+  int32 quantity = 3;
+  optional int32 unit_price = 4;
+}
+
+message CancelStockSaleRequest {
+  string clinic_id = 1;
+  string sale_id = 2;
+}
+
+message StockSaleResponse {
+  StockSale sale = 1;
+  StockItem item = 2;
+}
+
+message ListStockSalesRequest {
+  string clinic_id = 1;
+  string from_date = 2;
+  string to_date = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+}
+
+message ListStockSalesResponse {
+  repeated StockSale sales = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message GetStockSalesSummaryRequest {
+  string clinic_id = 1;
+  string month = 2;
+}
+
+message SalesTotals {
+  int64 revenue = 1;
+  int64 cost = 2;
+  int64 profit = 3;
+  int32 sales_count = 4;
+  int64 quantity = 5;
+}
+
+message DailySales {
+  string date = 1;
+  int64 revenue = 2;
+  int64 cost = 3;
+  int64 profit = 4;
+  int32 sales_count = 5;
+  int64 quantity = 6;
+}
+
+message WeeklySales {
+  string week_start = 1;
+  string week_end = 2;
+  int64 revenue = 3;
+  int64 cost = 4;
+  int64 profit = 5;
+  int32 sales_count = 6;
+  int64 quantity = 7;
+}
+
+message ProductSales {
+  string stock_item_id = 1;
+  string item_name = 2;
+  string unit = 3;
+  int64 revenue = 4;
+  int64 cost = 5;
+  int64 profit = 6;
+  int32 sales_count = 7;
+  int64 quantity = 8;
+}
+
+message StockSalesSummaryResponse {
+  string month = 1;
+  SalesTotals totals = 2;
+  repeated DailySales daily = 3;
+  repeated WeeklySales weekly = 4;
+  repeated ProductSales products = 5;
 }
 
 // ---------- BFF: klinik ekranındaki hayvan özeti ----------

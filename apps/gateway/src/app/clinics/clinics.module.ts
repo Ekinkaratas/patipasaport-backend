@@ -11,10 +11,11 @@ import {
 } from '@libs/common';
 import { ApiClinicsService } from './clinics.service';
 import { ApiClinicsController } from './clinics.controller';
-import { DocumentStorageService } from '../storage/document-storage.service';
+import { DocumentStorageModule } from '../storage/document-storage.module';
 
 @Module({
   imports: [
+    DocumentStorageModule,
     ClientsModule.register([
       {
         name: 'CLINICS_SERVICE',
@@ -25,6 +26,7 @@ import { DocumentStorageService } from '../storage/document-storage.service';
           loader: {
             defaults: true,
             arrays: true,
+            longs: Number,
           },
           channelOptions: {
             interceptors: [
@@ -39,6 +41,6 @@ import { DocumentStorageService } from '../storage/document-storage.service';
     ]),
   ],
   controllers: [ApiClinicsController],
-  providers: [ApiClinicsService, DocumentStorageService],
+  providers: [ApiClinicsService],
 })
 export class ApiClinicsModule {}

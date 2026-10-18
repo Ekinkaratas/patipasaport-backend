@@ -198,7 +198,7 @@ describe('clinics servisi (e2e)', () => {
     });
   });
 
-  // ---Amaç: stok ekleme kurallarını (sahiplik, aktiflik, kritik seviye, SKT) ve created_by'ın JWT'den geldiğini doğrulamak ---
+  // ---Amaç: stok ekleme kurallarını (sahiplik, aktiflik, kritik seviye, SKT, fiyatlar) ve created_by'ın JWT'den geldiğini doğrulamak ---
   describe('AddStockItem', () => {
     const add = async (override: object = {}, token?: string) =>
       callClinics<clinics.StockItemResponse>(
@@ -211,26 +211,32 @@ describe('clinics servisi (e2e)', () => {
           quantity: 10,
           criticalLevel: 2,
           expiresAt: '2027-03-01',
+          purchasePrice: 8_000,
+          salePrice: 12_000,
           ...override,
         },
         token ?? (await clinicToken(active.id)),
       );
 
-    it('kalemi ekler; created_by JWT kullanıcısıdır', async () => {
+    it('kalemi fiyatlarıyla ekler; created_by JWT kullanıcısıdır', async () => {
       const item = expectOk(await add(), 'AddStockItem').item;
       expect(item).toMatchObject({
         clinicId: active.id,
         expiresAt: '2027-03-01',
         isBelowCritical: false,
+        purchasePrice: 8_000,
+        salePrice: 12_000,
       });
       const db = await data.db('clinics');
       const { rows } = await db.query(
-        'SELECT created_by, expires_at::text AS expires_at FROM stock_items WHERE id = $1',
+        'SELECT created_by, expires_at::text AS expires_at, purchase_price, sale_price FROM stock_items WHERE id = $1',
         [item?.id],
       );
       expect(rows[0]).toEqual({
         created_by: clinicUserId(active.id),
         expires_at: '2027-03-01',
+        purchase_price: 8_000,
+        sale_price: 12_000,
       });
     });
 
@@ -658,6 +664,8 @@ describe('clinics servisi (e2e)', () => {
             quantity: 4,
             criticalLevel: 1,
             expiresAt: '',
+            purchasePrice: 1_250,
+            salePrice: 2_000,
           },
           jwt,
         ),
@@ -720,6 +728,8 @@ describe('clinics servisi (e2e)', () => {
               quantity: 1,
               criticalLevel: 0,
               expiresAt: '',
+              purchasePrice: 1_250,
+              salePrice: 2_000,
             },
             jwt,
           ),

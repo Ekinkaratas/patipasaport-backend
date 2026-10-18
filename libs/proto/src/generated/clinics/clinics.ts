@@ -59,6 +59,8 @@ export interface StockItem {
   expiresAt: string;
   /** ISO-8601 */
   updatedAt: string;
+  purchasePrice?: number | undefined;
+  salePrice?: number | undefined;
 }
 
 export interface ListStockItemsRequest {
@@ -85,10 +87,134 @@ export interface AddStockItemRequest {
   quantity: number;
   criticalLevel: number;
   expiresAt: string;
+  purchasePrice: number;
+  salePrice: number;
 }
 
 export interface StockItemResponse {
   item: StockItem | undefined;
+}
+
+export interface UpdateStockItemRequest {
+  clinicId: string;
+  itemId: string;
+  name?: string | undefined;
+  quantity?: number | undefined;
+  criticalLevel?: number | undefined;
+  expiresAt?: string | undefined;
+  purchasePrice?: number | undefined;
+  salePrice?: number | undefined;
+}
+
+export interface AdjustStockItemRequest {
+  clinicId: string;
+  itemId: string;
+  delta: number;
+}
+
+export interface DeleteStockItemRequest {
+  clinicId: string;
+  itemId: string;
+}
+
+export interface StockSale {
+  id: string;
+  clinicId: string;
+  stockItemId: string;
+  itemName: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  unitSalePrice: number;
+  unitPurchasePrice: number;
+  totalSale: number;
+  totalCost: number;
+  profit: number;
+  soldAt: string;
+  cancelledAt: string;
+}
+
+export interface CreateStockSaleRequest {
+  clinicId: string;
+  itemId: string;
+  quantity: number;
+  unitPrice?: number | undefined;
+}
+
+export interface CancelStockSaleRequest {
+  clinicId: string;
+  saleId: string;
+}
+
+export interface StockSaleResponse {
+  sale: StockSale | undefined;
+  item: StockItem | undefined;
+}
+
+export interface ListStockSalesRequest {
+  clinicId: string;
+  fromDate: string;
+  toDate: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface ListStockSalesResponse {
+  sales: StockSale[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface GetStockSalesSummaryRequest {
+  clinicId: string;
+  month: string;
+}
+
+export interface SalesTotals {
+  revenue: number;
+  cost: number;
+  profit: number;
+  salesCount: number;
+  quantity: number;
+}
+
+export interface DailySales {
+  date: string;
+  revenue: number;
+  cost: number;
+  profit: number;
+  salesCount: number;
+  quantity: number;
+}
+
+export interface WeeklySales {
+  weekStart: string;
+  weekEnd: string;
+  revenue: number;
+  cost: number;
+  profit: number;
+  salesCount: number;
+  quantity: number;
+}
+
+export interface ProductSales {
+  stockItemId: string;
+  itemName: string;
+  unit: string;
+  revenue: number;
+  cost: number;
+  profit: number;
+  salesCount: number;
+  quantity: number;
+}
+
+export interface StockSalesSummaryResponse {
+  month: string;
+  totals: SalesTotals | undefined;
+  daily: DailySales[];
+  weekly: WeeklySales[];
+  products: ProductSales[];
 }
 
 export interface GetClinicPetOverviewRequest {
@@ -344,6 +470,16 @@ export const StockItem: MessageFns<StockItem> = {
         : isSet(object.updated_at)
         ? globalThis.String(object.updated_at)
         : "",
+      purchasePrice: isSet(object.purchasePrice)
+        ? globalThis.Number(object.purchasePrice)
+        : isSet(object.purchase_price)
+        ? globalThis.Number(object.purchase_price)
+        : undefined,
+      salePrice: isSet(object.salePrice)
+        ? globalThis.Number(object.salePrice)
+        : isSet(object.sale_price)
+        ? globalThis.Number(object.sale_price)
+        : undefined,
     };
   },
 
@@ -378,6 +514,12 @@ export const StockItem: MessageFns<StockItem> = {
     }
     if (message.updatedAt !== "") {
       obj.updatedAt = message.updatedAt;
+    }
+    if (message.purchasePrice !== undefined) {
+      obj.purchasePrice = Math.round(message.purchasePrice);
+    }
+    if (message.salePrice !== undefined) {
+      obj.salePrice = Math.round(message.salePrice);
     }
     return obj;
   },
@@ -483,6 +625,16 @@ export const AddStockItemRequest: MessageFns<AddStockItemRequest> = {
         : isSet(object.expires_at)
         ? globalThis.String(object.expires_at)
         : "",
+      purchasePrice: isSet(object.purchasePrice)
+        ? globalThis.Number(object.purchasePrice)
+        : isSet(object.purchase_price)
+        ? globalThis.Number(object.purchase_price)
+        : 0,
+      salePrice: isSet(object.salePrice)
+        ? globalThis.Number(object.salePrice)
+        : isSet(object.sale_price)
+        ? globalThis.Number(object.sale_price)
+        : 0,
     };
   },
 
@@ -509,6 +661,12 @@ export const AddStockItemRequest: MessageFns<AddStockItemRequest> = {
     if (message.expiresAt !== "") {
       obj.expiresAt = message.expiresAt;
     }
+    if (message.purchasePrice !== 0) {
+      obj.purchasePrice = Math.round(message.purchasePrice);
+    }
+    if (message.salePrice !== 0) {
+      obj.salePrice = Math.round(message.salePrice);
+    }
     return obj;
   },
 };
@@ -522,6 +680,652 @@ export const StockItemResponse: MessageFns<StockItemResponse> = {
     const obj: any = {};
     if (message.item !== undefined) {
       obj.item = StockItem.toJSON(message.item);
+    }
+    return obj;
+  },
+};
+
+export const UpdateStockItemRequest: MessageFns<UpdateStockItemRequest> = {
+  fromJSON(object: any): UpdateStockItemRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      itemId: isSet(object.itemId)
+        ? globalThis.String(object.itemId)
+        : isSet(object.item_id)
+        ? globalThis.String(object.item_id)
+        : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : undefined,
+      quantity: isSet(object.quantity) ? globalThis.Number(object.quantity) : undefined,
+      criticalLevel: isSet(object.criticalLevel)
+        ? globalThis.Number(object.criticalLevel)
+        : isSet(object.critical_level)
+        ? globalThis.Number(object.critical_level)
+        : undefined,
+      expiresAt: isSet(object.expiresAt)
+        ? globalThis.String(object.expiresAt)
+        : isSet(object.expires_at)
+        ? globalThis.String(object.expires_at)
+        : undefined,
+      purchasePrice: isSet(object.purchasePrice)
+        ? globalThis.Number(object.purchasePrice)
+        : isSet(object.purchase_price)
+        ? globalThis.Number(object.purchase_price)
+        : undefined,
+      salePrice: isSet(object.salePrice)
+        ? globalThis.Number(object.salePrice)
+        : isSet(object.sale_price)
+        ? globalThis.Number(object.sale_price)
+        : undefined,
+    };
+  },
+
+  toJSON(message: UpdateStockItemRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.itemId !== "") {
+      obj.itemId = message.itemId;
+    }
+    if (message.name !== undefined) {
+      obj.name = message.name;
+    }
+    if (message.quantity !== undefined) {
+      obj.quantity = Math.round(message.quantity);
+    }
+    if (message.criticalLevel !== undefined) {
+      obj.criticalLevel = Math.round(message.criticalLevel);
+    }
+    if (message.expiresAt !== undefined) {
+      obj.expiresAt = message.expiresAt;
+    }
+    if (message.purchasePrice !== undefined) {
+      obj.purchasePrice = Math.round(message.purchasePrice);
+    }
+    if (message.salePrice !== undefined) {
+      obj.salePrice = Math.round(message.salePrice);
+    }
+    return obj;
+  },
+};
+
+export const AdjustStockItemRequest: MessageFns<AdjustStockItemRequest> = {
+  fromJSON(object: any): AdjustStockItemRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      itemId: isSet(object.itemId)
+        ? globalThis.String(object.itemId)
+        : isSet(object.item_id)
+        ? globalThis.String(object.item_id)
+        : "",
+      delta: isSet(object.delta) ? globalThis.Number(object.delta) : 0,
+    };
+  },
+
+  toJSON(message: AdjustStockItemRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.itemId !== "") {
+      obj.itemId = message.itemId;
+    }
+    if (message.delta !== 0) {
+      obj.delta = Math.round(message.delta);
+    }
+    return obj;
+  },
+};
+
+export const DeleteStockItemRequest: MessageFns<DeleteStockItemRequest> = {
+  fromJSON(object: any): DeleteStockItemRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      itemId: isSet(object.itemId)
+        ? globalThis.String(object.itemId)
+        : isSet(object.item_id)
+        ? globalThis.String(object.item_id)
+        : "",
+    };
+  },
+
+  toJSON(message: DeleteStockItemRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.itemId !== "") {
+      obj.itemId = message.itemId;
+    }
+    return obj;
+  },
+};
+
+export const StockSale: MessageFns<StockSale> = {
+  fromJSON(object: any): StockSale {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      stockItemId: isSet(object.stockItemId)
+        ? globalThis.String(object.stockItemId)
+        : isSet(object.stock_item_id)
+        ? globalThis.String(object.stock_item_id)
+        : "",
+      itemName: isSet(object.itemName)
+        ? globalThis.String(object.itemName)
+        : isSet(object.item_name)
+        ? globalThis.String(object.item_name)
+        : "",
+      category: isSet(object.category) ? globalThis.String(object.category) : "",
+      unit: isSet(object.unit) ? globalThis.String(object.unit) : "",
+      quantity: isSet(object.quantity) ? globalThis.Number(object.quantity) : 0,
+      unitSalePrice: isSet(object.unitSalePrice)
+        ? globalThis.Number(object.unitSalePrice)
+        : isSet(object.unit_sale_price)
+        ? globalThis.Number(object.unit_sale_price)
+        : 0,
+      unitPurchasePrice: isSet(object.unitPurchasePrice)
+        ? globalThis.Number(object.unitPurchasePrice)
+        : isSet(object.unit_purchase_price)
+        ? globalThis.Number(object.unit_purchase_price)
+        : 0,
+      totalSale: isSet(object.totalSale)
+        ? globalThis.Number(object.totalSale)
+        : isSet(object.total_sale)
+        ? globalThis.Number(object.total_sale)
+        : 0,
+      totalCost: isSet(object.totalCost)
+        ? globalThis.Number(object.totalCost)
+        : isSet(object.total_cost)
+        ? globalThis.Number(object.total_cost)
+        : 0,
+      profit: isSet(object.profit) ? globalThis.Number(object.profit) : 0,
+      soldAt: isSet(object.soldAt)
+        ? globalThis.String(object.soldAt)
+        : isSet(object.sold_at)
+        ? globalThis.String(object.sold_at)
+        : "",
+      cancelledAt: isSet(object.cancelledAt)
+        ? globalThis.String(object.cancelledAt)
+        : isSet(object.cancelled_at)
+        ? globalThis.String(object.cancelled_at)
+        : "",
+    };
+  },
+
+  toJSON(message: StockSale): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.stockItemId !== "") {
+      obj.stockItemId = message.stockItemId;
+    }
+    if (message.itemName !== "") {
+      obj.itemName = message.itemName;
+    }
+    if (message.category !== "") {
+      obj.category = message.category;
+    }
+    if (message.unit !== "") {
+      obj.unit = message.unit;
+    }
+    if (message.quantity !== 0) {
+      obj.quantity = Math.round(message.quantity);
+    }
+    if (message.unitSalePrice !== 0) {
+      obj.unitSalePrice = Math.round(message.unitSalePrice);
+    }
+    if (message.unitPurchasePrice !== 0) {
+      obj.unitPurchasePrice = Math.round(message.unitPurchasePrice);
+    }
+    if (message.totalSale !== 0) {
+      obj.totalSale = Math.round(message.totalSale);
+    }
+    if (message.totalCost !== 0) {
+      obj.totalCost = Math.round(message.totalCost);
+    }
+    if (message.profit !== 0) {
+      obj.profit = Math.round(message.profit);
+    }
+    if (message.soldAt !== "") {
+      obj.soldAt = message.soldAt;
+    }
+    if (message.cancelledAt !== "") {
+      obj.cancelledAt = message.cancelledAt;
+    }
+    return obj;
+  },
+};
+
+export const CreateStockSaleRequest: MessageFns<CreateStockSaleRequest> = {
+  fromJSON(object: any): CreateStockSaleRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      itemId: isSet(object.itemId)
+        ? globalThis.String(object.itemId)
+        : isSet(object.item_id)
+        ? globalThis.String(object.item_id)
+        : "",
+      quantity: isSet(object.quantity) ? globalThis.Number(object.quantity) : 0,
+      unitPrice: isSet(object.unitPrice)
+        ? globalThis.Number(object.unitPrice)
+        : isSet(object.unit_price)
+        ? globalThis.Number(object.unit_price)
+        : undefined,
+    };
+  },
+
+  toJSON(message: CreateStockSaleRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.itemId !== "") {
+      obj.itemId = message.itemId;
+    }
+    if (message.quantity !== 0) {
+      obj.quantity = Math.round(message.quantity);
+    }
+    if (message.unitPrice !== undefined) {
+      obj.unitPrice = Math.round(message.unitPrice);
+    }
+    return obj;
+  },
+};
+
+export const CancelStockSaleRequest: MessageFns<CancelStockSaleRequest> = {
+  fromJSON(object: any): CancelStockSaleRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      saleId: isSet(object.saleId)
+        ? globalThis.String(object.saleId)
+        : isSet(object.sale_id)
+        ? globalThis.String(object.sale_id)
+        : "",
+    };
+  },
+
+  toJSON(message: CancelStockSaleRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.saleId !== "") {
+      obj.saleId = message.saleId;
+    }
+    return obj;
+  },
+};
+
+export const StockSaleResponse: MessageFns<StockSaleResponse> = {
+  fromJSON(object: any): StockSaleResponse {
+    return {
+      sale: isSet(object.sale) ? StockSale.fromJSON(object.sale) : undefined,
+      item: isSet(object.item) ? StockItem.fromJSON(object.item) : undefined,
+    };
+  },
+
+  toJSON(message: StockSaleResponse): unknown {
+    const obj: any = {};
+    if (message.sale !== undefined) {
+      obj.sale = StockSale.toJSON(message.sale);
+    }
+    if (message.item !== undefined) {
+      obj.item = StockItem.toJSON(message.item);
+    }
+    return obj;
+  },
+};
+
+export const ListStockSalesRequest: MessageFns<ListStockSalesRequest> = {
+  fromJSON(object: any): ListStockSalesRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      fromDate: isSet(object.fromDate)
+        ? globalThis.String(object.fromDate)
+        : isSet(object.from_date)
+        ? globalThis.String(object.from_date)
+        : "",
+      toDate: isSet(object.toDate)
+        ? globalThis.String(object.toDate)
+        : isSet(object.to_date)
+        ? globalThis.String(object.to_date)
+        : "",
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListStockSalesRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.fromDate !== "") {
+      obj.fromDate = message.fromDate;
+    }
+    if (message.toDate !== "") {
+      obj.toDate = message.toDate;
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const ListStockSalesResponse: MessageFns<ListStockSalesResponse> = {
+  fromJSON(object: any): ListStockSalesResponse {
+    return {
+      sales: globalThis.Array.isArray(object?.sales)
+        ? object.sales.map((e: any) => StockSale.fromJSON(e))
+        : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize)
+        ? globalThis.Number(object.pageSize)
+        : isSet(object.page_size)
+        ? globalThis.Number(object.page_size)
+        : 0,
+    };
+  },
+
+  toJSON(message: ListStockSalesResponse): unknown {
+    const obj: any = {};
+    if (message.sales?.length) {
+      obj.sales = message.sales.map((e) => StockSale.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+};
+
+export const GetStockSalesSummaryRequest: MessageFns<GetStockSalesSummaryRequest> = {
+  fromJSON(object: any): GetStockSalesSummaryRequest {
+    return {
+      clinicId: isSet(object.clinicId)
+        ? globalThis.String(object.clinicId)
+        : isSet(object.clinic_id)
+        ? globalThis.String(object.clinic_id)
+        : "",
+      month: isSet(object.month) ? globalThis.String(object.month) : "",
+    };
+  },
+
+  toJSON(message: GetStockSalesSummaryRequest): unknown {
+    const obj: any = {};
+    if (message.clinicId !== "") {
+      obj.clinicId = message.clinicId;
+    }
+    if (message.month !== "") {
+      obj.month = message.month;
+    }
+    return obj;
+  },
+};
+
+export const SalesTotals: MessageFns<SalesTotals> = {
+  fromJSON(object: any): SalesTotals {
+    return {
+      revenue: isSet(object.revenue) ? globalThis.Number(object.revenue) : 0,
+      cost: isSet(object.cost) ? globalThis.Number(object.cost) : 0,
+      profit: isSet(object.profit) ? globalThis.Number(object.profit) : 0,
+      salesCount: isSet(object.salesCount)
+        ? globalThis.Number(object.salesCount)
+        : isSet(object.sales_count)
+        ? globalThis.Number(object.sales_count)
+        : 0,
+      quantity: isSet(object.quantity) ? globalThis.Number(object.quantity) : 0,
+    };
+  },
+
+  toJSON(message: SalesTotals): unknown {
+    const obj: any = {};
+    if (message.revenue !== 0) {
+      obj.revenue = Math.round(message.revenue);
+    }
+    if (message.cost !== 0) {
+      obj.cost = Math.round(message.cost);
+    }
+    if (message.profit !== 0) {
+      obj.profit = Math.round(message.profit);
+    }
+    if (message.salesCount !== 0) {
+      obj.salesCount = Math.round(message.salesCount);
+    }
+    if (message.quantity !== 0) {
+      obj.quantity = Math.round(message.quantity);
+    }
+    return obj;
+  },
+};
+
+export const DailySales: MessageFns<DailySales> = {
+  fromJSON(object: any): DailySales {
+    return {
+      date: isSet(object.date) ? globalThis.String(object.date) : "",
+      revenue: isSet(object.revenue) ? globalThis.Number(object.revenue) : 0,
+      cost: isSet(object.cost) ? globalThis.Number(object.cost) : 0,
+      profit: isSet(object.profit) ? globalThis.Number(object.profit) : 0,
+      salesCount: isSet(object.salesCount)
+        ? globalThis.Number(object.salesCount)
+        : isSet(object.sales_count)
+        ? globalThis.Number(object.sales_count)
+        : 0,
+      quantity: isSet(object.quantity) ? globalThis.Number(object.quantity) : 0,
+    };
+  },
+
+  toJSON(message: DailySales): unknown {
+    const obj: any = {};
+    if (message.date !== "") {
+      obj.date = message.date;
+    }
+    if (message.revenue !== 0) {
+      obj.revenue = Math.round(message.revenue);
+    }
+    if (message.cost !== 0) {
+      obj.cost = Math.round(message.cost);
+    }
+    if (message.profit !== 0) {
+      obj.profit = Math.round(message.profit);
+    }
+    if (message.salesCount !== 0) {
+      obj.salesCount = Math.round(message.salesCount);
+    }
+    if (message.quantity !== 0) {
+      obj.quantity = Math.round(message.quantity);
+    }
+    return obj;
+  },
+};
+
+export const WeeklySales: MessageFns<WeeklySales> = {
+  fromJSON(object: any): WeeklySales {
+    return {
+      weekStart: isSet(object.weekStart)
+        ? globalThis.String(object.weekStart)
+        : isSet(object.week_start)
+        ? globalThis.String(object.week_start)
+        : "",
+      weekEnd: isSet(object.weekEnd)
+        ? globalThis.String(object.weekEnd)
+        : isSet(object.week_end)
+        ? globalThis.String(object.week_end)
+        : "",
+      revenue: isSet(object.revenue) ? globalThis.Number(object.revenue) : 0,
+      cost: isSet(object.cost) ? globalThis.Number(object.cost) : 0,
+      profit: isSet(object.profit) ? globalThis.Number(object.profit) : 0,
+      salesCount: isSet(object.salesCount)
+        ? globalThis.Number(object.salesCount)
+        : isSet(object.sales_count)
+        ? globalThis.Number(object.sales_count)
+        : 0,
+      quantity: isSet(object.quantity) ? globalThis.Number(object.quantity) : 0,
+    };
+  },
+
+  toJSON(message: WeeklySales): unknown {
+    const obj: any = {};
+    if (message.weekStart !== "") {
+      obj.weekStart = message.weekStart;
+    }
+    if (message.weekEnd !== "") {
+      obj.weekEnd = message.weekEnd;
+    }
+    if (message.revenue !== 0) {
+      obj.revenue = Math.round(message.revenue);
+    }
+    if (message.cost !== 0) {
+      obj.cost = Math.round(message.cost);
+    }
+    if (message.profit !== 0) {
+      obj.profit = Math.round(message.profit);
+    }
+    if (message.salesCount !== 0) {
+      obj.salesCount = Math.round(message.salesCount);
+    }
+    if (message.quantity !== 0) {
+      obj.quantity = Math.round(message.quantity);
+    }
+    return obj;
+  },
+};
+
+export const ProductSales: MessageFns<ProductSales> = {
+  fromJSON(object: any): ProductSales {
+    return {
+      stockItemId: isSet(object.stockItemId)
+        ? globalThis.String(object.stockItemId)
+        : isSet(object.stock_item_id)
+        ? globalThis.String(object.stock_item_id)
+        : "",
+      itemName: isSet(object.itemName)
+        ? globalThis.String(object.itemName)
+        : isSet(object.item_name)
+        ? globalThis.String(object.item_name)
+        : "",
+      unit: isSet(object.unit) ? globalThis.String(object.unit) : "",
+      revenue: isSet(object.revenue) ? globalThis.Number(object.revenue) : 0,
+      cost: isSet(object.cost) ? globalThis.Number(object.cost) : 0,
+      profit: isSet(object.profit) ? globalThis.Number(object.profit) : 0,
+      salesCount: isSet(object.salesCount)
+        ? globalThis.Number(object.salesCount)
+        : isSet(object.sales_count)
+        ? globalThis.Number(object.sales_count)
+        : 0,
+      quantity: isSet(object.quantity) ? globalThis.Number(object.quantity) : 0,
+    };
+  },
+
+  toJSON(message: ProductSales): unknown {
+    const obj: any = {};
+    if (message.stockItemId !== "") {
+      obj.stockItemId = message.stockItemId;
+    }
+    if (message.itemName !== "") {
+      obj.itemName = message.itemName;
+    }
+    if (message.unit !== "") {
+      obj.unit = message.unit;
+    }
+    if (message.revenue !== 0) {
+      obj.revenue = Math.round(message.revenue);
+    }
+    if (message.cost !== 0) {
+      obj.cost = Math.round(message.cost);
+    }
+    if (message.profit !== 0) {
+      obj.profit = Math.round(message.profit);
+    }
+    if (message.salesCount !== 0) {
+      obj.salesCount = Math.round(message.salesCount);
+    }
+    if (message.quantity !== 0) {
+      obj.quantity = Math.round(message.quantity);
+    }
+    return obj;
+  },
+};
+
+export const StockSalesSummaryResponse: MessageFns<StockSalesSummaryResponse> = {
+  fromJSON(object: any): StockSalesSummaryResponse {
+    return {
+      month: isSet(object.month) ? globalThis.String(object.month) : "",
+      totals: isSet(object.totals) ? SalesTotals.fromJSON(object.totals) : undefined,
+      daily: globalThis.Array.isArray(object?.daily)
+        ? object.daily.map((e: any) => DailySales.fromJSON(e))
+        : [],
+      weekly: globalThis.Array.isArray(object?.weekly) ? object.weekly.map((e: any) => WeeklySales.fromJSON(e)) : [],
+      products: globalThis.Array.isArray(object?.products)
+        ? object.products.map((e: any) => ProductSales.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: StockSalesSummaryResponse): unknown {
+    const obj: any = {};
+    if (message.month !== "") {
+      obj.month = message.month;
+    }
+    if (message.totals !== undefined) {
+      obj.totals = SalesTotals.toJSON(message.totals);
+    }
+    if (message.daily?.length) {
+      obj.daily = message.daily.map((e) => DailySales.toJSON(e));
+    }
+    if (message.weekly?.length) {
+      obj.weekly = message.weekly.map((e) => WeeklySales.toJSON(e));
+    }
+    if (message.products?.length) {
+      obj.products = message.products.map((e) => ProductSales.toJSON(e));
     }
     return obj;
   },
@@ -844,6 +1648,20 @@ export interface ClinicsServiceClient {
 
   addStockItem(request: AddStockItemRequest): Observable<StockItemResponse>;
 
+  updateStockItem(request: UpdateStockItemRequest): Observable<StockItemResponse>;
+
+  adjustStockItem(request: AdjustStockItemRequest): Observable<StockItemResponse>;
+
+  deleteStockItem(request: DeleteStockItemRequest): Observable<StockItemResponse>;
+
+  createStockSale(request: CreateStockSaleRequest): Observable<StockSaleResponse>;
+
+  listStockSales(request: ListStockSalesRequest): Observable<ListStockSalesResponse>;
+
+  cancelStockSale(request: CancelStockSaleRequest): Observable<StockSaleResponse>;
+
+  getStockSalesSummary(request: GetStockSalesSummaryRequest): Observable<StockSalesSummaryResponse>;
+
   getClinicPetOverview(request: GetClinicPetOverviewRequest): Observable<GetClinicPetOverviewResponse>;
 
   uploadPetResult(request: UploadPetResultRequest): Observable<UploadPetResultResponse>;
@@ -874,6 +1692,34 @@ export interface ClinicsServiceController {
     request: AddStockItemRequest,
   ): Promise<StockItemResponse> | Observable<StockItemResponse> | StockItemResponse;
 
+  updateStockItem(
+    request: UpdateStockItemRequest,
+  ): Promise<StockItemResponse> | Observable<StockItemResponse> | StockItemResponse;
+
+  adjustStockItem(
+    request: AdjustStockItemRequest,
+  ): Promise<StockItemResponse> | Observable<StockItemResponse> | StockItemResponse;
+
+  deleteStockItem(
+    request: DeleteStockItemRequest,
+  ): Promise<StockItemResponse> | Observable<StockItemResponse> | StockItemResponse;
+
+  createStockSale(
+    request: CreateStockSaleRequest,
+  ): Promise<StockSaleResponse> | Observable<StockSaleResponse> | StockSaleResponse;
+
+  listStockSales(
+    request: ListStockSalesRequest,
+  ): Promise<ListStockSalesResponse> | Observable<ListStockSalesResponse> | ListStockSalesResponse;
+
+  cancelStockSale(
+    request: CancelStockSaleRequest,
+  ): Promise<StockSaleResponse> | Observable<StockSaleResponse> | StockSaleResponse;
+
+  getStockSalesSummary(
+    request: GetStockSalesSummaryRequest,
+  ): Promise<StockSalesSummaryResponse> | Observable<StockSalesSummaryResponse> | StockSalesSummaryResponse;
+
   getClinicPetOverview(
     request: GetClinicPetOverviewRequest,
   ): Promise<GetClinicPetOverviewResponse> | Observable<GetClinicPetOverviewResponse> | GetClinicPetOverviewResponse;
@@ -891,6 +1737,13 @@ export function ClinicsServiceControllerMethods() {
       "deactivateClinic",
       "listStockItems",
       "addStockItem",
+      "updateStockItem",
+      "adjustStockItem",
+      "deleteStockItem",
+      "createStockSale",
+      "listStockSales",
+      "cancelStockSale",
+      "getStockSalesSummary",
       "getClinicPetOverview",
       "uploadPetResult",
     ];
