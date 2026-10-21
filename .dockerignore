@@ -5,6 +5,8 @@ tmp
 out-tsc
 coverage
 .nx
+CLAUDE.md
+docs/ai-service-contract.md
 
 # --- VCS (.gitignore Nx'in dosya hash'lemesinde kullanildigi icin KALIR) ---
 .git
