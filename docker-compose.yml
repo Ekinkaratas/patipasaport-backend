@@ -164,6 +164,21 @@ services:
       retries: 12
       start_period: 30s
 
+  rabbitmq-init:
+    image: rabbitmq:4.3-management-alpine
+    restart: "no"
+    networks: [backend]
+    entrypoint: ["/bin/sh", "/init/init.sh"]
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER:-rabbit_user}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD}
+      AI_RABBITMQ_USER: ${AI_RABBITMQ_USER:-}
+      AI_RABBITMQ_PASSWORD: ${AI_RABBITMQ_PASSWORD:-}
+    volumes:
+      - ./tools/rabbitmq/init.sh:/init/init.sh:ro
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+
   fluent-bit:
     image: fluent/fluent-bit:5.1.3
     restart: unless-stopped

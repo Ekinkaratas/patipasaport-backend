@@ -23,6 +23,25 @@ Linux/macOS'ta sanal ortam `python3.14 -m venv .venv` ile oluşturulur. `.env` i
 .venv/Scripts/python -m uvicorn app.main:app --port 8000
 ```
 
+## Entegrasyon testleri
+
+Varsayılan `pytest` çalıştırması entegrasyon testlerini dışarıda bırakır (`-m 'not integration'`) ve ağa çıkmaz. Entegrasyon testleri gerçek RabbitMQ ile çalışır.
+
+Ön koşullar:
+
+- Ana proje dev modunda çalışıyor olmalı; RabbitMQ `localhost:5672` adresinden erişilebilir olmalı.
+- AI RabbitMQ kullanıcısı `rabbitmq-init` ile oluşturulmuş olmalı.
+- `apps/ai-service/.env` dolu olmalı (`RABBITMQ_HOST=localhost`, `AI_RABBITMQ_USER`, `AI_RABBITMQ_PASSWORD`). Testler ayarları `load_settings()` ile bu dosyadan okur.
+
+```bash
+.venv/Scripts/python -m pytest -m integration
+```
+
+- RabbitMQ'ya ulaşılamazsa testler atlanmaz; açık bir mesajla başarısız olur.
+- Üretim adlarıyla yalnızca topolojinin çakışmadan tanımlandığı denenir. Gerçek kuyruklar tüketilmez, gerçek exchange'lere yayın yapılmaz.
+- Diğer denemeler `ai-service.it-<rastgele>` önekli exchange ve kuyruklarla yapılır. Bunlar her testin sonunda, test başarısız olsa bile silinir ve silindikleri doğrulanır.
+- Tekrar deneme testi gerçek 30 sn TTL'i beklediği için çalıştırma yaklaşık bir dakika sürer.
+
 ## Biçim
 
 CI `nx format:check` çalıştırdığı için bu dizindeki `.md`, `.json` ve `.yml` dosyaları Prettier biçiminde olmalıdır. Depo kökünden:

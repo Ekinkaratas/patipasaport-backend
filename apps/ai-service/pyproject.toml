@@ -16,3 +16,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: ana proje dev modundayken gerçek RabbitMQ ile çalışan testler",
+]
+addopts = "-m 'not integration'"
