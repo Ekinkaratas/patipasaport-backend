@@ -467,3 +467,101 @@ def test_configure_logging_tolerates_missing_stdout(
     configure_logging()
 
     assert len(json_handlers()) == 1
+
+
+# aio-pika biçimindeki mesajlarda kullanıcı ve şifrenin gizlendiğini doğrular.
+def test_masks_credentials_in_aio_pika_style_messages(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging()
+    url = "amqp://sahte_kullanici:******@localhost:5672/"
+    logger = logging.getLogger("aio_pika.robust_connection")
+    logger.info("Connection to %s closed. Reconnecting after %r seconds.", url, 5)
+    logger.warning('Connection attempt to "%s" failed: refused.', url)
+
+    output = capsys.readouterr().out
+    closed, failed = parse_lines(output)
+
+    assert "sahte_kullanici" not in output
+    assert "******" not in output
+    assert closed["message"] == (
+        "Connection to amqp://***@localhost:5672/ closed. Reconnecting after 5 seconds."
+    )
+    assert failed["message"] == (
+        'Connection attempt to "amqp://***@localhost:5672/" failed: refused.'
+    )
+
+
+# errorMessage içindeki adresin kırpılmadan önce maskelendiğini doğrular.
+def test_masks_credentials_in_error_message(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging()
+    logger = get_logger(CONTEXT)
+    try:
+        raise ConnectionError("Bağlantı amqp://sahte:sahte-parola@rabbitmq:5672/ red")
+    except ConnectionError:
+        logger.exception("Bağlantı kurulamadı")
+    try:
+        raise ConnectionError("x" * 490 + " amqp://sahte:sahte-parola@rabbitmq:5672/")
+    except ConnectionError:
+        logger.exception("Uzun hata")
+
+    output = capsys.readouterr().out
+    short_error, long_error = parse_lines(output)
+
+    assert "sahte" not in output
+    assert short_error["errorMessage"] == "Bağlantı amqp://***@rabbitmq:5672/ red"
+    assert long_error["errorMessage"] == ("x" * 490 + " amqp://***@rabbitmq")[:500]
+
+
+# Çoklu adres, https, yalnız kullanıcı adı ve @ içeren şifrenin gizlendiğini doğrular.
+def test_masks_credentials_in_multiple_urls(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging()
+    get_logger(CONTEXT).info(
+        "Birincil amqp://sahte:sahte-parola@rabbitmq:5672/, "
+        "yedek amqps://sahte@rabbitmq-2:5671/vhost, "
+        "API https://sahte:sahte-parola@ai.example.invalid/v1, "
+        "depo s3://sahte:par@la@seaweedfs:8333"
+    )
+
+    [record] = parse_lines(capsys.readouterr().out)
+
+    assert record["message"] == (
+        "Birincil amqp://***@rabbitmq:5672/, "
+        "yedek amqps://***@rabbitmq-2:5671/vhost, "
+        "API https://***@ai.example.invalid/v1, "
+        "depo s3://***@seaweedfs:8333"
+    )
+
+
+# Kimlik bilgisi olmayan adresin ve şemasız ad@alan metninin değişmediğini doğrular.
+def test_leaves_text_without_credentials_unchanged(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging()
+    message = (
+        "Adres amqp://rabbitmq:5672/, iletişim destek@ornek.com, "
+        "uç https://ai.example.invalid/v1?ref=a@b"
+    )
+    get_logger(CONTEXT).info(message)
+
+    [record] = parse_lines(capsys.readouterr().out)
+
+    assert record["message"] == message
+
+
+# Maskelemenin yalnızca çıktıda yapıldığını, kaydın değişmediğini doğrular.
+def test_masking_does_not_modify_record() -> None:
+    url = "amqp://sahte:sahte-parola@rabbitmq:5672/"
+    record = logging.LogRecord(
+        CONTEXT, logging.INFO, __file__, 1, "Adres %s", (url,), None
+    )
+
+    data = json.loads(JsonFormatter().format(record))
+
+    assert data["message"] == "Adres amqp://***@rabbitmq:5672/"
+    assert record.getMessage() == f"Adres {url}"
+    assert record.args == (url,)

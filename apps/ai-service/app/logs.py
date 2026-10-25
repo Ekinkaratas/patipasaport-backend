@@ -3,6 +3,7 @@ import contextvars
 import io
 import json
 import logging
+import re
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
@@ -31,6 +32,9 @@ correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
 
 _HANDLER_NAME = "patipasaport-json-stdout"
 _ERROR_MESSAGE_LIMIT = 500
+_URL_USERINFO = re.compile(
+    r"(?<![A-Za-z0-9+.\-])([A-Za-z][A-Za-z0-9+.\-]*://)[^\s/?#]+@"
+)
 _UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
 _WARNING_ONLY_LOGGERS = (
     "pydantic_settings",
@@ -59,6 +63,13 @@ def _level_name(levelno: int) -> str:
     return "debug"
 
 
+# Metindeki şema://kullanıcı-bilgisi@ adreslerinde kullanıcı bilgisini *** yapar.
+def _mask_credentials(text: str) -> str:
+    if "://" not in text:
+        return text
+    return _URL_USERINFO.sub(r"\1***@", text)
+
+
 # Değer JSON'a çevrilebiliyorsa aynen, çevrilemiyorsa str() karşılığını döndürür.
 def _json_value(value: object) -> object:
     try:
@@ -75,7 +86,7 @@ class JsonFormatter(logging.Formatter):
             "timestamp": _format_timestamp(record.created),
             "level": _level_name(record.levelno),
             "context": record.name,
-            "message": record.getMessage(),
+            "message": _mask_credentials(record.getMessage()),
             "correlationId": correlation_id_var.get(),
         }
         for name, value in record.__dict__.items():
@@ -84,7 +95,8 @@ class JsonFormatter(logging.Formatter):
         error = record.exc_info[1] if record.exc_info else None
         if error is not None:
             payload["errorType"] = type(error).__name__
-            payload["errorMessage"] = str(error)[:_ERROR_MESSAGE_LIMIT]
+            masked = _mask_credentials(str(error))
+            payload["errorMessage"] = masked[:_ERROR_MESSAGE_LIMIT]
         return json.dumps(payload, ensure_ascii=False, allow_nan=False)
 
 
