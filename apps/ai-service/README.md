@@ -23,6 +23,20 @@ Linux/macOS'ta sanal ortam `python3.14 -m venv .venv` ile oluşturulur. `.env` i
 .venv/Scripts/python -m uvicorn app.main:app --port 8000
 ```
 
+## Docker
+
+Servis ana `docker-compose.yml` içinde `ai-service` adıyla diğer servislerle birlikte derlenir ve başlar. Ayarlar kök `.env`'den gelir (kök `.env.example`). Port açılmaz; `/health` yalnızca konteynerin sağlık kontrolü için kullanılır.
+
+```bash
+docker compose build ai-service
+docker compose up -d ai-service
+docker compose logs -f ai-service
+```
+
+- İmaja yalnızca `app/`, `requirements.txt` ve `constraints.txt` girer (`.dockerignore`).
+- Servisi yerelde `uvicorn` ile çalıştırmadan önce Docker'daki servis durdurulur (`docker compose stop ai-service`); aksi halde ikisi aynı kuyrukları tüketir.
+- Ana projenin e2e testlerinden önce de durdurulur, testlerden sonra `docker compose start ai-service` ile yeniden başlatılır.
+
 ## Entegrasyon testleri
 
 Varsayılan `pytest` çalıştırması entegrasyon testlerini dışarıda bırakır (`-m 'not integration'`) ve ağa çıkmaz. Entegrasyon testleri gerçek RabbitMQ ile çalışır.

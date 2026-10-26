@@ -9,6 +9,7 @@
 #   gateway (HTTP :3000, yalnızca iç ağda; dış kapı önündeki nginx)
 #   ─ gRPC ─> access:3001 | auth:3002 | clinics:3003
 #                medical-record:3004 | pets:3005 | users:3006
+#   medical-record ─ RabbitMQ ─> ai-service (Python, port yok)
 #   Her mikroservisin kendi veritabanı var (database-per-service).
 # ============================================================
 
@@ -433,6 +434,45 @@ services:
       users:          { condition: service_healthy }
       seaweedfs:      { condition: service_healthy }
       seaweedfs-init: { condition: service_completed_successfully }
+
+  # ============================================================
+  # AI SERVISI (Python, apps/ai-service)
+  # Port açılmaz; RabbitMQ'dan olay okur, SeaweedFS'ten salt okunur dosya alır.
+  # ============================================================
+
+  ai-service:
+    <<: *app-common
+    build:
+      context: apps/ai-service
+      dockerfile: Dockerfile
+    image: patipasaport/ai-service:${IMAGE_TAG:-latest}
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      AI_RABBITMQ_USER: ${AI_RABBITMQ_USER:-}
+      AI_RABBITMQ_PASSWORD: ${AI_RABBITMQ_PASSWORD:-}
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_BUCKET: ${S3_BUCKET:-medical-documents}
+      S3_ACCESS_KEY: ${S3_AI_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_AI_SECRET_KEY:-}
+      AI_API_BASE_URL: ${AI_API_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_REQUEST_TIMEOUT_SECONDS: ${AI_REQUEST_TIMEOUT_SECONDS:-120}
+      AI_ENABLE_THINKING: ${AI_ENABLE_THINKING:-true}
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      rabbitmq:       { condition: service_healthy }
+      rabbitmq-init:  { condition: service_completed_successfully }
+      seaweedfs:      { condition: service_healthy }
+      seaweedfs-init: { condition: service_completed_successfully }
+      medical-record: { condition: service_healthy }
 
 # ============================================================
 

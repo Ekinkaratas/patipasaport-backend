@@ -17,7 +17,7 @@ This is a graduation project. The backend is complete; the AI service is the onl
    ▼        ▼       ▼         ▼          ▼        ▼       ▼
  access    auth   users    clinics     pets   medical-record
  (Redis)  (Redis)                                   │
-                                          outbox ──► RabbitMQ ──► AI service (planned)
+                                          outbox ──► RabbitMQ ──► ai-service (Python)
                                           files  ──► SeaweedFS (S3)
 ```
 
@@ -30,6 +30,7 @@ This is a graduation project. The backend is complete; the AI service is the onl
 | `clinics` | Clinics, stock with purchase and sale prices, sales and monthly sales reports, clinic view of a pet, result upload orchestration | PostgreSQL |
 | `pets` | Pets, owner lookup, encrypted chip numbers | PostgreSQL |
 | `medical-record` | Records, vaccinations, prescriptions, lab results, documents, AI draft reviews, AI lab result explanations | PostgreSQL, RabbitMQ, SeaweedFS |
+| `ai-service` | Python worker, no ports. Reads uploaded documents into draft records and writes plain-language lab result explanations through an external AI API | RabbitMQ, SeaweedFS (read-only) |
 
 Design decisions worth knowing:
 
@@ -44,7 +45,7 @@ Full database, messaging and storage design: [docs/db-schema.md](docs/db-schema.
 
 ## Tech stack
 
-Nx monorepo · Node.js 24 · NestJS 11 (gRPC microservices + Express 5 gateway) · TypeScript · Prisma 7 · PostgreSQL 16 · Redis · RabbitMQ 4.3 · SeaweedFS (S3) · Fluent Bit · Protocol Buffers (buf + ts-proto) · Jest · Docker Compose.
+Nx monorepo · Node.js 24 · NestJS 11 (gRPC microservices + Express 5 gateway) · TypeScript · Prisma 7 · PostgreSQL 16 · Redis · RabbitMQ 4.3 · SeaweedFS (S3) · Fluent Bit · Protocol Buffers (buf + ts-proto) · Jest · Python 3.14 + FastAPI (AI service) · Docker Compose.
 
 ## Getting started
 
@@ -55,6 +56,7 @@ npm ci
 
 cp .env.example .env
 # fill in every "change-me" value, e.g. with: openssl rand -base64 18
+# and every "bu alan doldurulacak" value (AI provider and AI RabbitMQ user)
 
 openssl genrsa -out access_jwt_private.pem 2048
 openssl rsa -in access_jwt_private.pem -pubout -out access_jwt_public.pem
@@ -91,6 +93,17 @@ Gateway settings:
 | `RATE_LIMIT_UPLOAD` | `20` | Limit for document upload |
 | `TRUST_PROXY` | empty | Number of reverse proxies in front of the gateway. Empty for local development, `1` behind nginx, `2` if another layer (e.g. Cloudflare or a load balancer) sits in front of nginx. `true` is rejected, because it would let clients forge their IP. |
 | `REFRESH_COOKIE_PATH` | `/api/auth` | Browser-visible path of the refresh-token cookie. It must match the prefix the reverse proxy uses in front of `/auth`. |
+
+AI service settings (a missing required value stops only `ai-service`; the rest of the stack keeps running):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL` | required | OpenAI-compatible AI provider |
+| `AI_RABBITMQ_USER`, `AI_RABBITMQ_PASSWORD` | required | Limited RabbitMQ user created by `rabbitmq-init`; must differ from `RABBITMQ_USER` |
+| `S3_AI_ACCESS_KEY`, `S3_AI_SECRET_KEY` | required | Read-only SeaweedFS user created by `seaweedfs-init` |
+| `AI_REQUEST_TIMEOUT_SECONDS` | `120` | Timeout of one AI API request |
+| `AI_ENABLE_THINKING` | `true` | Lets the model reason before answering |
+| `AI_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
 
 ## API overview
 
@@ -135,13 +148,18 @@ npx nx run-many -t test --output-style=static    # unit tests
 
 # end-to-end tests run the built service on the host against the Docker stack
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+docker compose stop ai-service      # e2e tests play the AI role themselves
 npx nx run-many -t e2e --parallel=1 --output-style=static
+docker compose start ai-service
 ```
+
+The AI service has its own lint and tests; see [apps/ai-service/README.md](apps/ai-service/README.md).
 
 ## Project layout
 
 ```
 apps/        gateway and the six microservices, each with a *-e2e project
+apps/ai-service  Python AI worker (not an Nx project)
 libs/common  shared guards, pipes, filters, logging, CloudEvents helpers
 libs/dto     request DTOs and validation rules shared by gateway and services
 libs/proto   .proto contracts and generated TypeScript

@@ -12,10 +12,13 @@ docs/ai-service-contract.md
 .git
 
 # --- gizli / ortam dosyalari (env_file ile runtime'da verilir, imaja girmez) ---
-.env
-.env.*
-!.env.example
-*.pem
+**/.env
+**/.env.*
+!**/.env.example
+**/*.pem
+
+# --- Python AI servisi (kendi Dockerfile'i ve build context'i var) ---
+apps/ai-service
 
 # --- Docker'in kendi dosyalari (imaj icinde gereksiz) ---
 Dockerfile
