@@ -46,10 +46,11 @@ from app.messaging.cloudevents import (
 )
 from app.messaging.consumer import Consumer, Flow
 from app.messaging.publisher import Publisher
-from app.messaging.runtime import Messaging
+from app.messaging.runtime import Messaging, start_messaging
 from app.messaging.topology import (
     CORRELATION_ID_HEADER,
     DOCUMENT_PREFETCH,
+    DOCUMENT_QUEUE,
     RETRY_COUNT_HEADER,
     Topology,
     declare_topology,
@@ -403,14 +404,15 @@ async def test_ai_user_cannot_declare_foreign_exchange(
     assert refused, "AI kullanıcısı izin dışı bir exchange tanımlayabildi"
 
 
-# Varsayılan create_app'in gerçek ayar ve RabbitMQ ile açılıp kapandığını doğrular.
-def test_app_starts_and_stops_with_real_settings(
+# Uygulamanın gerçek ayarlarla açılıp kapandığını, akışı kuyruğa bağlamadığını doğrular.
+def test_app_starts_and_stops_with_real_settings_without_consuming(
     settings: Settings,
     reachable_broker: None,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     consumed: list[str] = []
+    offered: list[tuple[Flow, ...]] = []
     original_consume = Queue.consume
 
     # Tüketilmeye çalışılan kuyruğun adını kaydedip asıl consume'u çağırır.
@@ -418,8 +420,15 @@ def test_app_starts_and_stops_with_real_settings(
         consumed.append(self.name)
         return await original_consume(self, *args, **kwargs)
 
+    # Kurulan akışları kaydeder, mesajlaşmayı hiçbir akış bağlamadan başlatır.
+    async def start_without_flows(
+        app_settings: Settings, flows: Sequence[Flow]
+    ) -> Messaging:
+        offered.append(tuple(flows))
+        return await start_messaging(app_settings, ())
+
     monkeypatch.setattr(Queue, "consume", consume_spy)
-    app = create_app()
+    app = create_app(messaging_starter=start_without_flows)
     try:
         with TestClient(app) as client:
             response = client.get("/health")
@@ -431,6 +440,8 @@ def test_app_starts_and_stops_with_real_settings(
     assert response.json() == {"status": "ok"}
     assert isinstance(messaging, Messaging)
     assert messaging.connection.is_closed
+    [flows] = offered
+    assert [flow.queue for flow in flows] == [DOCUMENT_QUEUE]
     assert consumed == []
     secret_values = {
         "AI_RABBITMQ_PASSWORD": settings.ai_rabbitmq_password.get_secret_value(),

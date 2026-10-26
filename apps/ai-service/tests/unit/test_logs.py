@@ -51,6 +51,9 @@ ALLOWED_EXTRA = {
     "durationMs": 1532,
     "statusCode": 429,
     "model": "sahte-model",
+    "retryAfterSeconds": 30,
+    "promptTokens": 1200,
+    "completionTokens": 350,
 }
 TURKISH_MESSAGE = "Şüpheli değer: ğüşıöç İĞÜŞÖÇ"
 

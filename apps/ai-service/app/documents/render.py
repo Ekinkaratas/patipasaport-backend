@@ -17,7 +17,7 @@ from app.errors import (
 )
 
 SUPPORTED_MIME_TYPES = ("application/pdf", "image/jpeg", "image/png")
-MAX_PDF_PAGES = 10
+MAX_PDF_PAGES = 8
 PDF_RENDER_SCALE = 2
 MAX_LONG_SIDE = 2048
 JPEG_QUALITY = 85

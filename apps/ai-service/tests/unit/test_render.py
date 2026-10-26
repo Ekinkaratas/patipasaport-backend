@@ -224,19 +224,24 @@ def _raiser(error: BaseException) -> Callable[..., Any]:
     return raise_error
 
 
-# Sabitlerin sözleşme 6.4 ve 12'deki değerlerle aynı olduğunu doğrular.
+# Sayfa renklerini sırayla tekrarlayarak istenen sayıda sayfa rengi döndürür.
+def _page_colors(count: int) -> list[tuple[int, int, int]]:
+    return [PAGE_COLORS[index % len(PAGE_COLORS)] for index in range(count)]
+
+
+# Sabitlerin kararlaştırılan değerlerle aynı olduğunu doğrular; sayfa sınırı 8'dir.
 def test_constants_match_contract() -> None:
     assert SUPPORTED_MIME_TYPES == (PDF, JPEG, PNG)
-    assert MAX_PDF_PAGES == 10
+    assert MAX_PDF_PAGES == 8
     assert PDF_RENDER_SCALE == 2
     assert MAX_LONG_SIDE == 2048
     assert JPEG_QUALITY == 85
 
 
 # Geçerli PDF'in her sayfası için sayfa sırasıyla bir görsel verildiğini doğrular.
-@pytest.mark.parametrize("page_count", [1, 3, 10])
+@pytest.mark.parametrize("page_count", [1, 3, 8])
 async def test_pdf_pages_returned_in_order(page_count: int) -> None:
-    colors = PAGE_COLORS[:page_count]
+    colors = _page_colors(page_count)
 
     urls = await prepare_images(_pdf(colors), PDF)
 
@@ -245,11 +250,12 @@ async def test_pdf_pages_returned_in_order(page_count: int) -> None:
         _assert_color(_center(_decode(url)), color)
 
 
-# 11 sayfalı PDF'in hiçbir sayfası yüklenmeden TOO_MANY_PAGES verdiğini doğrular.
+# 9 ve daha uzun PDF'in sayfa yüklenmeden TOO_MANY_PAGES verdiğini doğrular.
+@pytest.mark.parametrize("page_count", [9, 10, 11])
 async def test_pdf_over_page_limit_rejected_before_render(
-    pdfium_spy: PdfiumSpy,
+    pdfium_spy: PdfiumSpy, page_count: int
 ) -> None:
-    colors = [PAGE_COLORS[index % 10] for index in range(MAX_PDF_PAGES + 1)]
+    colors = _page_colors(page_count)
 
     assert await _error_code(_pdf(colors), PDF) == TOO_MANY_PAGES
     assert pdfium_spy.pages == []
@@ -291,9 +297,8 @@ async def test_oversized_page_rendered_within_long_side(
 # Belge, sayfa ve bitmap nesnelerinin başarıda ve hatada kapandığını doğrular.
 async def test_pdfium_objects_closed(pdfium_spy: PdfiumSpy) -> None:
     await prepare_images(_pdf(PAGE_COLORS[:3]), PDF)
-    too_long = [PAGE_COLORS[index % 10] for index in range(MAX_PDF_PAGES + 1)]
     with pytest.raises(PermanentError):
-        await prepare_images(_pdf(too_long), PDF)
+        await prepare_images(_pdf(_page_colors(9)), PDF)
 
     assert len(pdfium_spy.documents) == 2
     assert len(pdfium_spy.pages) == 3

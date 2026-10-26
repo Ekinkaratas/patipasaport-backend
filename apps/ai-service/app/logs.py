@@ -23,6 +23,9 @@ ALLOWED_FIELDS: frozenset[str] = frozenset(
         "durationMs",
         "statusCode",
         "model",
+        "retryAfterSeconds",
+        "promptTokens",
+        "completionTokens",
     }
 )
 

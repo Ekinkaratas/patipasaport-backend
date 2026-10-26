@@ -1,3 +1,4 @@
+import re
 from typing import cast
 
 import pytest
@@ -61,6 +62,14 @@ def test_every_code_has_short_fixed_message() -> None:
         assert 1 <= len(message) <= 500
         assert not any(mark in message for mark in ("{", "}", "%"))
         assert all(character.isprintable() for character in message)
+
+
+# TOO_MANY_PAGES mesajının sözleşme 6.8'deki 8 sayfa sınırını belirttiğini doğrular.
+def test_too_many_pages_message_states_eight_page_limit() -> None:
+    message = ERROR_MESSAGES[TOO_MANY_PAGES]
+
+    assert re.findall(r"\d+", message) == ["8"]
+    assert "8 sayfa" in message
 
 
 # Mesaj tablosunun salt okunur olduğunu doğrular.

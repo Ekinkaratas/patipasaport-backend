@@ -56,6 +56,7 @@ RequiredSecretStr = Annotated[SecretStr, BeforeValidator(_reject_unfilled)]
 DefaultedStr = Annotated[str, BeforeValidator(_default_or_unfilled)]
 DefaultedInt = Annotated[int, BeforeValidator(_default_or_unfilled)]
 DefaultedFloat = Annotated[float, BeforeValidator(_default_or_unfilled)]
+DefaultedBool = Annotated[bool, BeforeValidator(_default_or_unfilled)]
 LogLevel = Annotated[DefaultedStr, AfterValidator(_normalize_log_level)]
 
 
@@ -76,6 +77,7 @@ class Settings(BaseSettings):
     ai_request_timeout_seconds: DefaultedFloat = Field(
         default=120.0, gt=0, allow_inf_nan=False
     )
+    ai_enable_thinking: DefaultedBool = True
     log_level: LogLevel = "INFO"
 
 

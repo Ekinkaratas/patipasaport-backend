@@ -20,7 +20,7 @@ ERROR_MESSAGES: Mapping[str, str] = MappingProxyType(
         ),
         UNSUPPORTED_MIME_TYPE: "Belge dosyasının türü desteklenmiyor",
         UNREADABLE_DOCUMENT: "PDF ya da görsel dosyası açılamadı",
-        TOO_MANY_PAGES: "PDF belgesi 10 sayfadan uzun",
+        TOO_MANY_PAGES: "PDF belgesi 8 sayfadan uzun",
         NOT_A_MEDICAL_DOCUMENT: "Belgede kayıt çıkarılacak tıbbi bilgi bulunamadı",
         INVALID_AI_OUTPUT: "Model iki denemede de kurallara uygun JSON vermedi",
         AI_PROVIDER_REJECTED: "AI API isteği reddetti",

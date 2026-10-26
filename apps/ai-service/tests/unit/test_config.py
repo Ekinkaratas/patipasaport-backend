@@ -39,6 +39,7 @@ DEFAULTS = {
     "RABBITMQ_PORT": 5672,
     "S3_BUCKET": "medical-documents",
     "AI_REQUEST_TIMEOUT_SECONDS": 120,
+    "AI_ENABLE_THINKING": True,
     "LOG_LEVEL": "INFO",
 }
 ALL_REQUIRED_NAMES = (
@@ -123,6 +124,7 @@ def test_loads_required_values_with_defaults(monkeypatch: pytest.MonkeyPatch) ->
     assert settings.rabbitmq_port == 5672
     assert settings.s3_bucket == "medical-documents"
     assert settings.ai_request_timeout_seconds == 120
+    assert settings.ai_enable_thinking is True
     assert settings.log_level == "INFO"
 
 
@@ -242,6 +244,7 @@ def test_example_file_loads_when_environment_fills_placeholders(
     assert settings.s3_bucket == "medical-documents"
     assert settings.ai_api_key.get_secret_value() == "sahte-ai-api-anahtari"
     assert settings.ai_request_timeout_seconds == 120
+    assert settings.ai_enable_thinking is True
     assert settings.log_level == "INFO"
 
 
@@ -306,6 +309,8 @@ def test_invalid_values_are_reported_without_values(
         ("AI_REQUEST_TIMEOUT_SECONDS", "sahte-sure"),
         ("LOG_LEVEL", "sahte-seviye"),
         ("LOG_LEVEL", "TRACE"),
+        ("AI_ENABLE_THINKING", "sahte-dusunme"),
+        ("AI_ENABLE_THINKING", "2"),
     )
     for name, value in invalid_values:
         with subtests.test(name=name, value=value):
@@ -418,6 +423,7 @@ def test_blank_file_value_uses_default(
         ("RABBITMQ_PORT", "5674", 5674),
         ("S3_BUCKET", "dosya-kovasi", "dosya-kovasi"),
         ("AI_REQUEST_TIMEOUT_SECONDS", "30", 30),
+        ("AI_ENABLE_THINKING", "false", False),
         ("LOG_LEVEL", "debug", "DEBUG"),
     ],
 )
@@ -528,6 +534,30 @@ def test_placeholder_and_invalid_values_are_reported_together(
 
     assert str(error) == expected
     assert_values_hidden(error, [*SECRET_VALUES.values(), PLACEHOLDER])
+
+
+# Düşünme ayarının true/false yazımlarının harf duyarsız çözüldüğünü doğrular.
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("true", True),
+        ("TRUE", True),
+        ("True", True),
+        ("false", False),
+        ("FALSE", False),
+        ("False", False),
+        ("1", True),
+        ("0", False),
+        ("yes", True),
+        ("no", False),
+    ],
+)
+def test_enable_thinking_parses_boolean_values(
+    monkeypatch: pytest.MonkeyPatch, value: str, expected: bool
+) -> None:
+    use_environment(monkeypatch, {**REQUIRED_VALUES, "AI_ENABLE_THINKING": value})
+
+    assert load_settings(None).ai_enable_thinking is expected
 
 
 # Log seviyesinin harf duyarsız okunup büyük harfe çevrildiğini doğrular.
