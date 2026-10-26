@@ -29,6 +29,7 @@ from app.logs import (
     JsonFormatter,
     correlation_id_var,
 )
+from app.messaging import consumer as consumer_module
 from app.messaging.cloudevents import (
     CONTENT_TYPE,
     DOCUMENT_ANALYSIS_FAILED,
@@ -138,6 +139,17 @@ PUBLISH_FAILURES = [
     pytest.param(closed_channel_error, "CHANNEL", id="kanal-kapali"),
 ]
 NON_UNROUTABLE_FAILURES = PUBLISH_FAILURES[1:]
+STOP_FAILURES = [
+    pytest.param(closed_channel_error, id="kanal-acik-degil"),
+    pytest.param(
+        lambda: amqp_errors.ChannelClosed(406, SECRET_MARKER), id="kanal-kapandi"
+    ),
+    pytest.param(
+        lambda: amqp_errors.ConnectionClosed(320, SECRET_MARKER),
+        id="baglanti-kapandi",
+    ),
+    pytest.param(lambda: ConnectionResetError(SECRET_MARKER), id="baglanti-koptu"),
+]
 
 
 @dataclass
@@ -225,6 +237,7 @@ class FakeQueue:
         self.callback: Callable[[AbstractIncomingMessage], Any] | None = None
         self.no_ack: bool | None = None
         self.cancelled: list[str] = []
+        self.cancel_error: BaseException | None = None
 
     # Geri çağrıyı ve onay kipini kaydedip tüketici etiketini döndürür.
     async def consume(
@@ -237,10 +250,12 @@ class FakeQueue:
         self.no_ack = no_ack
         return f"etiket-{self.name}"
 
-    # İptal edilen tüketici etiketini kaydeder.
+    # İptal hatası tanımlıysa fırlatır, değilse iptal edilen etiketi kaydeder.
     async def cancel(
         self, consumer_tag: str, timeout: float | None = None, nowait: bool = False
     ) -> None:
+        if self.cancel_error is not None:
+            raise self.cancel_error
         self.cancelled.append(consumer_tag)
         self.channel.connection.timeline.append(("cancel", consumer_tag))
 
@@ -263,6 +278,7 @@ class FakeChannel:
         self.on_return_raises = on_return_raises
         self.initialized = False
         self.closed = False
+        self.close_error: BaseException | None = None
         self.prefetch_counts: list[int] = []
         self.queue_requests: list[tuple[str, bool]] = []
         self.queues: dict[str, FakeQueue] = {}
@@ -291,8 +307,10 @@ class FakeChannel:
     async def get_exchange(self, name: str, *, ensure: bool = True) -> FakeExchange:
         return FakeExchange(self, name)
 
-    # Kanalı kapatılmış olarak işaretleyip zaman çizelgesine yazar.
+    # Kapatma hatası tanımlıysa fırlatır, değilse kanalı kapalı işaretleyip kaydeder.
     async def close(self, exc: BaseException | None = None) -> None:
+        if self.close_error is not None:
+            raise self.close_error
         self.closed = True
         self.connection.timeline.append(("close",))
 
@@ -425,6 +443,31 @@ async def start_harness(
     return Harness(consumer, connection, handler, failures, topology.document_queue)
 
 
+# Belge ve açıklama akışlı bir tüketiciyi sahte bağlantıyla başlatır.
+async def start_two_flow_consumer() -> tuple[Consumer, FakeConnection, Topology]:
+    topology = Topology()
+    connection = FakeConnection()
+    flows = [
+        Flow(
+            topology.document_queue,
+            DOCUMENT_UPLOADED,
+            2,
+            FakeHandler(),
+            FailureBuilderSpy(),
+        ),
+        Flow(
+            topology.explanation_queue,
+            LAB_EXPLANATION_REQUESTED,
+            4,
+            FakeHandler(),
+            FailureBuilderSpy(),
+        ),
+    ]
+    consumer = Consumer(cast(AbstractRobustConnection, connection), topology, flows)
+    await consumer.start()
+    return consumer, connection, topology
+
+
 # Mesaja verilecek x-retry-count başlığını, değer None ise başlıksız üretir.
 def retry_headers(retry_count: object, **headers: Any) -> dict[str, Any]:
     if retry_count is not None:
@@ -460,6 +503,13 @@ def consumer_record(caplog: pytest.LogCaptureFixture, prefix: str) -> logging.Lo
 # Yayınlanan hata olayının gövdesindeki data nesnesini döndürür.
 def published_data(published: Published) -> dict[str, Any]:
     return json.loads(published.message.body)["data"]
+
+
+# Yakalanan hiçbir log satırında sahte gizli değerin bulunmadığını doğrular.
+def assert_no_secret_logged(caplog: pytest.LogCaptureFixture) -> None:
+    formatter = JsonFormatter()
+    for record in caplog.records:
+        assert SECRET_MARKER not in formatter.format(record)
 
 
 # Logları DEBUG seviyesinden itibaren yakalar.
@@ -1002,6 +1052,84 @@ async def test_stop_without_in_flight_messages_closes_channels() -> None:
     assert harness.connection.timeline == [("cancel", CONSUMER_TAG), ("close",)]
 
 
+# Kanalı kapanmış akışın iptal edilmediğini, diğer akışın iptal edildiğini doğrular.
+async def test_stop_skips_cancel_on_closed_channel(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    consumer, connection, topology = await start_two_flow_consumer()
+    document_channel, explanation_channel = connection.channels
+    document_channel.closed = True
+
+    async with asyncio.timeout(2):
+        await consumer.stop()
+
+    assert document_channel.queues[topology.document_queue].cancelled == []
+    assert connection.timeline == [
+        ("cancel", f"etiket-{topology.explanation_queue}"),
+        ("close",),
+        ("close",),
+    ]
+    assert explanation_channel.closed is True
+    assert [
+        record
+        for record in records_of(caplog, "Consumer")
+        if record.levelno >= logging.WARNING
+    ] == []
+
+
+# İptal kanal hatası verirse uyarı loglanıp diğer akışın iptal edildiğini doğrular.
+@pytest.mark.parametrize("make_error", STOP_FAILURES)
+async def test_stop_continues_when_cancel_fails(
+    caplog: pytest.LogCaptureFixture, make_error: Callable[[], BaseException]
+) -> None:
+    consumer, connection, topology = await start_two_flow_consumer()
+    document_channel, explanation_channel = connection.channels
+    document_channel.queues[topology.document_queue].cancel_error = make_error()
+
+    async with asyncio.timeout(2):
+        await consumer.stop()
+
+    assert document_channel.queues[topology.document_queue].cancelled == []
+    assert connection.timeline == [
+        ("cancel", f"etiket-{topology.explanation_queue}"),
+        ("close",),
+        ("close",),
+    ]
+    assert document_channel.closed is True
+    assert explanation_channel.closed is True
+    record = consumer_record(caplog, "Tüketim iptal edilemedi")
+    assert record.levelno == logging.WARNING
+    assert record.exc_info is None
+    assert extra_fields(record) == {"queue": topology.document_queue}
+    assert_no_secret_logged(caplog)
+
+
+# Kanal kapatma hatası verirse uyarı loglanıp diğer kanalın kapatıldığını doğrular.
+@pytest.mark.parametrize("make_error", STOP_FAILURES)
+async def test_stop_closes_other_channels_when_close_fails(
+    caplog: pytest.LogCaptureFixture, make_error: Callable[[], BaseException]
+) -> None:
+    consumer, connection, topology = await start_two_flow_consumer()
+    document_channel, explanation_channel = connection.channels
+    document_channel.close_error = make_error()
+
+    async with asyncio.timeout(2):
+        await consumer.stop()
+
+    assert connection.timeline == [
+        ("cancel", f"etiket-{topology.document_queue}"),
+        ("cancel", f"etiket-{topology.explanation_queue}"),
+        ("close",),
+    ]
+    assert document_channel.closed is False
+    assert explanation_channel.closed is True
+    record = consumer_record(caplog, "Kanal kapatılamadı")
+    assert record.levelno == logging.WARNING
+    assert record.exc_info is None
+    assert extra_fields(record) == {}
+    assert_no_secret_logged(caplog)
+
+
 # Akış listesi boşsa hiçbir kanalın açılmadığını ve kuyruğun tüketilmediğini doğrular.
 async def test_empty_flow_list_consumes_nothing() -> None:
     connection = FakeConnection()
@@ -1133,3 +1261,42 @@ async def test_failure_builder_error_sends_message_to_dlq(
     assert record.levelno == logging.ERROR
     assert record.exc_info is None
     assert SECRET_MARKER not in record.getMessage()
+
+
+# Onaydan sonra beklenmeyen hata olursa mesajın ikinci kez sonlandırılmadığını doğrular.
+@pytest.mark.parametrize(
+    ("error", "routes"),
+    [
+        pytest.param(None, [], id="basari"),
+        pytest.param(
+            PermanentError(UNREADABLE_DOCUMENT),
+            [(EVENTS_EXCHANGE, DOCUMENT_ANALYSIS_FAILED)],
+            id="hata-olayi",
+        ),
+    ],
+)
+async def test_error_after_ack_does_not_settle_again(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    error: BaseException | None,
+    routes: list[tuple[str, str]],
+) -> None:
+    # Onaydan sonraki süre hesabında beklenmeyen bir hata fırlatır.
+    def failing_elapsed_ms(started: float) -> int:
+        raise RuntimeError(SECRET_MARKER)
+
+    monkeypatch.setattr(consumer_module, "_elapsed_ms", failing_elapsed_ms)
+    harness = await start_harness(FakeHandler(error=error))
+    message = harness.message()
+
+    await harness.deliver(message)
+
+    assert message.settlements == ACKED
+    assert harness.routes() == routes
+    record = consumer_record(caplog, "Mesaj işlenirken beklenmeyen hata (RuntimeError)")
+    assert [
+        item for item in records_of(caplog, "Consumer") if item.levelno >= logging.ERROR
+    ] == [record]
+    assert record.exc_info is None
+    assert extra_fields(record) == {"queue": QUEUE}
+    assert_no_secret_logged(caplog)

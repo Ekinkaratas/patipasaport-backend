@@ -1,4 +1,5 @@
 -r requirements.txt
+coverage==7.17.0
 grpcio-tools==1.84.0
 pytest==9.1.1
 pytest-asyncio==1.4.0

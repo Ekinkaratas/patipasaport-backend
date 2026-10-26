@@ -3,12 +3,14 @@ import json
 import math
 import re
 from dataclasses import FrozenInstanceError
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from typing import Any
+from zoneinfo import ZoneInfoNotFoundError
 
 import pytest
 from google.protobuf import json_format
 
+from app.documents import validate as validate_module
 from app.documents.validate import (
     BUSINESS_TIME_ZONE,
     ExtractionInvalid,
@@ -1097,6 +1099,32 @@ def test_today_defaults_to_current_istanbul_date() -> None:
 def test_business_time_zone_offset() -> None:
     moment = datetime(2026, 7, 1, 12, 0, tzinfo=UTC).astimezone(BUSINESS_TIME_ZONE)
     assert moment.utcoffset() == timedelta(hours=3)
+
+
+# Saat dilimi verisi yokmuş gibi ZoneInfoNotFoundError verir.
+def _missing_zone(key: str) -> tzinfo:
+    raise ZoneInfoNotFoundError(key)
+
+
+# Saat dilimi verisi bulunursa Europe/Istanbul dilimi olduğu gibi kullanılır.
+def test_business_time_zone_uses_zone_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    loaded = timezone(timedelta(hours=3), "yüklenen")
+    requested: list[str] = []
+    monkeypatch.setattr(
+        validate_module, "ZoneInfo", lambda key: requested.append(key) or loaded
+    )
+    assert validate_module._load_business_time_zone() is loaded
+    assert requested == [validate_module.BUSINESS_TIME_ZONE_NAME]
+
+
+# Saat dilimi verisi yoksa adı korunan sabit UTC+3 dilimi kullanılır.
+def test_business_time_zone_falls_back_without_zone_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(validate_module, "ZoneInfo", _missing_zone)
+    zone = validate_module._load_business_time_zone()
+    assert zone.utcoffset(None) == timedelta(hours=3)
+    assert zone.tzname(None) == validate_module.BUSINESS_TIME_ZONE_NAME
 
 
 # Diğer türlerin ayrıntıları bozuk olsa bile sessizce atılır.

@@ -46,6 +46,11 @@ async def _close_after_failure(connection: AbstractRobustConnection) -> None:
         )
 
 
+# Sağlam bağlantı koptuktan sonra yeniden kurulunca tek satır bilgi logu yazar.
+def _log_reconnected(connection: AbstractRobustConnection | None) -> None:
+    _log.info("RabbitMQ bağlantısı yeniden kuruldu")
+
+
 # RabbitMQ'ya bağlanır, topolojiyi tanımlar ve verilen akışlarla tüketiciyi başlatır.
 async def start_messaging(
     settings: Settings,
@@ -66,6 +71,7 @@ async def start_messaging(
         client_properties={"connection_name": CONNECTION_NAME},
         timeout=CONNECT_TIMEOUT_SECONDS,
     )
+    connection.reconnect_callbacks.add(_log_reconnected)
     try:
         channel = connection.channel()
         await channel.initialize()

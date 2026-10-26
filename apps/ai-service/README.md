@@ -19,6 +19,8 @@ Linux/macOS'ta sanal ortam `python3.14 -m venv .venv` ile oluşturulur. `.env` i
 ```bash
 .venv/Scripts/python -m ruff check .
 .venv/Scripts/python -m pytest
+.venv/Scripts/python -m coverage run -m pytest
+.venv/Scripts/python -m coverage report
 .venv/Scripts/python scripts/generate_proto.py
 .venv/Scripts/python -m uvicorn app.main:app --port 8000
 ```
@@ -34,18 +36,19 @@ docker compose logs -f ai-service
 ```
 
 - İmaja yalnızca `app/`, `requirements.txt` ve `constraints.txt` girer (`.dockerignore`).
+- Konteyner 512 MB bellek sınırıyla çalışır (`mem_limit`); iki adet 8 sayfalık PDF aynı anda işlenirken ölçülen en yüksek kullanım yaklaşık 260 MB'tır.
 - Servisi yerelde `uvicorn` ile çalıştırmadan önce Docker'daki servis durdurulur (`docker compose stop ai-service`); aksi halde ikisi aynı kuyrukları tüketir.
 - Ana projenin e2e testlerinden önce de durdurulur, testlerden sonra `docker compose start ai-service` ile yeniden başlatılır.
 
 ## Entegrasyon testleri
 
-Varsayılan `pytest` çalıştırması entegrasyon testlerini dışarıda bırakır (`-m 'not integration'`) ve ağa çıkmaz. Entegrasyon testleri gerçek RabbitMQ ile çalışır.
+Varsayılan `pytest` çalıştırması entegrasyon testlerini dışarıda bırakır (`-m 'not integration'`) ve ağa çıkmaz. Entegrasyon testleri gerçek RabbitMQ ve SeaweedFS ile çalışır; `test_llm_client.py` ve `test_explanation_llm.py` sentetik içerikle gerçek AI API'ye istek gönderir, bu yüzden her çalıştırma sağlayıcı kotasından düşer.
 
 Ön koşullar:
 
 - Ana proje dev modunda çalışıyor olmalı; RabbitMQ `localhost:5672` adresinden erişilebilir olmalı.
 - AI RabbitMQ kullanıcısı `rabbitmq-init` ile oluşturulmuş olmalı.
-- `apps/ai-service/.env` dolu olmalı (`RABBITMQ_HOST=localhost`, `AI_RABBITMQ_USER`, `AI_RABBITMQ_PASSWORD`). Testler ayarları `load_settings()` ile bu dosyadan okur.
+- `apps/ai-service/.env` dolu olmalı (`RABBITMQ_HOST=localhost`, `S3_ENDPOINT=http://localhost:8333`, AI RabbitMQ, S3 ve AI API değerleri). Testler ayarları `load_settings()` ile bu dosyadan okur.
 
 ```bash
 .venv/Scripts/python -m pytest -m integration

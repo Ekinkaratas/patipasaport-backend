@@ -20,6 +20,7 @@ from botocore.exceptions import (
     ResponseStreamingError,
 )
 from botocore.stub import Stubber
+from urllib3.exceptions import SSLError as Urllib3SSLError
 
 from app import storage as storage_module
 from app.config import Settings
@@ -361,6 +362,10 @@ STREAM_ERRORS = [
         lambda: IncompleteReadError(actual_bytes=1, expected_bytes=len(BODY)),
         id="eksik-okuma",
     ),
+    pytest.param(
+        lambda: Urllib3SSLError(f"{KEY} {BODY_MARKER}"),
+        id="ssl-hatasi",
+    ),
 ]
 
 
@@ -495,7 +500,7 @@ def recorded_clients(
     return created
 
 
-# create_storage'ın uç nokta, bölge, path adresleme ve checksum ayarlarını sınar.
+# create_storage'ın uç nokta, adresleme, checksum, zaman aşımı ve tekrar ayarını sınar.
 def test_create_storage_configures_client(
     recorded_clients: list[tuple[BaseClient, dict[str, Any]]],
     caplog: pytest.LogCaptureFixture,
@@ -517,10 +522,9 @@ def test_create_storage_configures_client(
     assert config.s3 == {"addressing_style": "path"}
     assert config.request_checksum_calculation == "when_required"
     assert config.response_checksum_validation == "when_required"
-    default = make_client().meta.config
-    assert config.connect_timeout == default.connect_timeout
-    assert config.read_timeout == default.read_timeout
-    assert config.retries == default.retries
+    assert config.connect_timeout == 5
+    assert config.read_timeout == 30
+    assert config.retries == {"mode": "standard", "total_max_attempts": 3}
     for text in (FAKE_ACCESS_KEY, FAKE_SECRET_KEY):
         assert text not in caplog.text
         for record in caplog.records:

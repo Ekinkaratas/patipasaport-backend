@@ -1,7 +1,8 @@
 # dto
 
-This library was generated with [Nx](https://nx.dev).
+Request DTOs and validation rules shared by the gateway and the services (access, auth, clinics, medical-record, pets, users), plus shared validation helpers and messages.
 
-## Building
-
-Run `nx build dto` to build the library.
+```sh
+npx nx lint dto
+npx nx test dto
+```

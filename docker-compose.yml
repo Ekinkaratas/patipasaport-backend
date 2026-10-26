@@ -446,6 +446,7 @@ services:
       context: apps/ai-service
       dockerfile: Dockerfile
     image: patipasaport/ai-service:${IMAGE_TAG:-latest}
+    mem_limit: 512m
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"

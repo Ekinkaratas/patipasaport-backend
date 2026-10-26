@@ -1,4 +1,5 @@
 import inspect
+import json
 import logging
 from collections.abc import Sequence
 from typing import Any, cast
@@ -6,6 +7,7 @@ from typing import Any, cast
 import aio_pika
 import pytest
 from aio_pika.abc import AbstractChannel, AbstractRobustConnection
+from aio_pika.tools import CallbackCollection
 
 from app.config import Settings
 from app.errors import ERROR_MESSAGES
@@ -29,6 +31,8 @@ FAKE_USER = "sahte-ai-kullanicisi"
 FAKE_PASSWORD = "sahte-rabbitmq-sifresi"
 FAKE_HOST = "sahte-rabbitmq"
 FAKE_PORT = 5673
+RECONNECTED_MESSAGE = "RabbitMQ bağlantısı yeniden kuruldu"
+CONNECTED_MESSAGE = "RabbitMQ bağlantısı kuruldu ve topoloji tanımlandı"
 CUSTOM_TOPOLOGY = Topology(
     events_exchange="test-run.events",
     dead_letter_exchange="test-run.events.dlx",
@@ -93,6 +97,7 @@ class FakeConnection:
         self.close_error = close_error
         self.channels: list[FakeChannel] = []
         self.close_calls = 0
+        self.reconnect_callbacks: CallbackCollection[Any, []] = CallbackCollection(self)
 
     # aio-pika gibi açılış seçenekleriyle yeni bir sahte kanal döndürür.
     def channel(
@@ -575,6 +580,86 @@ async def test_stop_closes_connection_even_if_consumer_stop_fails(
     assert connection.close_calls == 1
     await messaging.stop()
     assert connection.close_calls == 1
+
+
+# Messaging bağlamındaki kayıtların mesajlarını sırayla döndürür.
+def messaging_messages(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name == "Messaging"]
+
+
+# Açılışta yeniden bağlanma geri çağrısının tam bir kez kaydedildiğini doğrular.
+async def test_reconnect_callback_is_registered(
+    connection: FakeConnection,
+    connect: ConnectSpy,
+    declare: DeclareSpy,
+    consumers: ConsumerFactory,
+) -> None:
+    await start_messaging(fake_settings(), connect=connect)
+
+    assert list(connection.reconnect_callbacks) == [runtime._log_reconnected]
+
+
+# İlk bağlantının yalnızca kuruldu satırını yazıp yeniden kuruldu yazmadığını doğrular.
+async def test_first_connect_does_not_log_reconnect(
+    caplog: pytest.LogCaptureFixture,
+    connect: ConnectSpy,
+    declare: DeclareSpy,
+    consumers: ConsumerFactory,
+) -> None:
+    await start_messaging(fake_settings(), connect=connect)
+
+    assert messaging_messages(caplog) == [CONNECTED_MESSAGE]
+
+
+# Geri çağrı tetiklenince tek bir INFO yeniden kuruldu satırı yazıldığını doğrular.
+async def test_reconnect_logs_single_info_line(
+    caplog: pytest.LogCaptureFixture,
+    connection: FakeConnection,
+    connect: ConnectSpy,
+    declare: DeclareSpy,
+    consumers: ConsumerFactory,
+) -> None:
+    await start_messaging(fake_settings(), connect=connect)
+    caplog.clear()
+
+    await connection.reconnect_callbacks()
+
+    [record] = caplog.records
+    assert record.name == "Messaging"
+    assert record.levelno == logging.INFO
+    assert record.getMessage() == RECONNECTED_MESSAGE
+    assert record.exc_info is None
+    rendered = json.loads(JsonFormatter().format(record))
+    assert rendered["context"] == "Messaging"
+    assert rendered["level"] == "info"
+    assert rendered["message"] == RECONNECTED_MESSAGE
+
+
+# Bağlantı nesnesi artık yoksa da geri çağrının aynı satırı yazdığını doğrular.
+def test_reconnect_log_without_sender(caplog: pytest.LogCaptureFixture) -> None:
+    runtime._log_reconnected(None)
+
+    assert messaging_messages(caplog) == [RECONNECTED_MESSAGE]
+
+
+# Yeniden bağlanma logunda kimlik bilgisinin ve adresin bulunmadığını doğrular.
+async def test_reconnect_log_has_no_secrets(
+    caplog: pytest.LogCaptureFixture,
+    connection: FakeConnection,
+    connect: ConnectSpy,
+    declare: DeclareSpy,
+    consumers: ConsumerFactory,
+) -> None:
+    await start_messaging(fake_settings(), connect=connect)
+    await connection.reconnect_callbacks()
+    await connection.reconnect_callbacks()
+
+    assert messaging_messages(caplog) == [
+        CONNECTED_MESSAGE,
+        RECONNECTED_MESSAGE,
+        RECONNECTED_MESSAGE,
+    ]
+    assert_not_logged(caplog, FAKE_PASSWORD, FAKE_USER, FAKE_HOST, "amqp")
 
 
 # Messaging'in kendisine verilen bağlantı ve tüketiciyi tuttuğunu doğrular.

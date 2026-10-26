@@ -7,6 +7,7 @@ from botocore.client import BaseClient
 from botocore.config import Config
 from botocore.exceptions import ClientError, HTTPClientError, IncompleteReadError
 from botocore.exceptions import ConnectionError as BotoConnectionError
+from urllib3.exceptions import SSLError as Urllib3SSLError
 
 from app.config import Settings
 from app.errors import (
@@ -18,9 +19,17 @@ from app.errors import (
 from app.logs import get_logger
 
 S3_REGION = "us-east-1"
+S3_CONNECT_TIMEOUT_SECONDS = 5
+S3_READ_TIMEOUT_SECONDS = 30
+S3_MAX_ATTEMPTS = 3
 NOT_FOUND_ERROR_CODE = "NoSuchKey"
 
-_TRANSIENT_ERRORS = (BotoConnectionError, HTTPClientError, IncompleteReadError)
+_TRANSIENT_ERRORS = (
+    BotoConnectionError,
+    HTTPClientError,
+    IncompleteReadError,
+    Urllib3SSLError,
+)
 _log = get_logger("Storage")
 
 
@@ -130,6 +139,9 @@ def create_storage(settings: Settings) -> DocumentStorage:
             s3={"addressing_style": "path"},
             request_checksum_calculation="when_required",
             response_checksum_validation="when_required",
+            connect_timeout=S3_CONNECT_TIMEOUT_SECONDS,
+            read_timeout=S3_READ_TIMEOUT_SECONDS,
+            retries={"mode": "standard", "total_max_attempts": S3_MAX_ATTEMPTS},
         ),
     )
     return DocumentStorage(client, settings.s3_bucket)

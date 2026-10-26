@@ -20,3 +20,12 @@ markers = [
     "integration: ana proje dev modundayken gerçek RabbitMQ ile çalışan testler",
 ]
 addopts = "-m 'not integration'"
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = ["app/generated/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import io
+import math
 import threading
 import time
 from collections.abc import Callable
@@ -270,6 +271,51 @@ async def test_pdf_over_page_limit_rejected_before_render(
 )
 async def test_broken_pdf_unreadable(content: bytes) -> None:
     assert await _error_code(content, PDF) == UNREADABLE_DOCUMENT
+
+
+# Sayfa sayısı 0 okunursa belgenin kapatılıp UNREADABLE_DOCUMENT verildiğini doğrular.
+async def test_pdf_with_zero_page_count_unreadable(
+    monkeypatch: pytest.MonkeyPatch, pdfium_spy: PdfiumSpy
+) -> None:
+    with monkeypatch.context() as patch:
+        patch.setattr(pdfium.PdfDocument, "__len__", lambda self: 0)
+        assert await _error_code(_pdf([RED]), PDF) == UNREADABLE_DOCUMENT
+
+    assert pdfium_spy.events == ["init_forms"]
+    assert len(pdfium_spy.documents) == 1
+    assert pdfium_spy.documents[0].raw is None
+    assert pdfium_spy.pages == []
+    urls = await prepare_images(_pdf([RED]), PDF)
+    _assert_color(_center(_decode(urls[0])), RED)
+
+
+# Sayfa boyutu geçersizse render edilmeden UNREADABLE_DOCUMENT verildiğini doğrular.
+@pytest.mark.parametrize(
+    "size",
+    [
+        pytest.param((0.0, 842.0), id="sifir-genislik"),
+        pytest.param((595.0, 0.0), id="sifir-yukseklik"),
+        pytest.param((-595.0, 842.0), id="negatif"),
+        pytest.param((math.inf, 842.0), id="sonsuz"),
+        pytest.param((595.0, math.nan), id="nan"),
+    ],
+)
+async def test_pdf_page_with_invalid_size_unreadable(
+    monkeypatch: pytest.MonkeyPatch,
+    pdfium_spy: PdfiumSpy,
+    size: tuple[float, float],
+) -> None:
+    with monkeypatch.context() as patch:
+        patch.setattr(pdfium.PdfPage, "get_size", lambda self: size)
+        assert await _error_code(_pdf([RED]), PDF) == UNREADABLE_DOCUMENT
+
+    assert pdfium_spy.events == ["init_forms", "len", "get_page"]
+    assert pdfium_spy.bitmaps == []
+    objects = [*pdfium_spy.documents, *pdfium_spy.pages]
+    assert len(objects) == 2
+    assert all(item.raw is None for item in objects)
+    urls = await prepare_images(_pdf([RED]), PDF)
+    _assert_color(_center(_decode(urls[0])), RED)
 
 
 # A4 boyutlu sayfanın scale=2 ile render edildiğini doğrular.

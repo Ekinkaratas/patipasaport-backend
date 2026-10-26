@@ -504,6 +504,13 @@ def test_correction_text_rejects_paths_outside_schema(path: str) -> None:
         build_explanation_correction_text([ValidationIssue(path, "REQUIRED")])
 
 
+# Metin olmayan alan yolları reddedilir.
+@pytest.mark.parametrize("path", [None, 0, b"summary"])
+def test_correction_text_rejects_non_string_paths(path: Any) -> None:
+    with pytest.raises(ValueError, match="alan yolu ya da kural kodu geçersiz"):
+        build_explanation_correction_text([ValidationIssue(path, "REQUIRED")])
+
+
 # Açıklamada kullanılmayan ya da bilinmeyen kural kodları reddedilir.
 @pytest.mark.parametrize(
     "code", ["", "FUTURE_DATE", "ORDER", "RANGE", "required", INJECTION]

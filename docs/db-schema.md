@@ -9,7 +9,8 @@ Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL fore
 | Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`, `stock_sales`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `UpdateStockItem`, `AdjustStockItem`, `DeleteStockItem`, `CreateStockSale`, `ListStockSales`, `CancelStockSale`, `GetStockSalesSummary`, `GetClinicPetOverview`). `UploadPetResult` uygulandı: gateway dosyayı SeaweedFS'e yazar, clinics belge referansını medical_record `RegisterDocument`'a iletir (bkz. Medical Record bölümü) |
 | Pets | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`) |
 | Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor |
-| Medical Record | ✅ Uygulandı — proto, DTO'lar, CloudEvents, Prisma schema + migration (trigger'larla), 10 gRPC metodu, outbox + RabbitMQ, clinics.UploadPetResult ve gateway uçları (yükleme dahil); unit testler (medical_record 172, gateway 15) ve e2e testler (medical_record-e2e 11, gateway-e2e yükleme ve kayıt uçları) yazıldı. AI sözleşme dokümanı henüz yok. Tahlil açıklaması eklendi: `lab_result_explanations` tablosu (migration `20261026100731_lab_result_explanations`), istek olayı, sonuç tüketicisi, `GetLabExplanation` ve `GET /records/:recordId/explanation` (bkz. Tahlil açıklaması bölümü) |
+| Medical Record | ✅ Uygulandı — proto, DTO'lar, CloudEvents, Prisma schema + migration'lar (trigger'larla), 11 gRPC metodu, outbox + RabbitMQ, clinics.UploadPetResult ve gateway uçları (yükleme dahil); unit ve e2e testler yazıldı. Tahlil açıklaması: `lab_result_explanations` tablosu (migration'lar `20261026100731_lab_result_explanations` ve `20261026133613_lab_explanation_status_default`), istek olayı, sonuç tüketicisi, `GetLabExplanation` ve `GET /records/:recordId/explanation` (bkz. Tahlil açıklaması bölümü) |
+| AI (Python/FastAPI) | ✅ Uygulandı — kendi veritabanı yok; `apps/ai-service`, Compose servisi `ai-service`. Belge okuma ve tahlil açıklaması isteklerini RabbitMQ'dan tüketir, sonucu olay olarak yayınlar (bkz. Medical Record bölümü, AI servisi) |
 
 ---
 
@@ -316,7 +317,7 @@ TTL:   auth'un istediği süre (15 dk), en fazla OPAQUE_TOKEN_TTL (.env, varsay�
 
 ## Medical Record Service — PostgreSQL (`medical_db`) + SeaweedFS (S3) + RabbitMQ
 
-> Uygulanıyor. Proto: `libs/proto/src/lib/medical_record/medical_record.proto`, olay şemaları: `libs/proto/src/lib/events/events.proto`.
+> Uygulandı. Proto: `libs/proto/src/lib/medical_record/medical_record.proto`, olay şemaları: `libs/proto/src/lib/events/events.proto`.
 
 ### Dosya deposu — SeaweedFS (S3 uyumlu, on-premise)
 
@@ -325,7 +326,7 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
 > **Neden MinIO değil:** MinIO Ekim 2025'te topluluk sürümünün Docker imajlarını yayınlamayı bıraktı, topluluk deposu bakım moduna alınıp arşivlendi; güvenlik yamaları imaj olarak gelmiyor. SeaweedFS aktif geliştirilen, Apache-2.0 lisanslı bir alternatif (imaj: `chrislusf/seaweedfs:4.48`).
 
 - Compose servisi: `seaweedfs` (`weed server -s3`, S3 portu 8333; master 9333, filer 8888 yalnızca iç ağda). Veri `seaweedfs_data` volume'unda.
-- Node servisleri `@aws-sdk/client-s3` ile bağlanır (`endpoint: S3_ENDPOINT`, `forcePathStyle: true`, `region: us-east-1`); SeaweedFS ile yazma/okuma/silme ve salt okunur sınır doğrulandı.
+- Node servisleri `@aws-sdk/client-s3` ile bağlanır (`endpoint: S3_ENDPOINT`, `forcePathStyle: true`, `region: us-east-1`); SeaweedFS ile yazma/okuma/silme ve salt okunur sınır doğrulandı. AI servisi `boto3` ile aynı şekilde (path-style) bağlanır.
 - `seaweedfs-init` tek seferlik container'ı (`tools/seaweedfs/init.sh`) bucket'ı ve kullanıcıları oluşturur; tekrar çalıştırıldığında var olana dokunmaz. `.env`'deki anahtarlardan biri boşsa hiçbir şey oluşturmadan durur.
 - Bucket **özeldir**; anonim erişim kapalıdır.
 - Erişim en az yetkiyle (bucket'a özel politika): `gateway` kullanıcısı `readwrite` (yazma/okuma/silme), `ai` kullanıcısı `readonly`. Uygulamalar admin kimliği kullanmaz.
@@ -399,11 +400,13 @@ Bu özellikten önce oluşmuş tahlil kayıtları için geriye dönük açıklam
 | `com.patipasaport.lab_explanation.generated.v1` | AI → medical-record | `LabExplanationGenerated` |
 | `com.patipasaport.lab_explanation.failed.v1` | AI → medical-record | `LabExplanationFailed` |
 
-**Güvenilirlik:** kalıcı quorum kuyruk, kalıcı mesaj, yayıncı onayı (publisher confirm), tüketicide iş bittikten sonra elle onay (manual ack), gecikmeli tekrar deneme ve dead-letter kuyruğu. Teslim en az bir kez (at-least-once) olduğundan tüketiciler idempotenttir: aynı `document_id` için ikinci sonuç yok sayılır.
+**Güvenilirlik:** kalıcı quorum kuyruk, kalıcı mesaj, yayıncı onayı (publisher confirm), tüketicide iş bittikten sonra elle onay (manual ack), gecikmeli tekrar deneme ve dead-letter kuyruğu. Teslim en az bir kez (at-least-once) olduğundan tüketiciler idempotenttir: aynı `document_id` (tahlil açıklamasında `record_id`) için ikinci sonuç yok sayılır.
 
 **RabbitMQ:** `rabbitmq:4.3-management-alpine` (3.13'ün topluluk desteği 30 Eylül 2024'te bitti). medical-record bağlantıyı ayrı değişkenlerle kurar (`RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`); şifre URL'ye girmediği için özel karakter sorunu olmaz. İstemci: `amqplib` + `amqp-connection-manager` (bağlantı koparsa yeniden bağlanır, topolojiyi ve tüketiciyi yeniden kurar).
 
-**Topoloji** (tamamını medical-record açılışta tanımlar; AI'ın iş kuyruğu dahil, böylece AI çalışmıyorken gelen olaylar kaybolmaz):
+AI servisi yönetici hesabını değil, kısıtlı kendi kullanıcısını kullanır (`RABBITMQ_HOST`, `RABBITMQ_PORT`, `AI_RABBITMQ_USER`, `AI_RABBITMQ_PASSWORD`; istemci `aio-pika`, kopan bağlantıyı yeniden kurar). Bu kullanıcıyı tek seferlik `rabbitmq-init` container'ı (`tools/rabbitmq/init.sh`) yönetim API'siyle oluşturur ve `/` vhost'unda configure/write/read iznini yalnızca `^(ai-service\..+|patipasaport\.events|patipasaport\.events\.dlx)$` ile sınırlar: `ai-service.*` kuyrukları ve iki exchange. AI kullanıcı değişkenlerinden biri boş ya da doldurulmamışsa veya AI kullanıcısı `RABBITMQ_USER` ile aynıysa betik hiçbir şey oluşturmadan hatayla durur; `ai-service` bu container başarıyla bitmeden başlamaz.
+
+**Topoloji** (tamamını medical-record açılışta tanımlar; AI'ın iş kuyrukları dahil, böylece AI çalışmıyorken gelen olaylar kaybolmaz. AI servisi de açılışta iki exchange'i ve kendi kuyruklarını aynı argümanlarla tanımlar):
 
 | Ad | Tür | Not |
 |---|---|---|
@@ -416,7 +419,7 @@ Bu özellikten önce oluşmuş tahlil kayıtları için geriye dönük açıklam
 | `<kuyruk>.retry` | quorum kuyruk | `x-message-ttl` 30 sn; süre dolunca ana kuyruğa döner |
 | `<kuyruk>.dlq` | quorum kuyruk | Son durak; elle incelenir |
 
-Ana ve retry kuyruklarının argümanları: `x-queue-type: quorum`, `x-dead-letter-exchange: patipasaport.events.dlx`, `x-dead-letter-routing-key` (ana → `.dlq`, retry → ana kuyruk), `x-dead-letter-strategy: at-least-once`, `x-overflow: reject-publish`; retry'da ayrıca `x-message-ttl: 30000`. AI kuyruğu aynı argümanlarla tanımlamalıdır (farklı argümanla tanımlama RabbitMQ'da hata verir).
+Ana ve retry kuyruklarının argümanları: `x-queue-type: quorum`, `x-dead-letter-exchange: patipasaport.events.dlx`, `x-dead-letter-routing-key` (ana → `.dlq`, retry → ana kuyruk), `x-dead-letter-strategy: at-least-once`, `x-overflow: reject-publish`; retry'da ayrıca `x-message-ttl: 30000`. AI servisi kendi kuyruklarını aynı argümanlarla tanımlar (`apps/ai-service/app/messaging/topology.py`); farklı argümanla tanımlama RabbitMQ'da hata verir.
 
 **Mesaj özellikleri:** kalıcı (`delivery_mode` 2), `content_type: application/cloudevents+json`, `message_id` = CloudEvents `id`, `type` = CloudEvents `type`, başlık `x-correlation-id`. Gövde CloudEvents zarfıdır.
 
@@ -445,7 +448,12 @@ Ana ve retry kuyruklarının argümanları: `x-queue-type: quorum`, `x-dead-lett
 - Yayıncı onayı gelince `published_at` doldurulur.
 - Hata olursa (10 sn yayın zaman aşımı dahil) `attempts` artar, `last_error` yazılır ve sonraki deneme 2^deneme sn sonraya (en fazla 5 dk) ertelenir. Döngü vazgeçmez: RabbitMQ kapalıysa olay tabloda bekler, kaybolmaz.
 
-**AI servisi (Python/FastAPI):** `document.uploaded.v1` ile tetiklenir; dosyayı mesajdaki `storage_path` ile, salt okunur S3 anahtarıyla (`ai` kullanıcısı) okur; sonucu yayınlamadan gelen mesajı onaylamaz. Kendi veritabanı olmadığından outbox gerekmez. Gateway ve medical-record AI servisini HTTP/gRPC ile çağırmaz.
+**AI servisi (Python/FastAPI, `apps/ai-service`, Compose servisi `ai-service`, dışarıya port açılmaz):** `ai-service.document-uploaded` (prefetch 2) ve `ai-service.lab-explanation-requested` (prefetch 4) kuyruklarını elle onayla tüketir.
+
+- Belge akışı (`document.uploaded.v1`): önce `processing_started.v1` yayınlar; dosyayı mesajdaki `storage_path` ile, salt okunur S3 anahtarıyla (`ai` kullanıcısı) okur ve boyutu ile sha256'yı mesajdakiyle karşılaştırır; dış AI API'sinden (OpenAI uyumlu) kayıt önerisi alır, `analyzed.v1` ya da `analysis_failed.v1` yayınlar.
+- Tahlil açıklaması akışı (`lab_explanation.requested.v1`): dosya okumaz; mesajdaki değerlerle AI API'sini çağırır, `lab_explanation.generated.v1` ya da `lab_explanation.failed.v1` yayınlar.
+- Sonucu yayınlamadan gelen mesajı onaylamaz. Geçici hatada (AI API'si ya da dosya deposu geçici hata verirse) aynı `.retry` / `x-retry-count` düzeniyle tekrar dener; 5. denemede de sürerse hata olayı yayınlar. Geçersiz mesaj tekrar denenmeden `.dlq`'ya gider.
+- Kendi veritabanı olmadığından outbox gerekmez. Gateway ve medical-record AI servisini HTTP/gRPC ile çağırmaz; servisin tek HTTP ucu Compose sağlık kontrolünün kullandığı `/health`'tir.
 
 ### Durum makineleri
 
@@ -457,7 +465,7 @@ Ana ve retry kuyruklarının argümanları: `x-queue-type: quorum`, `x-dead-lett
 
 AI önerisi doğrulanmamış ve biçimi değişken olduğu için **taslakta jsonb** olarak durur; klinik onaylayınca **tipli tablolara** dönüştürülür. Klinik elle kayıt girdiğinde (`CreateRecord`) taslak aşaması atlanır.
 
-> Şema: `apps/medical_record/prisma/schema.prisma`, migration: `apps/medical_record/prisma/migrations/*_init`. Metin uzunlukları DTO sınırlarıyla aynıdır. Kullanıcının girdiği tarihler `date` (YYYY-MM-DD), sistem zamanları `timestamp`.
+> Şema: `apps/medical_record/prisma/schema.prisma`, migration'lar: `apps/medical_record/prisma/migrations/` (`*_init`, `*_documents_pet_created_index`, `*_lab_result_explanations`, `*_lab_explanation_status_default`). Metin uzunlukları DTO sınırlarıyla aynıdır. Kullanıcının girdiği tarihler `date` (YYYY-MM-DD), sistem zamanları `timestamp`.
 
 #### documents
 
@@ -535,7 +543,7 @@ Her tablonun kendi `id`'si (UUID, PK) vardır. `pet_id` / `clinic_id` tekrar yaz
 
 #### lab_result_explanations (tahlil kaydının AI açıklaması)
 
-Açıklama kayıttan sonra geldiği ve `medical_records` / `lab_results` değiştirilemediği için ayrı tablodadır; bu tabloda değişmezlik trigger'ı yoktur. Migration: `20261026100731_lab_result_explanations`.
+Açıklama kayıttan sonra geldiği ve `medical_records` / `lab_results` değiştirilemediği için ayrı tablodadır; bu tabloda değişmezlik trigger'ı yoktur. Migration'lar: `20261026100731_lab_result_explanations` (tablo ve enum) ve `20261026133613_lab_explanation_status_default` (`status` varsayılanı `PENDING`).
 
 | Kolon | Tip | Not |
 |---|---|---|
@@ -564,7 +572,7 @@ Açıklama kayıttan sonra geldiği ve `medical_records` / `lab_results` değiş
 | created_at | timestamp | |
 | published_at | timestamp, nullable | Doluysa gönderildi |
 
-**İndeksler:** `documents (clinic_id, status)`, `draft_reviews (clinic_id, status)`, `medical_records (pet_id, recorded_at)`, `record_attachments (document_id)`, `vaccinations (next_due_at)`, `lab_results (record_id)`, `lab_result_explanations (record_id)` unique, `outbox (published_at, next_attempt_at)` — gönderilmemiş ve zamanı gelmiş olayları hızlı bulmak için.
+**İndeksler:** `documents (clinic_id, status)`, `documents (pet_id, created_at)`, `draft_reviews (clinic_id, status)`, `medical_records (pet_id, recorded_at)`, `record_attachments (document_id)`, `vaccinations (next_due_at)`, `lab_results (record_id)`, `lab_result_explanations (record_id)` unique, `outbox (published_at, next_attempt_at)` — gönderilmemiş ve zamanı gelmiş olayları hızlı bulmak için.
 
 ### Erişim kuralları (zero trust)
 

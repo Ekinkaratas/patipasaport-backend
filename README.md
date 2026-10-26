@@ -1,8 +1,8 @@
 # PatiPasaport
 
-A pet health passport platform: pet owners keep their animals' medical history in one place and decide, per clinic, who may see or add to it. Clinics upload lab results and images, an AI service (planned) drafts structured records from them, and a clinic reviews every draft before it becomes part of the permanent record.
+A pet health passport platform: pet owners keep their animals' medical history in one place and decide, per clinic, who may see or add to it. Clinics upload lab results and images, an AI service drafts structured records from them, and a clinic reviews every draft before it becomes part of the permanent record. For every approved or manually entered lab result, the AI service also writes a plain-language explanation that only the pet owner sees.
 
-This is a graduation project. The backend is complete; the AI service is the only part still to be built. Its integration points (events, queues, storage access) are already in place, and its contract document is the next update (see [Roadmap](#roadmap)).
+This is a graduation project. The backend, including the AI service, is complete and runs with Docker Compose; the frontend lives in a separate repository. What is left is hardening and deployment (see [Roadmap](#roadmap)).
 
 ## Architecture
 
@@ -39,6 +39,7 @@ Design decisions worth knowing:
 - **Phantom tokens.** Clients hold opaque tokens; the gateway exchanges them for short-lived JWTs that internal services verify. Only `access` holds the private key.
 - **Outbox + CloudEvents.** A document upload writes the document and an outbox row in one transaction; a relay publishes CloudEvents to RabbitMQ with retries and a dead-letter queue. A new lab result record (approved draft or manual entry) writes the record, a pending explanation row and an explanation request in one transaction the same way.
 - **Human in the loop.** AI output is stored as a draft and only becomes a medical record after a clinic approves it.
+- **Isolated AI service.** It has no database and calls no other service: events come in and go out through RabbitMQ, files are read from SeaweedFS with read-only credentials, and every AI answer is checked against a strict JSON schema and the same validation rules the services use before it is published.
 - **Access audit log.** Every S3 request is logged through Fluent Bit.
 
 Full database, messaging and storage design: [docs/db-schema.md](docs/db-schema.md).
@@ -153,7 +154,7 @@ npx nx run-many -t e2e --parallel=1 --output-style=static
 docker compose start ai-service
 ```
 
-The AI service has its own lint and tests; see [apps/ai-service/README.md](apps/ai-service/README.md).
+The AI service has its own lint and tests; see [apps/ai-service/README.md](apps/ai-service/README.md). CI runs them in a separate job: ruff, unit tests with a coverage report, and the Docker image build.
 
 ## Project layout
 
@@ -170,9 +171,8 @@ docs/        database, messaging and storage design
 
 ## Roadmap
 
-1. **Next update: AI service contract** (`docs/ai-service-contract.md`). It will define the event types and payloads, the queue and retry topology, storage access and error handling that the AI service must follow.
-2. **AI service:** consumes `document-uploaded` events from RabbitMQ, reads the file from SeaweedFS with read-only credentials and publishes the analysis result as an event.
-3. **Deployment:** TLS reverse proxy and production configuration.
+1. **AI service hardening (in progress):** Python checks in CI, timeout and concurrency review, usage and cost review, and an end-to-end test with a real lab report.
+2. **Deployment:** TLS reverse proxy and production configuration.
 
 ## License
 
