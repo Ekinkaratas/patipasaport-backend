@@ -7,6 +7,7 @@ import {
   DOCUMENT_EVENT_TYPES,
   forwardGrpcError,
   getCorrelationId,
+  LAB_EXPLANATION_EVENT_TYPES,
   rejectRpc,
   ResponseMessages,
 } from '@libs/common';
@@ -21,7 +22,11 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from './prisma/prisma.service';
-import { DraftReviewStatus, Prisma } from '../generated/prisma/client';
+import {
+  DraftReviewStatus,
+  LabExplanationStatus,
+  Prisma,
+} from '../generated/prisma/client';
 import { CONSENT_PAGE_SIZE } from './medical-record.constants';
 import {
   DOCUMENT_INCLUDE,
@@ -30,13 +35,19 @@ import {
   DRAFT_INCLUDE,
   DRAFT_STATUS_TO_DB,
   DraftWithDocument,
+  EMPTY_PET_CONTEXT,
   fromDateOnly,
   LAB_RESULT_INCLUDE,
+  LabExplanationPetContext,
   PRESCRIPTION_INCLUDE,
   RECORD_INCLUDE,
   RECORD_TYPE_TO_DB,
+  RecordWithLabResults,
+  toLabExplanationPetContext,
+  toLabExplanationRequestedData,
   toProtoDocument,
   toProtoDraft,
+  toProtoLabExplanation,
   toProtoLabResult,
   toProtoPrescription,
   toProtoRecord,
@@ -196,6 +207,49 @@ export class MedicalRecordService implements OnModuleInit {
       `${method_name}: taslak zaten incelenmiş (draftReviewId=${draftId})`,
       'warn',
     );
+  }
+
+  private async getLabExplanationPet(
+    petId: string,
+    method_name: string,
+  ): Promise<LabExplanationPetContext> {
+    try {
+      const { pet } = await firstValueFrom(
+        this.petsClient.getPet({ id: petId }),
+      );
+      return toLabExplanationPetContext(pet);
+    } catch {
+      this.logger.warn(
+        `${method_name}: pets.getPet başarısız, tahlil açıklaması tür ve doğum tarihi olmadan istenecek (petId=${petId})`,
+      );
+      return EMPTY_PET_CONTEXT;
+    }
+  }
+
+  private async requestLabExplanation(
+    tx: Prisma.TransactionClient,
+    record: RecordWithLabResults,
+    pet: LabExplanationPetContext,
+  ): Promise<void> {
+    await tx.labResultExplanation.create({
+      data: { recordId: record.id, status: LabExplanationStatus.PENDING },
+    });
+
+    const event = createCloudEvent({
+      type: LAB_EXPLANATION_EVENT_TYPES.REQUESTED,
+      source: CLOUD_EVENT_SOURCES.MEDICAL_RECORD,
+      subject: record.id,
+      data: toLabExplanationRequestedData(record, pet),
+    });
+
+    await tx.outbox.create({
+      data: {
+        id: event.id,
+        type: event.type,
+        payload: event as unknown as Prisma.InputJsonObject,
+        correlationId: getCorrelationId(),
+      },
+    });
   }
 
   private validateContent(content: unknown): Promise<RecordContentDto> {
@@ -406,19 +460,61 @@ export class MedicalRecordService implements OnModuleInit {
       }
     }
 
-    const record = await this.prisma.medicalRecord.create({
-      data: {
-        ...toRecordContentData(request.content),
-        petId: request.petId,
-        clinicId: user.clinicId,
-        attachments: {
-          create: documentIds.map((documentId) => ({ documentId })),
+    const labExplanationPet =
+      request.content.type === medicalRecord.RecordType.LAB_RESULT
+        ? await this.getLabExplanationPet(request.petId, 'createRecord')
+        : undefined;
+
+    const record = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.medicalRecord.create({
+        data: {
+          ...toRecordContentData(request.content),
+          petId: request.petId,
+          clinicId: user.clinicId,
+          attachments: {
+            create: documentIds.map((documentId) => ({ documentId })),
+          },
         },
-      },
-      include: RECORD_INCLUDE,
+        include: RECORD_INCLUDE,
+      });
+
+      if (labExplanationPet) {
+        await this.requestLabExplanation(tx, created, labExplanationPet);
+      }
+      return created;
     });
 
     return { record: toProtoRecord(record) };
+  }
+
+  async getLabExplanation(
+    request: medicalRecord.GetLabExplanationRequest,
+    user: AuthUser,
+  ): Promise<medicalRecord.LabExplanationResponse> {
+    const record = await this.prisma.medicalRecord.findUnique({
+      where: { id: request.recordId },
+      select: { petId: true, labExplanation: true },
+    });
+
+    if (!record) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.NOT_FOUND,
+        `getLabExplanation: kayıt yok (recordId=${request.recordId})`,
+      );
+    }
+
+    await this.assertPetOwner(record.petId, user, 'getLabExplanation');
+
+    if (!record.labExplanation) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.NOT_FOUND,
+        `getLabExplanation: kaydın tahlil açıklaması yok (recordId=${request.recordId})`,
+      );
+    }
+
+    return toProtoLabExplanation(record.labExplanation);
   }
 
   async listRecordsByPet(
@@ -691,6 +787,10 @@ export class MedicalRecordService implements OnModuleInit {
       const content = await this.validateContent(
         request.editedContent ?? draft.proposedPayload,
       );
+      const labExplanationPet =
+        content.type === medicalRecord.RecordType.LAB_RESULT
+          ? await this.getLabExplanationPet(draft.petId, 'reviewDraft')
+          : undefined;
 
       await this.prisma.$transaction(async (tx) => {
         const approved = await tx.draftReview.updateMany({
@@ -721,13 +821,21 @@ export class MedicalRecordService implements OnModuleInit {
             sourceDraftReviewId: draft.id,
             attachments: { create: [{ documentId: draft.documentId }] },
           },
-          select: { id: true },
+          select: {
+            id: true,
+            title: true,
+            labResults: RECORD_INCLUDE.labResults,
+          },
         });
 
         await tx.draftReview.update({
           where: { id: draft.id },
           data: { createdRecordId: record.id },
         });
+
+        if (labExplanationPet) {
+          await this.requestLabExplanation(tx, record, labExplanationPet);
+        }
       });
     }
 

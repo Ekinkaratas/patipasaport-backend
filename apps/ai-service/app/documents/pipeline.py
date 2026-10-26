@@ -1,8 +1,9 @@
 import re
 import time
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 
+from app.clock import elapsed_ms, format_time, utc_now
 from app.documents.render import SUPPORTED_MIME_TYPES, prepare_images
 from app.documents.validate import (
     ExtractionInvalid,
@@ -30,6 +31,7 @@ from app.messaging.cloudevents import (
     DOCUMENT_ANALYZED,
     DOCUMENT_PROCESSING_STARTED,
     DOCUMENT_UPLOADED,
+    INVALID_DATA,
     IncomingEvent,
     InvalidMessageError,
     OutgoingEvent,
@@ -42,7 +44,6 @@ from app.storage import DocumentStorage
 
 MIN_SIZE_BYTES = 1
 MAX_SIZE_BYTES = 10_485_760
-INVALID_DATA = "INVALID_DATA"
 
 _STORAGE_PATH = re.compile(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
@@ -50,23 +51,6 @@ _STORAGE_PATH = re.compile(
 )
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _log = get_logger("DocumentPipeline")
-
-
-# Şimdiki zamanı UTC olarak döndürür.
-def _utc_now() -> datetime:
-    return datetime.now(UTC)
-
-
-# Zamanı UTC'de, milisaniyeli ve Z ile biten ISO-8601 metnine çevirir.
-def _format_time(moment: datetime) -> str:
-    utc = moment.replace(tzinfo=UTC) if moment.utcoffset() is None else moment
-    text = utc.astimezone(UTC).isoformat(timespec="milliseconds")
-    return text.replace("+00:00", "Z")
-
-
-# Başlangıçtan bu yana geçen süreyi milisaniye olarak döndürür.
-def _elapsed_ms(started: float) -> int:
-    return round((time.monotonic() - started) * 1000)
 
 
 # Olayın verisinin DocumentUploaded olduğunu doğrulayıp döndürür.
@@ -97,7 +81,7 @@ class DocumentPipeline:
         llm: LlmClient,
         ai_model: str,
         *,
-        clock: Callable[[], datetime] = _utc_now,
+        clock: Callable[[], datetime] = utc_now,
     ) -> None:
         self._storage = storage
         self._llm = llm
@@ -126,7 +110,7 @@ class DocumentPipeline:
                 events_pb2.DocumentProcessingStarted(
                     document_id=data.document_id,
                     model_version=self.model_version,
-                    started_at=_format_time(started_at),
+                    started_at=format_time(started_at),
                 ),
                 DOCUMENT_PROCESSING_STARTED,
                 now=started_at,
@@ -145,7 +129,7 @@ class DocumentPipeline:
                     model_version=self.model_version,
                     confidence=result.confidence,
                     proposal=result.proposal,
-                    analyzed_at=_format_time(analyzed_at),
+                    analyzed_at=format_time(analyzed_at),
                 ),
                 DOCUMENT_ANALYZED,
                 now=analyzed_at,
@@ -155,7 +139,7 @@ class DocumentPipeline:
             "Belge okundu, kayıt önerisi yayınlandı",
             extra={
                 "documentId": data.document_id,
-                "durationMs": _elapsed_ms(started),
+                "durationMs": elapsed_ms(started),
                 "model": self._ai_model,
             },
         )
@@ -170,7 +154,7 @@ class DocumentPipeline:
                 model_version=self.model_version,
                 error_code=code,
                 error_message=ERROR_MESSAGES[code],
-                failed_at=_format_time(failed_at),
+                failed_at=format_time(failed_at),
             ),
             DOCUMENT_ANALYSIS_FAILED,
             now=failed_at,

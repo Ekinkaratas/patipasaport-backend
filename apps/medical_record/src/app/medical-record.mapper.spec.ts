@@ -1,23 +1,29 @@
-import { medicalRecord } from '@libs/proto';
+import { medicalRecord, pets } from '@libs/proto';
 import { RecordContentDto } from '@libs/dto';
 import {
   Document,
   DocumentStatus,
   DraftReviewStatus,
+  LabExplanationStatus,
+  LabResultExplanation,
   LabResultFlag,
   RecordType,
 } from '../generated/prisma/client';
 import {
   DocumentWithDraft,
   DraftWithDocument,
+  EMPTY_PET_CONTEXT,
   fromDateOnly,
   LabResultWithRecord,
   PrescriptionWithRecord,
   RecordWithDetails,
   toDateOnly,
   toFileReference,
+  toLabExplanationPetContext,
+  toLabExplanationRequestedData,
   toProtoDocument,
   toProtoDraft,
+  toProtoLabExplanation,
   toProtoLabResult,
   toProtoPrescription,
   toProtoRecord,
@@ -520,4 +526,191 @@ describe('toRecordContentData', () => {
       } as unknown as RecordContentDto),
     ).toThrow('geçersiz kayıt türü');
   });
+});
+
+describe('toLabExplanationPetContext', () => {
+  const pet = (over: Partial<pets.Pet> = {}): pets.Pet => ({
+    id: PET_ID,
+    name: 'Pamuk',
+    species: 'CAT',
+    breed: 'TURKISH_VAN',
+    sex: pets.PetSex.FEMALE,
+    birthDate: '2019-05-01',
+    isBirthDateEstimated: true,
+    isNeutered: false,
+    ownerUserId: 'sahip-1',
+    chipNumberMasked: '****1234',
+    chipNumber: '900000000001234',
+    createdAt: CREATED.toISOString(),
+    updatedAt: CREATED.toISOString(),
+    ...over,
+  });
+
+  it('yalnızca tür, doğum tarihi ve tahmini mi bilgisi alınır', () =>
+    expect(toLabExplanationPetContext(pet())).toEqual({
+      species: 'CAT',
+      birthDate: '2019-05-01',
+      isBirthDateEstimated: true,
+    }));
+
+  it('zaman içeren geçerli tarih YYYY-AA-GG olur', () =>
+    expect(
+      toLabExplanationPetContext(pet({ birthDate: '2019-05-01T00:00:00.000Z' }))
+        .birthDate,
+    ).toBe('2019-05-01'));
+
+  it.each([
+    ['boş', ''],
+    ['geçersiz', 'dün'],
+  ])('%s doğum tarihi boş kalır', (_n, birthDate) =>
+    expect(toLabExplanationPetContext(pet({ birthDate })).birthDate).toBe(''),
+  );
+
+  it('hayvan yoksa boş bağlam döner', () =>
+    expect(toLabExplanationPetContext(undefined)).toEqual(EMPTY_PET_CONTEXT));
+});
+
+describe('toLabExplanationRequestedData', () => {
+  it('kaydın kalemleri ad olarak bayrakla, notsuz ve kimliksiz taşınır', () => {
+    const sampledAt = new Date('2026-10-10T00:00:00.000Z');
+    const record = recordRow({
+      id: 'kayit-1',
+      type: RecordType.LAB_RESULT,
+      title: 'Kan tahlili',
+      notes: 'Gizli not',
+      labResults: [
+        {
+          id: 'l1',
+          recordId: 'kayit-1',
+          testName: 'ALT',
+          value: '142',
+          unit: 'U/L',
+          referenceRange: '12-130',
+          flag: LabResultFlag.HIGH,
+          sampledAt,
+        },
+        {
+          id: 'l2',
+          recordId: 'kayit-1',
+          testName: 'Üre',
+          value: '30',
+          unit: null,
+          referenceRange: null,
+          flag: null,
+          sampledAt,
+        },
+      ],
+    });
+
+    expect(
+      toLabExplanationRequestedData(record, {
+        species: 'DOG',
+        birthDate: '2020-01-02',
+        isBirthDateEstimated: false,
+      }),
+    ).toEqual({
+      recordId: 'kayit-1',
+      title: 'Kan tahlili',
+      sampledAt: '2026-10-10',
+      species: 'DOG',
+      birthDate: '2020-01-02',
+      isBirthDateEstimated: false,
+      items: [
+        {
+          testName: 'ALT',
+          value: '142',
+          unit: 'U/L',
+          referenceRange: '12-130',
+          flag: 'HIGH',
+        },
+        {
+          testName: 'Üre',
+          value: '30',
+          unit: '',
+          referenceRange: '',
+          flag: 'LAB_RESULT_FLAG_UNSPECIFIED',
+        },
+      ],
+    });
+  });
+});
+
+describe('toProtoLabExplanation', () => {
+  const row = (
+    over: Partial<LabResultExplanation> = {},
+  ): LabResultExplanation => ({
+    id: 'aciklama-1',
+    recordId: 'kayit-1',
+    status: LabExplanationStatus.PENDING,
+    summary: null,
+    items: null,
+    confidence: null,
+    modelVersion: null,
+    failureReason: null,
+    requestedAt: CREATED,
+    generatedAt: null,
+    ...over,
+  });
+  const onlyStatus = (status: medicalRecord.LabExplanationStatus) => ({
+    status,
+    summary: '',
+    items: [],
+    confidence: 0,
+    generatedAt: '',
+  });
+
+  it.each([
+    [
+      LabExplanationStatus.PENDING,
+      medicalRecord.LabExplanationStatus.LAB_EXPLANATION_PENDING,
+    ],
+    [
+      LabExplanationStatus.FAILED,
+      medicalRecord.LabExplanationStatus.LAB_EXPLANATION_FAILED,
+    ],
+  ])('%s → yalnızca durum döner', (status, expected) =>
+    expect(
+      toProtoLabExplanation(
+        row({
+          status,
+          failureReason: 'INVALID_AI_OUTPUT',
+          modelVersion: 'model-1',
+          summary: 'eski',
+          confidence: 0.4,
+        }),
+      ),
+    ).toEqual(onlyStatus(expected)),
+  );
+
+  it('READY → özet, kalemler, güven ve ISO üretim zamanı', () =>
+    expect(
+      toProtoLabExplanation(
+        row({
+          status: LabExplanationStatus.READY,
+          summary: 'Özet',
+          items: [{ testName: 'ALT', explanation: 'Açıklama' }],
+          confidence: 0.82,
+          generatedAt: new Date('2026-10-21T09:30:09.000Z'),
+        }),
+      ),
+    ).toEqual({
+      status: medicalRecord.LabExplanationStatus.LAB_EXPLANATION_READY,
+      summary: 'Özet',
+      items: [{ testName: 'ALT', explanation: 'Açıklama' }],
+      confidence: 0.82,
+      generatedAt: '2026-10-21T09:30:09.000Z',
+    }));
+
+  it('READY ve kalemsiz → boş liste', () =>
+    expect(
+      toProtoLabExplanation(
+        row({
+          status: LabExplanationStatus.READY,
+          summary: 'Özet',
+          items: [],
+          confidence: 0,
+          generatedAt: CREATED,
+        }),
+      ).items,
+    ).toEqual([]));
 });

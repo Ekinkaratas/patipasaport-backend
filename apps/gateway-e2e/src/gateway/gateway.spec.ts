@@ -280,7 +280,12 @@ describe('gateway (e2e)', () => {
       expect(envelope.data?.refreshExpiresIn).toBe(43_200);
       expect(response.headers['set-cookie']).toBeUndefined();
       expect(
-        code(await exchange(envelope.data?.accessToken ?? '', access.ClientType.MOBILE)),
+        code(
+          await exchange(
+            envelope.data?.accessToken ?? '',
+            access.ClientType.MOBILE,
+          ),
+        ),
       ).toBe('ok');
     });
 
@@ -478,8 +483,19 @@ describe('gateway (e2e)', () => {
       await register({ email });
 
       for (const variant of [
-        { body: (t: TokenData) => ({ refreshToken: t.refreshToken, opaqueToken: t.accessToken }), headers: () => ({}) },
-        { body: (t: TokenData) => ({ refreshToken: t.refreshToken }), headers: (t: TokenData) => ({ authorization: `Basic ${t.accessToken}` }) },
+        {
+          body: (t: TokenData) => ({
+            refreshToken: t.refreshToken,
+            opaqueToken: t.accessToken,
+          }),
+          headers: () => ({}),
+        },
+        {
+          body: (t: TokenData) => ({ refreshToken: t.refreshToken }),
+          headers: (t: TokenData) => ({
+            authorization: `Basic ${t.accessToken}`,
+          }),
+        },
       ]) {
         const tokens = (await login(email, {}, MOBILE)).envelope
           .data as TokenData;
@@ -650,10 +666,15 @@ describe('gateway (e2e)', () => {
       expect(noToken.status).toBe(401);
       expect(parse(noToken).message).toBe('UNAUTH');
 
-      const noClientType = await httpRequest(service.port, 'POST', '/consents', {
-        headers: { authorization: `Bearer ${ownerToken}` },
-        body: grantBody(),
-      });
+      const noClientType = await httpRequest(
+        service.port,
+        'POST',
+        '/consents',
+        {
+          headers: { authorization: `Bearer ${ownerToken}` },
+          body: grantBody(),
+        },
+      );
       expect(noClientType.status).toBe(400);
       expect(parse(noClientType).message).toBe('INVALID_CLIENT_TYPE');
     });
@@ -690,7 +711,12 @@ describe('gateway (e2e)', () => {
     });
 
     it('rıza vermeyi CLINIC rolü 403 FORBIDDEN alır; gövde gateway’de doğrulanır; pasif klinik 404', async () => {
-      const asClinic = await call('POST', '/consents', clinicToken, grantBody());
+      const asClinic = await call(
+        'POST',
+        '/consents',
+        clinicToken,
+        grantBody(),
+      );
       expect(asClinic.status).toBe(403);
       expect(parse(asClinic).message).toBe('FORBIDDEN');
 
@@ -2276,8 +2302,7 @@ describe('gateway (e2e)', () => {
       });
       expect(response.status).toBe(201);
       const row = await documentOf(
-        parse<clinics.UploadPetResultResponse>(response).data?.documentId ??
-          '',
+        parse<clinics.UploadPetResultResponse>(response).data?.documentId ?? '',
       );
       expect(row.mime_type).toBe('image/png');
       expect(row.storage_path.endsWith('.png')).toBe(true);
@@ -2344,19 +2369,24 @@ describe('gateway (e2e)', () => {
     });
 
     it('POST /pets/:petId/records 201 döner (sayısal enum, ek); listeler hasta sahibine ve rızalı kliniğe açıktır', async () => {
-      const created = await call('POST', `/pets/${petId}/records`, clinicToken, {
-        content: {
-          type: medicalRecord.RecordType.VACCINATION,
-          title: 'Kuduz aşısı',
-          recordedAt: today,
-          vaccination: {
-            vaccineName: 'Kuduz',
-            administeredAt: today,
-            nextDueAt: shiftDays(today, 365),
+      const created = await call(
+        'POST',
+        `/pets/${petId}/records`,
+        clinicToken,
+        {
+          content: {
+            type: medicalRecord.RecordType.VACCINATION,
+            title: 'Kuduz aşısı',
+            recordedAt: today,
+            vaccination: {
+              vaccineName: 'Kuduz',
+              administeredAt: today,
+              nextDueAt: shiftDays(today, 365),
+            },
           },
+          attachments: [{ documentId }],
         },
-        attachments: [{ documentId }],
-      });
+      );
       expect(created.status).toBe(201);
       expect(
         parse<medicalRecord.RecordResponse>(created).data?.record,
@@ -2371,9 +2401,9 @@ describe('gateway (e2e)', () => {
         ownerToken,
       );
       expect(records.status).toBe(200);
-      expect(parse<medicalRecord.ListRecordsResponse>(records).data?.total).toBe(
-        1,
-      );
+      expect(
+        parse<medicalRecord.ListRecordsResponse>(records).data?.total,
+      ).toBe(1);
       const vaccinations = await call(
         'GET',
         `/pets/${petId}/vaccinations?page=1&pageSize=8&onlyUpcoming=true`,
@@ -2606,7 +2636,9 @@ describe('gateway (e2e)', () => {
           ).data?.draftReviews.find((d) => d.documentId === documentId)?.id ??
           '';
         if (!draftId) {
-          await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+          await new Promise((resolvePromise) =>
+            setTimeout(resolvePromise, 250),
+          );
         }
       }
       expect(draftId).toMatch(UUID_V4);
@@ -2634,6 +2666,113 @@ describe('gateway (e2e)', () => {
         (await call('GET', '/draft-reviews?page=1&pageSize=8', ownerToken))
           .status,
       ).toBe(403);
+    });
+
+    it('GET /records/:recordId/explanation hasta sahibine sayısal durumla açıktır; klinik 403, başka sahip ve tahlil olmayan kayıt 404, bozuk kimlik 400', async () => {
+      const createRecord = async (content: object) => {
+        const response = await call(
+          'POST',
+          `/pets/${petId}/records`,
+          clinicToken,
+          { content },
+        );
+        expect(response.status).toBe(201);
+        return (
+          parse<medicalRecord.RecordResponse>(response).data?.record?.id ?? ''
+        );
+      };
+      const explanation = async (recordId: string, token = ownerToken) => {
+        const response = await call(
+          'GET',
+          `/records/${recordId}/explanation`,
+          token,
+        );
+        return {
+          status: response.status,
+          body: parse<medicalRecord.LabExplanationResponse>(response),
+        };
+      };
+
+      const recordId = await createRecord({
+        type: medicalRecord.RecordType.LAB_RESULT,
+        title: 'Biyokimya paneli',
+        recordedAt: today,
+        labResult: {
+          sampledAt: today,
+          items: [
+            {
+              testName: 'ALT',
+              value: '142',
+              unit: 'U/L',
+              referenceRange: '12-130',
+              flag: medicalRecord.LabResultFlag.HIGH,
+            },
+          ],
+        },
+      });
+
+      const pending = await explanation(recordId);
+      expect(pending.status).toBe(200);
+      expect(pending.body).toMatchObject({
+        message: 'SUCCESS',
+        success: true,
+        data: {
+          status: medicalRecord.LabExplanationStatus.LAB_EXPLANATION_PENDING,
+          summary: '',
+          items: [],
+          confidence: 0,
+          generatedAt: '',
+        },
+      });
+
+      await bus.publishAiEvent('lab_explanation_generated', {
+        recordId,
+        modelVersion: 'fake-ai-1/explain-v1',
+        confidence: 0.82,
+        explanation: {
+          summary: 'Değerlerin çoğu referans aralığında.',
+          items: [{ testName: 'ALT', explanation: 'ALT karaciğer enzimidir.' }],
+        },
+        generatedAt: new Date().toISOString(),
+      });
+      let ready = pending;
+      const deadline = Date.now() + 10_000;
+      while (
+        ready.body.data?.status !==
+          medicalRecord.LabExplanationStatus.LAB_EXPLANATION_READY &&
+        Date.now() < deadline
+      ) {
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+        ready = await explanation(recordId);
+      }
+      expect(ready.status).toBe(200);
+      expect(ready.body.data).toMatchObject({
+        status: medicalRecord.LabExplanationStatus.LAB_EXPLANATION_READY,
+        summary: 'Değerlerin çoğu referans aralığında.',
+        items: [{ testName: 'ALT', explanation: 'ALT karaciğer enzimidir.' }],
+        confidence: 0.82,
+      });
+      expect(Number.isNaN(Date.parse(ready.body.data?.generatedAt ?? ''))).toBe(
+        false,
+      );
+
+      const examinationId = await createRecord({
+        type: medicalRecord.RecordType.EXAMINATION,
+        title: 'Kontrol',
+        recordedAt: today,
+      });
+      for (const [id, token, status, message] of [
+        [recordId, clinicToken, 403, 'FORBIDDEN'],
+        [recordId, strangerToken, 404, 'NOT_FOUND'],
+        [examinationId, ownerToken, 404, 'NOT_FOUND'],
+        ['abc', ownerToken, 400, 'RECORD_ID_WRONG DATA FORMAT'],
+      ] as const) {
+        const response = await explanation(id, token);
+        expect([response.status, response.body.message]).toEqual([
+          status,
+          message,
+        ]);
+      }
     });
   });
 });

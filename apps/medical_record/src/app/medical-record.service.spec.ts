@@ -13,6 +13,8 @@ import { CreateRecordRequestDto, ReviewDraftRequestDto } from '@libs/dto';
 import {
   DocumentStatus,
   DraftReviewStatus,
+  LabExplanationStatus,
+  LabResultFlag,
   Prisma,
   RecordType,
 } from '../generated/prisma/client';
@@ -26,6 +28,7 @@ const OTHER_CLINIC_ID = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
 const OWNER_ID = '7d6c5b4a-3f2e-4d1c-8b0a-9f8e7d6c5b4a';
 const DOC_ID = '0dfc0a17-8fb6-4f0b-9732-6a8ca67465de';
 const DRAFT_ID = '54fd68b6-a352-4297-a333-dd33d3981dca';
+const RECORD_ID = '7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e';
 const CREATED = new Date('2026-10-13T08:30:00.000Z');
 
 const CLINIC: AuthUser = {
@@ -140,6 +143,110 @@ const rejectionMessage = async (promise: Promise<unknown>) => {
 
 const allowed = (value: boolean) => of({ allowed: value });
 
+const LAB_PROPOSAL = {
+  type: medicalRecord.RecordType.LAB_RESULT,
+  title: 'Biyokimya paneli',
+  notes: 'Açlık kan şekeri',
+  recordedAt: '2026-10-20',
+  labResult: {
+    sampledAt: '2026-10-20',
+    items: [
+      {
+        testName: 'ALT',
+        value: '142',
+        unit: 'U/L',
+        referenceRange: '12-130',
+        flag: medicalRecord.LabResultFlag.HIGH,
+      },
+      {
+        testName: 'Kreatinin',
+        value: '1.4',
+        unit: '',
+        referenceRange: '',
+        flag: medicalRecord.LabResultFlag.LAB_RESULT_FLAG_UNSPECIFIED,
+      },
+    ],
+  },
+};
+
+const labResultRows = () => [
+  {
+    id: 'tahlil-1',
+    recordId: RECORD_ID,
+    testName: 'ALT',
+    value: '142',
+    unit: 'U/L',
+    referenceRange: '12-130',
+    flag: LabResultFlag.HIGH,
+    sampledAt: new Date('2026-10-20T00:00:00.000Z'),
+  },
+  {
+    id: 'tahlil-2',
+    recordId: RECORD_ID,
+    testName: 'Kreatinin',
+    value: '1.4',
+    unit: null,
+    referenceRange: null,
+    flag: null,
+    sampledAt: new Date('2026-10-20T00:00:00.000Z'),
+  },
+];
+
+const LAB_REQUEST_DATA = {
+  recordId: RECORD_ID,
+  title: 'Biyokimya paneli',
+  sampledAt: '2026-10-20',
+  species: 'CAT',
+  birthDate: '2019-05-01',
+  isBirthDateEstimated: true,
+  items: [
+    {
+      testName: 'ALT',
+      value: '142',
+      unit: 'U/L',
+      referenceRange: '12-130',
+      flag: 'HIGH',
+    },
+    {
+      testName: 'Kreatinin',
+      value: '1.4',
+      unit: '',
+      referenceRange: '',
+      flag: 'LAB_RESULT_FLAG_UNSPECIFIED',
+    },
+  ],
+};
+
+const petMessage = () => ({
+  id: PET_ID,
+  name: 'Pamuk',
+  species: 'CAT',
+  breed: 'TURKISH_VAN',
+  sex: 2,
+  birthDate: '2019-05-01',
+  isBirthDateEstimated: true,
+  isNeutered: false,
+  ownerUserId: OWNER_ID,
+  chipNumberMasked: '****1234',
+  chipNumber: '',
+  createdAt: CREATED.toISOString(),
+  updatedAt: CREATED.toISOString(),
+});
+
+const explanationRow = (over: Record<string, unknown> = {}) => ({
+  id: 'aciklama-1',
+  recordId: RECORD_ID,
+  status: LabExplanationStatus.PENDING,
+  summary: null,
+  items: null,
+  confidence: null,
+  modelVersion: null,
+  failureReason: null,
+  requestedAt: CREATED,
+  generatedAt: null,
+  ...over,
+});
+
 describe('MedicalRecordService', () => {
   let service: MedicalRecordService;
   let prisma: {
@@ -150,7 +257,13 @@ describe('MedicalRecordService', () => {
       count: jest.Mock;
     };
     outbox: { create: jest.Mock };
-    medicalRecord: { create: jest.Mock; findMany: jest.Mock; count: jest.Mock };
+    medicalRecord: {
+      create: jest.Mock;
+      findMany: jest.Mock;
+      count: jest.Mock;
+      findUnique: jest.Mock;
+    };
+    labResultExplanation: { create: jest.Mock };
     vaccination: { findMany: jest.Mock; count: jest.Mock };
     prescription: { findMany: jest.Mock };
     labResult: { findMany: jest.Mock; count: jest.Mock };
@@ -166,7 +279,7 @@ describe('MedicalRecordService', () => {
     $queryRaw: jest.Mock;
   };
   let accessClient: { checkAccess: jest.Mock; listMyConsents: jest.Mock };
-  let petsClient: { getPetOwner: jest.Mock };
+  let petsClient: { getPetOwner: jest.Mock; getPet: jest.Mock };
 
   beforeEach(async () => {
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
@@ -185,7 +298,12 @@ describe('MedicalRecordService', () => {
         create: jest.fn().mockResolvedValue(recordRow()),
         findMany: jest.fn().mockResolvedValue([recordRow()]),
         count: jest.fn().mockResolvedValue(1),
+        findUnique: jest.fn().mockResolvedValue({
+          petId: PET_ID,
+          labExplanation: explanationRow(),
+        }),
       },
+      labResultExplanation: { create: jest.fn().mockResolvedValue({}) },
       vaccination: {
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
@@ -223,6 +341,7 @@ describe('MedicalRecordService', () => {
       getPetOwner: jest
         .fn()
         .mockReturnValue(of({ petId: PET_ID, ownerUserId: OWNER_ID })),
+      getPet: jest.fn().mockReturnValue(of({ pet: petMessage() })),
     };
 
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -521,6 +640,226 @@ describe('MedicalRecordService', () => {
         await rejectionMessage(service.createRecord(request(), CLINIC)),
       ).toBe(ResponseMessages.FORBIDDEN);
       expect(prisma.medicalRecord.create).not.toHaveBeenCalled();
+    });
+
+    it('tahlil olmayan kayıtta pets sorulmaz, açıklama satırı ve olay yazılmaz', async () => {
+      await service.createRecord(request(), CLINIC);
+      expect(petsClient.getPet).not.toHaveBeenCalled();
+      expect(prisma.labResultExplanation.create).not.toHaveBeenCalled();
+      expect(prisma.outbox.create).not.toHaveBeenCalled();
+    });
+
+    describe('tahlil kaydı', () => {
+      const labRequest = () =>
+        ({
+          petId: PET_ID,
+          content: LAB_PROPOSAL,
+          attachments: [],
+        }) as unknown as CreateRecordRequestDto;
+
+      beforeEach(() =>
+        prisma.medicalRecord.create.mockResolvedValue(
+          recordRow({
+            id: RECORD_ID,
+            type: RecordType.LAB_RESULT,
+            title: 'Biyokimya paneli',
+            notes: 'Açlık kan şekeri',
+            labResults: labResultRows(),
+          }),
+        ),
+      );
+
+      it('pets.GetPet transaction öncesi sorulur; kayıt, PENDING açıklama satırı ve istek olayı aynı transaction içinde yazılır', async () => {
+        const tx = {
+          medicalRecord: { create: prisma.medicalRecord.create },
+          labResultExplanation: { create: jest.fn().mockResolvedValue({}) },
+          outbox: { create: jest.fn().mockResolvedValue({}) },
+        };
+        prisma.$transaction.mockImplementation(
+          (fn: (client: unknown) => Promise<unknown>) => fn(tx),
+        );
+
+        const response = await service.createRecord(labRequest(), CLINIC);
+
+        expect(petsClient.getPet).toHaveBeenCalledWith({ id: PET_ID });
+        expect(petsClient.getPet.mock.invocationCallOrder[0]).toBeLessThan(
+          prisma.$transaction.mock.invocationCallOrder[0],
+        );
+        expect(tx.labResultExplanation.create).toHaveBeenCalledWith({
+          data: { recordId: RECORD_ID, status: LabExplanationStatus.PENDING },
+        });
+        const [{ data }] = tx.outbox.create.mock.calls[0];
+        expect(data).toMatchObject({
+          type: 'com.patipasaport.lab_explanation.requested.v1',
+          correlationId: expect.any(String),
+          payload: {
+            specversion: '1.0',
+            source: '/patipasaport/medical-record',
+            type: 'com.patipasaport.lab_explanation.requested.v1',
+            subject: RECORD_ID,
+            datacontenttype: 'application/json',
+            dataschema: 'urn:patipasaport:events:LabExplanationRequested:v1',
+          },
+        });
+        expect(data.payload.data).toEqual(LAB_REQUEST_DATA);
+        expect(data.id).toBe(data.payload.id);
+        expect(prisma.labResultExplanation.create).not.toHaveBeenCalled();
+        expect(prisma.outbox.create).not.toHaveBeenCalled();
+        expect(response.record?.id).toBe(RECORD_ID);
+      });
+
+      it.each([
+        ['ulaşılamıyor', grpcError(status.UNAVAILABLE)],
+        ['izin yok', grpcError(status.NOT_FOUND, ResponseMessages.NOT_FOUND)],
+        ['beklenmeyen hata', new Error('pets çöktü')],
+      ])(
+        'pets.GetPet hatası (%s): tür ve doğum tarihi boş gider, kayıt yine oluşur, warn log yalnızca kimlik taşır',
+        async (_n, error) => {
+          const warn = jest.spyOn(Logger.prototype, 'warn');
+          petsClient.getPet.mockReturnValue(throwError(() => error));
+
+          await service.createRecord(labRequest(), CLINIC);
+
+          const [{ data }] = prisma.outbox.create.mock.calls[0];
+          expect(data.payload.data).toEqual({
+            ...LAB_REQUEST_DATA,
+            species: '',
+            birthDate: '',
+            isBirthDateEstimated: false,
+          });
+          expect(prisma.labResultExplanation.create).toHaveBeenCalled();
+          expect(warn).toHaveBeenCalledWith(
+            `createRecord: pets.getPet başarısız, tahlil açıklaması tür ve doğum tarihi olmadan istenecek (petId=${PET_ID})`,
+          );
+        },
+      );
+
+      it('doğum tarihi olmayan hayvanda birthDate boş gider', async () => {
+        petsClient.getPet.mockReturnValue(
+          of({
+            pet: {
+              ...petMessage(),
+              birthDate: '',
+              isBirthDateEstimated: false,
+            },
+          }),
+        );
+        await service.createRecord(labRequest(), CLINIC);
+        expect(
+          prisma.outbox.create.mock.calls[0][0].data.payload.data,
+        ).toMatchObject({
+          species: 'CAT',
+          birthDate: '',
+          isBirthDateEstimated: false,
+        });
+      });
+
+      it('rıza yoksa pets sorulmaz, hiçbir şey yazılmaz', async () => {
+        accessClient.checkAccess.mockReturnValue(allowed(false));
+        expect(
+          await rejectionMessage(service.createRecord(labRequest(), CLINIC)),
+        ).toBe(ResponseMessages.FORBIDDEN);
+        expect(petsClient.getPet).not.toHaveBeenCalled();
+        expect(prisma.labResultExplanation.create).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('getLabExplanation', () => {
+    const request = { recordId: RECORD_ID };
+
+    it('bekleyen açıklamada yalnızca durum döner; sahiplik pets ile doğrulanır', async () => {
+      await expect(service.getLabExplanation(request, OWNER)).resolves.toEqual({
+        status: medicalRecord.LabExplanationStatus.LAB_EXPLANATION_PENDING,
+        summary: '',
+        items: [],
+        confidence: 0,
+        generatedAt: '',
+      });
+      expect(prisma.medicalRecord.findUnique).toHaveBeenCalledWith({
+        where: { id: RECORD_ID },
+        select: { petId: true, labExplanation: true },
+      });
+      expect(petsClient.getPetOwner).toHaveBeenCalledWith({ petId: PET_ID });
+      expect(accessClient.checkAccess).not.toHaveBeenCalled();
+    });
+
+    it('hazır açıklama özet, kalemler, güven ve üretim zamanıyla döner', async () => {
+      prisma.medicalRecord.findUnique.mockResolvedValue({
+        petId: PET_ID,
+        labExplanation: explanationRow({
+          status: LabExplanationStatus.READY,
+          summary: 'Değerlerin çoğu aralıkta.',
+          items: [{ testName: 'ALT', explanation: 'Karaciğer enzimi.' }],
+          confidence: 0.82,
+          modelVersion: 'gemma-4-31b/explain-v1',
+          generatedAt: new Date('2026-10-21T09:30:09.000Z'),
+        }),
+      });
+      await expect(service.getLabExplanation(request, OWNER)).resolves.toEqual({
+        status: medicalRecord.LabExplanationStatus.LAB_EXPLANATION_READY,
+        summary: 'Değerlerin çoğu aralıkta.',
+        items: [{ testName: 'ALT', explanation: 'Karaciğer enzimi.' }],
+        confidence: 0.82,
+        generatedAt: '2026-10-21T09:30:09.000Z',
+      });
+    });
+
+    it('başarısız açıklamada yalnızca durum döner, hata kodu gösterilmez', async () => {
+      prisma.medicalRecord.findUnique.mockResolvedValue({
+        petId: PET_ID,
+        labExplanation: explanationRow({
+          status: LabExplanationStatus.FAILED,
+          failureReason: 'INVALID_AI_OUTPUT',
+          modelVersion: 'gemma-4-31b/explain-v1',
+        }),
+      });
+      await expect(service.getLabExplanation(request, OWNER)).resolves.toEqual({
+        status: medicalRecord.LabExplanationStatus.LAB_EXPLANATION_FAILED,
+        summary: '',
+        items: [],
+        confidence: 0,
+        generatedAt: '',
+      });
+    });
+
+    it('kayıt yoksa NOT_FOUND, sahiplik sorulmaz', async () => {
+      prisma.medicalRecord.findUnique.mockResolvedValue(null);
+      expect(
+        await rejectionMessage(service.getLabExplanation(request, OWNER)),
+      ).toBe(ResponseMessages.NOT_FOUND);
+      expect(petsClient.getPetOwner).not.toHaveBeenCalled();
+    });
+
+    it('kaydın hayvanı başkasınınsa NOT_FOUND', async () => {
+      petsClient.getPetOwner.mockReturnValue(
+        of({ petId: PET_ID, ownerUserId: 'baska-sahip' }),
+      );
+      expect(
+        await rejectionMessage(service.getLabExplanation(request, OWNER)),
+      ).toBe(ResponseMessages.NOT_FOUND);
+    });
+
+    it('açıklama satırı yoksa (tahlil olmayan ya da eski kayıt) NOT_FOUND', async () => {
+      prisma.medicalRecord.findUnique.mockResolvedValue({
+        petId: PET_ID,
+        labExplanation: null,
+      });
+      expect(
+        await rejectionMessage(service.getLabExplanation(request, OWNER)),
+      ).toBe(ResponseMessages.NOT_FOUND);
+      expect(petsClient.getPetOwner).toHaveBeenCalled();
+    });
+
+    it('pets NOT_FOUND döndürürse aynen aktarılır', async () => {
+      petsClient.getPetOwner.mockReturnValue(
+        throwError(() =>
+          grpcError(status.NOT_FOUND, ResponseMessages.NOT_FOUND),
+        ),
+      );
+      expect(
+        await rejectionMessage(service.getLabExplanation(request, OWNER)),
+      ).toBe(ResponseMessages.NOT_FOUND);
     });
   });
 
@@ -983,6 +1322,140 @@ describe('MedicalRecordService', () => {
         await rejectionMessage(service.reviewDraft(review({}), CLINIC)),
       ).toBe(ResponseMessages.CONFLICT);
       expect(prisma.medicalRecord.create).not.toHaveBeenCalled();
+    });
+
+    it('tahlil olmayan onayda pets sorulmaz, açıklama istenmez', async () => {
+      prisma.medicalRecord.create.mockResolvedValue({
+        id: 'kayit-9',
+        title: 'Karma aşı',
+        labResults: [],
+      });
+      await service.reviewDraft(review({}), CLINIC);
+      expect(petsClient.getPet).not.toHaveBeenCalled();
+      expect(prisma.labResultExplanation.create).not.toHaveBeenCalled();
+      expect(prisma.outbox.create).not.toHaveBeenCalled();
+    });
+
+    describe('tahlil onayı', () => {
+      const labRecord = () => ({
+        id: RECORD_ID,
+        title: 'Biyokimya paneli',
+        labResults: labResultRows(),
+      });
+
+      beforeEach(() => {
+        prisma.draftReview.findUnique.mockResolvedValue(
+          draftRow({
+            recordType: RecordType.LAB_RESULT,
+            proposedPayload: LAB_PROPOSAL,
+          }),
+        );
+        prisma.medicalRecord.create.mockResolvedValue(labRecord());
+      });
+
+      it('düzeltmesiz onay: pets transaction öncesi sorulur; kayıt, PENDING açıklama ve istek olayı aynı transaction içinde yazılır', async () => {
+        const tx = {
+          draftReview: {
+            updateMany: prisma.draftReview.updateMany,
+            update: prisma.draftReview.update,
+          },
+          medicalRecord: { create: prisma.medicalRecord.create },
+          labResultExplanation: { create: jest.fn().mockResolvedValue({}) },
+          outbox: { create: jest.fn().mockResolvedValue({}) },
+        };
+        prisma.$transaction.mockImplementation(
+          (fn: (client: unknown) => Promise<unknown>) => fn(tx),
+        );
+
+        await service.reviewDraft(review({}), CLINIC);
+
+        expect(petsClient.getPet).toHaveBeenCalledWith({ id: PET_ID });
+        expect(petsClient.getPet.mock.invocationCallOrder[0]).toBeLessThan(
+          prisma.$transaction.mock.invocationCallOrder[0],
+        );
+        expect(prisma.medicalRecord.create.mock.calls[0][0].select).toEqual({
+          id: true,
+          title: true,
+          labResults: { orderBy: [{ testName: 'asc' }, { id: 'asc' }] },
+        });
+        expect(tx.labResultExplanation.create).toHaveBeenCalledWith({
+          data: { recordId: RECORD_ID, status: LabExplanationStatus.PENDING },
+        });
+        const [{ data }] = tx.outbox.create.mock.calls[0];
+        expect(data).toMatchObject({
+          type: 'com.patipasaport.lab_explanation.requested.v1',
+          payload: {
+            subject: RECORD_ID,
+            dataschema: 'urn:patipasaport:events:LabExplanationRequested:v1',
+          },
+        });
+        expect(data.payload.data).toEqual(LAB_REQUEST_DATA);
+      });
+
+      it('düzelterek onayda son tür tahlil değilse açıklama istenmez', async () => {
+        await service.reviewDraft(
+          review({
+            editedContent: {
+              type: medicalRecord.RecordType.EXAMINATION,
+              title: 'Kontrol',
+              recordedAt: '2026-10-20',
+            } as ReviewDraftRequestDto['editedContent'],
+          }),
+          CLINIC,
+        );
+        expect(petsClient.getPet).not.toHaveBeenCalled();
+        expect(prisma.labResultExplanation.create).not.toHaveBeenCalled();
+      });
+
+      it('düzelterek onayda son tür tahlilse (öneri başka türde olsa da) açıklama istenir', async () => {
+        prisma.draftReview.findUnique.mockResolvedValue(draftRow());
+        await service.reviewDraft(
+          review({
+            editedContent:
+              LAB_PROPOSAL as unknown as ReviewDraftRequestDto['editedContent'],
+          }),
+          CLINIC,
+        );
+        expect(petsClient.getPet).toHaveBeenCalledWith({ id: PET_ID });
+        expect(prisma.labResultExplanation.create).toHaveBeenCalled();
+      });
+
+      it('pets.GetPet hata verirse onay yine tamamlanır, tür ve doğum tarihi boş gider', async () => {
+        const warn = jest.spyOn(Logger.prototype, 'warn');
+        petsClient.getPet.mockReturnValue(
+          throwError(() => grpcError(status.DEADLINE_EXCEEDED)),
+        );
+        const response = await service.reviewDraft(review({}), CLINIC);
+        expect(response.draftReview?.id).toBe(DRAFT_ID);
+        expect(
+          prisma.outbox.create.mock.calls[0][0].data.payload.data,
+        ).toMatchObject({
+          species: '',
+          birthDate: '',
+          isBirthDateEstimated: false,
+        });
+        expect(warn).toHaveBeenCalledWith(
+          `reviewDraft: pets.getPet başarısız, tahlil açıklaması tür ve doğum tarihi olmadan istenecek (petId=${PET_ID})`,
+        );
+      });
+
+      it('onay çakışmasında açıklama satırı ve olay yazılmaz', async () => {
+        prisma.draftReview.updateMany.mockResolvedValue({ count: 0 });
+        expect(
+          await rejectionMessage(service.reviewDraft(review({}), CLINIC)),
+        ).toBe(ResponseMessages.CONFLICT);
+        expect(prisma.labResultExplanation.create).not.toHaveBeenCalled();
+        expect(prisma.outbox.create).not.toHaveBeenCalled();
+      });
+
+      it('red: açıklama istenmez', async () => {
+        await service.reviewDraft(
+          review({ approved: false, reviewNote: 'Yanlış belge' }),
+          CLINIC,
+        );
+        expect(petsClient.getPet).not.toHaveBeenCalled();
+        expect(prisma.labResultExplanation.create).not.toHaveBeenCalled();
+      });
     });
   });
 });

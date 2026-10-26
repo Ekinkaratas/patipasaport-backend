@@ -9,6 +9,7 @@ import {
   GetDocumentFileRequestDto,
   GetDocumentRequestDto,
 } from './get-document.dto';
+import { GetLabExplanationRequestDto } from './get-lab-explanation.dto';
 import { ListDocumentsByPetRequestDto } from './list-documents-by-pet.dto';
 import { ListDraftReviewsRequestDto } from './list-draft-reviews.dto';
 import { ListLabResultsRequestDto } from './list-lab-results.dto';
@@ -772,6 +773,18 @@ describe('GetDocumentRequestDto', () => {
     ['UUID değil', 'abc', { id: msg(P.DOCUMENT_ID, V.WRONG_DATA_FORMAT) }],
   ])('id %s', (_n, id, expected) =>
     expect(nestedErrors(GetDocumentRequestDto, { id })).toEqual(expected),
+  );
+});
+
+describe('GetLabExplanationRequestDto', () => {
+  it.each([
+    ['geçerli', UUID_A, {}],
+    ['boş', '', { recordId: msg(P.RECORD_ID, V.NOT_EMPTY) }],
+    ['UUID değil', 'abc', { recordId: msg(P.RECORD_ID, V.WRONG_DATA_FORMAT) }],
+  ])('recordId %s', (_n, recordId, expected) =>
+    expect(nestedErrors(GetLabExplanationRequestDto, { recordId })).toEqual(
+      expected,
+    ),
   );
 });
 

@@ -51,6 +51,7 @@ from app.messaging.topology import (
     CORRELATION_ID_HEADER,
     DOCUMENT_PREFETCH,
     DOCUMENT_QUEUE,
+    EXPLANATION_QUEUE,
     RETRY_COUNT_HEADER,
     Topology,
     declare_topology,
@@ -404,7 +405,7 @@ async def test_ai_user_cannot_declare_foreign_exchange(
     assert refused, "AI kullanıcısı izin dışı bir exchange tanımlayabildi"
 
 
-# Uygulamanın gerçek ayarlarla açılıp kapandığını, akışı kuyruğa bağlamadığını doğrular.
+# Uygulamanın gerçek ayarlarla açılıp kapandığını, akışları kuyruğa bağlamadığını sınar.
 def test_app_starts_and_stops_with_real_settings_without_consuming(
     settings: Settings,
     reachable_broker: None,
@@ -441,7 +442,7 @@ def test_app_starts_and_stops_with_real_settings_without_consuming(
     assert isinstance(messaging, Messaging)
     assert messaging.connection.is_closed
     [flows] = offered
-    assert [flow.queue for flow in flows] == [DOCUMENT_QUEUE]
+    assert [flow.queue for flow in flows] == [DOCUMENT_QUEUE, EXPLANATION_QUEUE]
     assert consumed == []
     secret_values = {
         "AI_RABBITMQ_PASSWORD": settings.ai_rabbitmq_password.get_secret_value(),

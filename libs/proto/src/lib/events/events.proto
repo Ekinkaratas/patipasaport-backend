@@ -35,3 +35,29 @@ message DocumentAnalysisFailed {
   string error_message = 4;
   string failed_at = 5;
 }
+
+message LabExplanationRequested {
+  string record_id = 1;
+  string title = 2;
+  string sampled_at = 3;
+  string species = 4;
+  string birth_date = 5;
+  bool is_birth_date_estimated = 6;
+  repeated medical_record.LabResultItem items = 7;
+}
+
+message LabExplanationGenerated {
+  string record_id = 1;
+  string model_version = 2;
+  double confidence = 3;
+  medical_record.LabExplanation explanation = 4;
+  string generated_at = 5;
+}
+
+message LabExplanationFailed {
+  string record_id = 1;
+  string model_version = 2;
+  string error_code = 3;
+  string error_message = 4;
+  string failed_at = 5;
+}

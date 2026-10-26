@@ -83,6 +83,14 @@ export class ApiMedicalRecordService implements OnModuleInit {
     );
   }
 
+  async getLabExplanation(
+    request: medicalRecord.GetLabExplanationRequest,
+  ): Promise<BaseResponse<medicalRecord.LabExplanationResponse>> {
+    return ApiMedicalRecordService.ok(
+      await firstValueFrom(this.medicalRecordClient.getLabExplanation(request)),
+    );
+  }
+
   async createRecord(
     request: CreateRecordRequestDto,
   ): Promise<BaseResponse<medicalRecord.RecordResponse>> {

@@ -18,6 +18,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RabbitMqService } from './messaging/rabbitmq.service';
 import { OutboxRelayService } from './messaging/outbox-relay.service';
 import { DocumentEventsConsumer } from './messaging/document-events.consumer';
+import { LabExplanationEventsConsumer } from './messaging/lab-explanation-events.consumer';
 
 const grpcClientOptions = (
   url: string,
@@ -71,6 +72,7 @@ const grpcClientOptions = (
     RabbitMqService,
     OutboxRelayService,
     DocumentEventsConsumer,
+    LabExplanationEventsConsumer,
     { provide: APP_GUARD, useClass: GrpcJwtGuard },
   ],
 })

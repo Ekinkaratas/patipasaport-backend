@@ -1,5 +1,6 @@
 import { Client } from '@grpc/grpc-js';
 import {
+  AI_LAB_EXPLANATION_QUEUE,
   AI_UPLOADED_QUEUE,
   callGrpc,
   DOCKER_GRPC_PORTS,
@@ -10,6 +11,8 @@ import {
   GrpcResult,
   istanbulToday,
   JwtIssuer,
+  LAB_EXPLANATION_EVENTS_DLQ,
+  LAB_EXPLANATION_EVENTS_QUEUE,
   messageSubject,
   RunningService,
   SeededClinic,
@@ -750,6 +753,449 @@ describe('medical_record servisi (e2e)', () => {
         15_000,
       );
       expect((await documentRow(document.id)).status).toBe('QUEUED');
+    });
+  });
+
+  describe('tahlil açıklaması', () => {
+    const { LabExplanationStatus } = medicalRecord;
+    const sampledAt = shiftDays(today, -1);
+    const birthDate = shiftDays(today, -800);
+    let labPetId: string;
+    let approvedRecordId: string;
+
+    const labContent = () => ({
+      type: medicalRecord.RecordType.LAB_RESULT,
+      title: 'Biyokimya paneli',
+      notes: 'Açlık kan şekeri',
+      recordedAt: sampledAt,
+      labResult: {
+        sampledAt,
+        items: [
+          {
+            testName: 'ALT',
+            value: '142',
+            unit: 'U/L',
+            referenceRange: '12-130',
+            flag: medicalRecord.LabResultFlag.HIGH,
+          },
+          {
+            testName: 'Kreatinin',
+            value: '1.4',
+            unit: '',
+            referenceRange: '',
+            flag: medicalRecord.LabResultFlag.LAB_RESULT_FLAG_UNSPECIFIED,
+          },
+        ],
+      },
+    });
+
+    const expectedData = (recordId: string) => ({
+      recordId,
+      title: 'Biyokimya paneli',
+      sampledAt,
+      species: 'DOG',
+      birthDate,
+      isBirthDateEstimated: true,
+      items: [
+        {
+          testName: 'ALT',
+          value: '142',
+          unit: 'U/L',
+          referenceRange: '12-130',
+          flag: 'HIGH',
+        },
+        {
+          testName: 'Kreatinin',
+          value: '1.4',
+          unit: '',
+          referenceRange: '',
+          flag: 'LAB_RESULT_FLAG_UNSPECIFIED',
+        },
+      ],
+    });
+
+    const generated = (recordId: string, over: object = {}) => ({
+      recordId,
+      modelVersion: 'fake-ai-1/explain-v1',
+      confidence: 0.82,
+      explanation: {
+        summary: 'Değerlerin çoğu referans aralığında.',
+        items: [{ testName: 'ALT', explanation: 'ALT karaciğer enzimidir.' }],
+      },
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      ...over,
+    });
+
+    const explanationRow = async (recordId: string) =>
+      (
+        await (
+          await data.db('medical_record')
+        ).query<{
+          status: string;
+          summary: string | null;
+          items: unknown;
+          confidence: number | null;
+          model_version: string | null;
+          failure_reason: string | null;
+          generated_at: Date | null;
+        }>(
+          'SELECT status::text, summary, items, confidence, model_version, failure_reason, generated_at FROM lab_result_explanations WHERE record_id = $1',
+          [recordId],
+        )
+      ).rows[0];
+
+    const takeRequest = async (recordId: string) => {
+      const [message] = await waitFor(async () => {
+        const taken = await bus.takeWhere(
+          AI_LAB_EXPLANATION_QUEUE,
+          (m) => messageSubject(m) === recordId,
+        );
+        return taken.length > 0 ? taken : undefined;
+      });
+      return message;
+    };
+
+    const createRecord = async (content: object) =>
+      expectOk(
+        await call<medicalRecord.RecordResponse>(
+          'CreateRecord',
+          { petId: labPetId, content, attachments: [] },
+          await clinicToken(clinicA.id),
+        ),
+        'CreateRecord',
+      ).record as medicalRecord.MedicalRecord;
+
+    const createLabRecord = async () => {
+      const record = await createRecord(labContent());
+      await takeRequest(record.id);
+      return record;
+    };
+
+    const getExplanation = async (recordId: string, token?: string) =>
+      call<medicalRecord.LabExplanationResponse>(
+        'GetLabExplanation',
+        { recordId },
+        token ?? (await ownerToken()),
+      );
+
+    beforeAll(async () => {
+      const ownerJwt = await ownerToken();
+      labPetId =
+        expectOk(
+          await callGrpc<pets.PetResponse>(
+            petsClient,
+            'CreatePet',
+            {
+              name: 'Zeytin',
+              species: 'DOG',
+              breed: 'KANGAL',
+              sex: pets.PetSex.MALE,
+              birthDate,
+              isBirthDateEstimated: true,
+              isNeutered: false,
+              chipNumber: '',
+              ownerUserId: owner.id,
+            },
+            ownerJwt,
+          ),
+          'pets.CreatePet',
+        ).pet?.id ?? '';
+      data.trackPet(labPetId);
+      expectOk(
+        await callGrpc<access.ConsentResponse>(
+          accessClient,
+          'GrantConsent',
+          {
+            clinicId: clinicA.id,
+            petId: labPetId,
+            scopes: ['medical_read', 'medical_write'],
+            expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+          },
+          ownerJwt,
+        ),
+        'access.GrantConsent',
+      );
+    });
+
+    it('LAB_RESULT taslağı onaylanınca istek AI kuyruğuna doğru veriyle düşer, açıklama satırı PENDING olur', async () => {
+      const document = expectOk(
+        await register(undefined, { petId: labPetId }),
+        'RegisterDocument',
+      ).document as medicalRecord.Document;
+      await bus.publishAiEvent('analyzed', {
+        documentId: document.id,
+        modelVersion: 'fake-ai-1',
+        confidence: 0.9,
+        analyzedAt: new Date().toISOString(),
+        proposal: {
+          type: 'LAB_RESULT',
+          title: 'Biyokimya paneli',
+          notes: 'Açlık kan şekeri',
+          recordedAt: sampledAt,
+          labResult: {
+            sampledAt,
+            items: [
+              {
+                testName: 'ALT',
+                value: '142',
+                unit: 'U/L',
+                referenceRange: '12-130',
+                flag: 'HIGH',
+              },
+              { testName: 'Kreatinin', value: '1.4' },
+            ],
+          },
+        },
+      });
+      await waitFor(
+        async () => (await documentRow(document.id))?.status === 'DRAFT_READY',
+      );
+
+      const token = await clinicToken(clinicA.id);
+      const draft = expectOk(
+        await call<medicalRecord.ListDraftReviewsResponse>(
+          'ListDraftReviews',
+          { petId: labPetId, page: 1, pageSize: 8 },
+          token,
+        ),
+        'ListDraftReviews',
+      ).draftReviews.find((d) => d.documentId === document.id);
+      approvedRecordId =
+        expectOk(
+          await call<medicalRecord.DraftReviewResponse>(
+            'ReviewDraft',
+            { id: draft?.id, approved: true },
+            token,
+          ),
+          'ReviewDraft',
+        ).draftReview?.createdRecordId ?? '';
+      expect(approvedRecordId).not.toBe('');
+
+      const message = await takeRequest(approvedRecordId);
+      const event = JSON.parse(message.content.toString('utf8'));
+      expect(message.properties).toMatchObject({
+        contentType: 'application/cloudevents+json',
+        type: 'com.patipasaport.lab_explanation.requested.v1',
+        messageId: event.id,
+        deliveryMode: 2,
+      });
+      expect(event).toMatchObject({
+        specversion: '1.0',
+        source: '/patipasaport/medical-record',
+        type: 'com.patipasaport.lab_explanation.requested.v1',
+        subject: approvedRecordId,
+        datacontenttype: 'application/json',
+        dataschema: 'urn:patipasaport:events:LabExplanationRequested:v1',
+      });
+      expect(event.data).toEqual(expectedData(approvedRecordId));
+      expect((await explanationRow(approvedRecordId)).status).toBe('PENDING');
+    });
+
+    it('sahte generated olayı satırı READY yapar ve hasta sahibi açıklamayı okur; ikinci sonuçlar yok sayılır', async () => {
+      const startedAt = Date.now();
+      expect(
+        expectOk(await getExplanation(approvedRecordId), 'GetLabExplanation'),
+      ).toEqual({
+        status: LabExplanationStatus.LAB_EXPLANATION_PENDING,
+        summary: '',
+        items: [],
+        confidence: 0,
+        generatedAt: '',
+      });
+
+      await bus.publishAiEvent(
+        'lab_explanation_generated',
+        generated(approvedRecordId, {
+          confidence: 1.3,
+          explanation: {
+            summary: '  Değerlerin çoğu referans aralığında.  ',
+            items: [
+              { testName: ' ALT ', explanation: 'ALT karaciğer enzimidir.' },
+            ],
+          },
+        }),
+      );
+      await waitFor(
+        async () =>
+          (await explanationRow(approvedRecordId))?.status === 'READY',
+      );
+      const row = await explanationRow(approvedRecordId);
+      expect(row).toMatchObject({
+        summary: 'Değerlerin çoğu referans aralığında.',
+        items: [{ testName: 'ALT', explanation: 'ALT karaciğer enzimidir.' }],
+        confidence: 1,
+        model_version: 'fake-ai-1/explain-v1',
+        failure_reason: null,
+      });
+
+      const ready = expectOk(
+        await getExplanation(approvedRecordId),
+        'GetLabExplanation',
+      );
+      expect(ready).toMatchObject({
+        status: LabExplanationStatus.LAB_EXPLANATION_READY,
+        summary: 'Değerlerin çoğu referans aralığında.',
+        items: [{ testName: 'ALT', explanation: 'ALT karaciğer enzimidir.' }],
+        confidence: 1,
+      });
+      expect(new Date(ready.generatedAt).toISOString()).toBe(ready.generatedAt);
+      expect(Date.parse(ready.generatedAt)).toBeGreaterThanOrEqual(
+        startedAt - 1_000,
+      );
+
+      const dlqBefore = await bus.messageCount(LAB_EXPLANATION_EVENTS_DLQ);
+      await bus.publishAiEvent(
+        'lab_explanation_generated',
+        generated(approvedRecordId, {
+          explanation: { summary: 'İkinci sonuç', items: [] },
+        }),
+      );
+      await bus.publishAiEvent('lab_explanation_failed', {
+        recordId: approvedRecordId,
+        modelVersion: 'fake-ai-1/explain-v1',
+        errorCode: 'INTERNAL_ERROR',
+        errorMessage: 'Beklenmeyen hata',
+        failedAt: new Date().toISOString(),
+      });
+      await waitFor(
+        async () =>
+          (await bus.messageCount(LAB_EXPLANATION_EVENTS_QUEUE)) === 0,
+      );
+      for (const deadline = Date.now() + 3_000; Date.now() < deadline; ) {
+        expect(await explanationRow(approvedRecordId)).toEqual(row);
+        await sleep(250);
+      }
+      expect(await explanationRow(approvedRecordId)).toEqual(row);
+      expect(await bus.messageCount(LAB_EXPLANATION_EVENTS_DLQ)).toBe(
+        dlqBefore,
+      );
+    });
+
+    it('elle girilen LAB_RESULT kaydı da istek doğurur', async () => {
+      const record = await createRecord(labContent());
+      const message = await takeRequest(record.id);
+      expect(JSON.parse(message.content.toString('utf8')).data).toEqual(
+        expectedData(record.id),
+      );
+      expect((await explanationRow(record.id)).status).toBe('PENDING');
+    });
+
+    it('failed olayı satırı FAILED yapar; hasta sahibi yalnızca durumu görür', async () => {
+      const record = await createLabRecord();
+      await bus.publishAiEvent('lab_explanation_failed', {
+        recordId: record.id,
+        modelVersion: 'fake-ai-1/explain-v1',
+        errorCode: 'AI_PROVIDER_UNAVAILABLE',
+        errorMessage: "AI API'ye 5 denemede ulaşılamadı",
+        failedAt: new Date().toISOString(),
+      });
+      await waitFor(
+        async () => (await explanationRow(record.id))?.status === 'FAILED',
+      );
+      expect((await explanationRow(record.id)).failure_reason).toBe(
+        'AI_PROVIDER_UNAVAILABLE',
+      );
+      expect(
+        expectOk(await getExplanation(record.id), 'GetLabExplanation'),
+      ).toEqual({
+        status: LabExplanationStatus.LAB_EXPLANATION_FAILED,
+        summary: '',
+        items: [],
+        confidence: 0,
+        generatedAt: '',
+      });
+    });
+
+    it('kurallara uymayan açıklama satırı FAILED (INVALID_AI_OUTPUT) yapar', async () => {
+      const record = await createLabRecord();
+      await bus.publishAiEvent(
+        'lab_explanation_generated',
+        generated(record.id, {
+          explanation: {
+            summary: 'Özet',
+            items: [{ testName: 'AST', explanation: 'Kayıtta olmayan test.' }],
+          },
+        }),
+      );
+      await waitFor(
+        async () => (await explanationRow(record.id))?.status === 'FAILED',
+      );
+      expect(await explanationRow(record.id)).toMatchObject({
+        failure_reason: 'INVALID_AI_OUTPUT',
+        model_version: 'fake-ai-1/explain-v1',
+        summary: null,
+        items: null,
+        generated_at: null,
+      });
+    });
+
+    it("bozuk modelVersion ve satırı olmayan kayıt DLQ'ya gider, satıra dokunulmaz", async () => {
+      const record = await createLabRecord();
+      const before = await bus.messageCount(LAB_EXPLANATION_EVENTS_DLQ);
+      const sent = [
+        await bus.publishAiEvent(
+          'lab_explanation_generated',
+          generated(record.id, { modelVersion: 'm'.repeat(65) }),
+        ),
+        await bus.publishAiEvent(
+          'lab_explanation_generated',
+          generated(record.id, { modelVersion: '' }),
+        ),
+        await bus.publishAiEvent('lab_explanation_failed', {
+          recordId: randomUUID(),
+          modelVersion: 'fake-ai-1/explain-v1',
+          errorCode: 'INTERNAL_ERROR',
+        }),
+      ];
+      sent.forEach((id) => data.trackMessage(id));
+
+      await waitFor(
+        async () =>
+          (await bus.messageCount(LAB_EXPLANATION_EVENTS_DLQ)) >=
+          before + sent.length,
+        15_000,
+      );
+      expect((await explanationRow(record.id)).status).toBe('PENDING');
+    });
+
+    it('klinik FORBIDDEN; başka sahip, olmayan kayıt NOT_FOUND; bozuk kimlik INVALID_ARGUMENT alır', async () => {
+      const record = await createLabRecord();
+      expect(
+        outcome(await getExplanation(record.id, await clinicToken(clinicA.id))),
+      ).toBe('PERMISSION_DENIED/FORBIDDEN');
+      expect(
+        outcome(
+          await getExplanation(
+            record.id,
+            await tokens.jwtFor({ role: 'PET_OWNER', userId: stranger.id }),
+          ),
+        ),
+      ).toBe('NOT_FOUND/NOT_FOUND');
+      expect(outcome(await getExplanation(randomUUID()))).toBe(
+        'NOT_FOUND/NOT_FOUND',
+      );
+      expect(outcome(await getExplanation('abc'))).toBe(
+        'INVALID_ARGUMENT/RECORD_ID_WRONG DATA FORMAT',
+      );
+    });
+
+    it('tahlil olmayan kayıtta olay çıkmaz, açıklama NOT_FOUND döner', async () => {
+      const record = await createRecord({
+        type: medicalRecord.RecordType.EXAMINATION,
+        title: 'Genel muayene',
+        recordedAt: today,
+      });
+      const { rows } = await (
+        await data.db('medical_record')
+      ).query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM outbox WHERE payload->>'subject' = $1",
+        [record.id],
+      );
+      expect(rows[0].count).toBe(0);
+      expect(await explanationRow(record.id)).toBeUndefined();
+      expect(outcome(await getExplanation(record.id))).toBe(
+        'NOT_FOUND/NOT_FOUND',
+      );
     });
   });
 });

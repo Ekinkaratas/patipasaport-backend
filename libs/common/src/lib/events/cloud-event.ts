@@ -16,8 +16,19 @@ export const DOCUMENT_EVENT_TYPES = {
   ANALYSIS_FAILED: 'com.patipasaport.document.analysis_failed.v1',
 } as const;
 
+export const LAB_EXPLANATION_EVENT_TYPES = {
+  REQUESTED: 'com.patipasaport.lab_explanation.requested.v1',
+  GENERATED: 'com.patipasaport.lab_explanation.generated.v1',
+  FAILED: 'com.patipasaport.lab_explanation.failed.v1',
+} as const;
+
 export type DocumentEventType =
   (typeof DOCUMENT_EVENT_TYPES)[keyof typeof DOCUMENT_EVENT_TYPES];
+
+export type LabExplanationEventType =
+  (typeof LAB_EXPLANATION_EVENT_TYPES)[keyof typeof LAB_EXPLANATION_EVENT_TYPES];
+
+export type CloudEventType = DocumentEventType | LabExplanationEventType;
 
 export const DOCUMENT_EVENT_SCHEMAS: Record<DocumentEventType, string> = {
   [DOCUMENT_EVENT_TYPES.UPLOADED]:
@@ -30,11 +41,33 @@ export const DOCUMENT_EVENT_SCHEMAS: Record<DocumentEventType, string> = {
     'urn:patipasaport:events:DocumentAnalysisFailed:v1',
 };
 
+export const LAB_EXPLANATION_EVENT_SCHEMAS: Record<
+  LabExplanationEventType,
+  string
+> = {
+  [LAB_EXPLANATION_EVENT_TYPES.REQUESTED]:
+    'urn:patipasaport:events:LabExplanationRequested:v1',
+  [LAB_EXPLANATION_EVENT_TYPES.GENERATED]:
+    'urn:patipasaport:events:LabExplanationGenerated:v1',
+  [LAB_EXPLANATION_EVENT_TYPES.FAILED]:
+    'urn:patipasaport:events:LabExplanationFailed:v1',
+};
+
+export const CLOUD_EVENT_SCHEMAS: Record<CloudEventType, string> = {
+  ...DOCUMENT_EVENT_SCHEMAS,
+  ...LAB_EXPLANATION_EVENT_SCHEMAS,
+};
+
+const CLOUD_EVENT_TYPES: CloudEventType[] = [
+  ...Object.values(DOCUMENT_EVENT_TYPES),
+  ...Object.values(LAB_EXPLANATION_EVENT_TYPES),
+];
+
 export interface CloudEvent<T = unknown> {
   specversion: typeof CLOUD_EVENT_SPEC_VERSION;
   id: string;
   source: string;
-  type: DocumentEventType;
+  type: CloudEventType;
   subject: string;
   time: string;
   datacontenttype: typeof CLOUD_EVENT_DATA_CONTENT_TYPE;
@@ -43,7 +76,7 @@ export interface CloudEvent<T = unknown> {
 }
 
 export interface CreateCloudEventParams<T> {
-  type: DocumentEventType;
+  type: CloudEventType;
   source: string;
   subject: string;
   data: T;
@@ -67,7 +100,7 @@ export function createCloudEvent<T>({
     subject,
     time: time.toISOString(),
     datacontenttype: CLOUD_EVENT_DATA_CONTENT_TYPE,
-    dataschema: DOCUMENT_EVENT_SCHEMAS[type],
+    dataschema: CLOUD_EVENT_SCHEMAS[type],
     data,
   };
 }
@@ -75,8 +108,8 @@ export function createCloudEvent<T>({
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim() !== '';
 
-const isDocumentEventType = (value: unknown): value is DocumentEventType =>
-  Object.values(DOCUMENT_EVENT_TYPES).includes(value as DocumentEventType);
+const isCloudEventType = (value: unknown): value is CloudEventType =>
+  CLOUD_EVENT_TYPES.includes(value as CloudEventType);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -100,12 +133,12 @@ export function parseCloudEvent(raw: unknown): CloudEvent | null {
     specversion !== CLOUD_EVENT_SPEC_VERSION ||
     !isNonEmptyString(id) ||
     !isNonEmptyString(source) ||
-    !isDocumentEventType(type) ||
+    !isCloudEventType(type) ||
     !isNonEmptyString(subject) ||
     !isNonEmptyString(time) ||
     Number.isNaN(Date.parse(time)) ||
     datacontenttype !== CLOUD_EVENT_DATA_CONTENT_TYPE ||
-    dataschema !== DOCUMENT_EVENT_SCHEMAS[type] ||
+    dataschema !== CLOUD_EVENT_SCHEMAS[type] ||
     !isPlainObject(data)
   ) {
     return null;

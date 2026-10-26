@@ -141,7 +141,12 @@ describe('RabbitMqService', () => {
       );
     });
 
-    it.each(['ai-service.document-uploaded', QUEUE])(
+    it.each([
+      'ai-service.document-uploaded',
+      QUEUE,
+      'ai-service.lab-explanation-requested',
+      'medical-record.lab-explanation-events',
+    ])(
       '%s ve retry/dlq kuyrukları quorum ve doğru argümanlarla tanımlanır',
       (queue) => {
         const deadLetter = (key: string) => ({
@@ -185,9 +190,12 @@ describe('RabbitMqService', () => {
         .map(([queue, , key]) => `${queue} <- ${key}`);
       expect(bindings.sort()).toEqual([
         'ai-service.document-uploaded <- com.patipasaport.document.uploaded.v1',
+        'ai-service.lab-explanation-requested <- com.patipasaport.lab_explanation.requested.v1',
         `${QUEUE} <- com.patipasaport.document.analysis_failed.v1`,
         `${QUEUE} <- com.patipasaport.document.analyzed.v1`,
         `${QUEUE} <- com.patipasaport.document.processing_started.v1`,
+        'medical-record.lab-explanation-events <- com.patipasaport.lab_explanation.failed.v1',
+        'medical-record.lab-explanation-events <- com.patipasaport.lab_explanation.generated.v1',
       ]);
     });
   });

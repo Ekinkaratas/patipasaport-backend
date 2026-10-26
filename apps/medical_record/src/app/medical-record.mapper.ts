@@ -1,9 +1,12 @@
 import { RecordContentDto } from '@libs/dto';
-import { medicalRecord } from '@libs/proto';
+import { events, medicalRecord, pets } from '@libs/proto';
 import {
   Document,
   DocumentStatus,
   DraftReviewStatus,
+  LabExplanationStatus,
+  LabResult,
+  LabResultExplanation,
   LabResultFlag,
   Prisma,
   RecordType,
@@ -62,6 +65,31 @@ export const LAB_RESULT_INCLUDE = {
 export type LabResultWithRecord = Prisma.LabResultGetPayload<{
   include: typeof LAB_RESULT_INCLUDE;
 }>;
+
+export interface RecordWithLabResults {
+  id: string;
+  title: string;
+  labResults: LabResult[];
+}
+
+export interface LabExplanationPetContext {
+  species: string;
+  birthDate: string;
+  isBirthDateEstimated: boolean;
+}
+
+export type LabExplanationRequestedData = Omit<
+  events.LabExplanationRequested,
+  'items'
+> & {
+  items: (Omit<medicalRecord.LabResultItem, 'flag'> & { flag: string })[];
+};
+
+export const EMPTY_PET_CONTEXT: LabExplanationPetContext = {
+  species: '',
+  birthDate: '',
+  isBirthDateEstimated: false,
+};
 
 export type RecordContentData = Pick<
   Prisma.MedicalRecordUncheckedCreateInput,
@@ -145,6 +173,18 @@ const LAB_RESULT_FLAG_TO_DB: Partial<
   [medicalRecord.LabResultFlag.HIGH]: LabResultFlag.HIGH,
 };
 
+const LAB_EXPLANATION_STATUS_TO_PROTO: Record<
+  LabExplanationStatus,
+  medicalRecord.LabExplanationStatus
+> = {
+  [LabExplanationStatus.PENDING]:
+    medicalRecord.LabExplanationStatus.LAB_EXPLANATION_PENDING,
+  [LabExplanationStatus.READY]:
+    medicalRecord.LabExplanationStatus.LAB_EXPLANATION_READY,
+  [LabExplanationStatus.FAILED]:
+    medicalRecord.LabExplanationStatus.LAB_EXPLANATION_FAILED,
+};
+
 export const toDateOnly = (value: Date): string =>
   value.toISOString().slice(0, 10);
 
@@ -222,18 +262,22 @@ export function toProtoRecord(
       : undefined,
     labResult: firstLabResult
       ? {
-          items: row.labResults.map((item) => ({
-            testName: item.testName,
-            value: item.value,
-            unit: item.unit ?? '',
-            referenceRange: item.referenceRange ?? '',
-            flag: item.flag
-              ? LAB_RESULT_FLAG_TO_PROTO[item.flag]
-              : medicalRecord.LabResultFlag.LAB_RESULT_FLAG_UNSPECIFIED,
-          })),
+          items: row.labResults.map((item) => toProtoLabResultItem(item)),
           sampledAt: toDateOnly(firstLabResult.sampledAt),
         }
       : undefined,
+  };
+}
+
+function toProtoLabResultItem(row: LabResult): medicalRecord.LabResultItem {
+  return {
+    testName: row.testName,
+    value: row.value,
+    unit: row.unit ?? '',
+    referenceRange: row.referenceRange ?? '',
+    flag: row.flag
+      ? LAB_RESULT_FLAG_TO_PROTO[row.flag]
+      : medicalRecord.LabResultFlag.LAB_RESULT_FLAG_UNSPECIFIED,
   };
 }
 
@@ -309,6 +353,63 @@ export function toProtoDraft(
       : undefined,
     modelVersion: row.modelVersion,
     confidence: row.confidence,
+  };
+}
+
+export function toLabExplanationPetContext(
+  pet: pets.Pet | undefined,
+): LabExplanationPetContext {
+  if (!pet) return EMPTY_PET_CONTEXT;
+
+  const birthDate = new Date(pet.birthDate);
+  return {
+    species: pet.species,
+    birthDate: Number.isNaN(birthDate.getTime()) ? '' : toDateOnly(birthDate),
+    isBirthDateEstimated: pet.isBirthDateEstimated,
+  };
+}
+
+export function toLabExplanationRequestedData(
+  record: RecordWithLabResults,
+  pet: LabExplanationPetContext,
+): LabExplanationRequestedData {
+  const [firstLabResult] = record.labResults;
+
+  return {
+    recordId: record.id,
+    title: record.title,
+    sampledAt: firstLabResult ? toDateOnly(firstLabResult.sampledAt) : '',
+    species: pet.species,
+    birthDate: pet.birthDate,
+    isBirthDateEstimated: pet.isBirthDateEstimated,
+    items: record.labResults.map((row) => {
+      const item = toProtoLabResultItem(row);
+      return { ...item, flag: medicalRecord.labResultFlagToJSON(item.flag) };
+    }),
+  };
+}
+
+export function toProtoLabExplanation(
+  row: LabResultExplanation,
+): medicalRecord.LabExplanationResponse {
+  const status = LAB_EXPLANATION_STATUS_TO_PROTO[row.status];
+
+  if (row.status !== LabExplanationStatus.READY) {
+    return { status, summary: '', items: [], confidence: 0, generatedAt: '' };
+  }
+
+  const items = row.items as unknown as
+    | medicalRecord.LabExplanationItem[]
+    | null;
+  return {
+    status,
+    summary: row.summary ?? '',
+    items: (items ?? []).map(({ testName, explanation }) => ({
+      testName,
+      explanation,
+    })),
+    confidence: row.confidence ?? 0,
+    generatedAt: row.generatedAt ? row.generatedAt.toISOString() : '',
   };
 }
 

@@ -1,23 +1,33 @@
-import json
-import math
-import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
-from typing import Any, NoReturn
+from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.errors import NOT_A_MEDICAL_DOCUMENT, PermanentError
 from app.generated import medical_record_pb2
+from app.validation import (
+    CONTROL_CHAR,
+    COUNT,
+    DATE_PATTERN,
+    ENUM,
+    FORMAT,
+    LENGTH,
+    REQUIRED,
+    ROOT_PATH,
+    TYPE,
+    OutputInvalid,
+    ValidationIssue,
+    decode_object,
+    has_control_character,
+    has_lone_surrogate,
+    parse_date,
+    read_confidence,
+    text_length,
+    trim,
+)
 
-REQUIRED = "REQUIRED"
-TYPE = "TYPE"
-FORMAT = "FORMAT"
-ENUM = "ENUM"
-LENGTH = "LENGTH"
 RANGE = "RANGE"
-COUNT = "COUNT"
-CONTROL_CHAR = "CONTROL_CHAR"
 FUTURE_DATE = "FUTURE_DATE"
 ORDER = "ORDER"
 
@@ -34,8 +44,6 @@ ISSUE_CODES: tuple[str, ...] = (
     ORDER,
 )
 
-ROOT_PATH = "$"
-
 TITLE_MIN_LENGTH = 2
 TITLE_MAX_LENGTH = 128
 NOTES_MAX_LENGTH = 2000
@@ -47,7 +55,6 @@ DURATION_DAYS_MIN = 1
 DURATION_DAYS_MAX = 365
 LAB_ITEMS_MIN = 1
 LAB_ITEMS_MAX = 50
-MIN_DATE_YEAR = 1000
 ESTIMATED_DATE_MAX_CONFIDENCE = 0.5
 
 RECORD_TYPES: tuple[str, ...] = (
@@ -71,33 +78,6 @@ _ADMINISTERED_AT = f"{_VACCINATION}.administeredAt"
 _NEXT_DUE_AT = f"{_VACCINATION}.nextDueAt"
 _PRESCRIBED_AT = f"{_PRESCRIPTION}.prescribedAt"
 
-_TRIM_CHARACTERS = "".join(
-    map(
-        chr,
-        (
-            0x09,
-            0x0A,
-            0x0B,
-            0x0C,
-            0x0D,
-            0x20,
-            0xA0,
-            0x1680,
-            *range(0x2000, 0x200B),
-            0x2028,
-            0x2029,
-            0x202F,
-            0x205F,
-            0x3000,
-            0xFEFF,
-        ),
-    )
-)
-_VARIATION_SELECTORS = frozenset(map(chr, (0xFE0E, 0xFE0F)))
-_LINE_BREAKS = frozenset(map(chr, (0x0A, 0x0D)))
-_DATE_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
-_PATH_TOKEN = re.compile(r"([^.\[\]]+)|\[([0-9]+)\]")
-
 
 # Europe/Istanbul saat dilimini yükler, saat dilimi verisi yoksa sabit UTC+3 kullanır.
 def _load_business_time_zone() -> tzinfo:
@@ -110,30 +90,8 @@ def _load_business_time_zone() -> tzinfo:
 BUSINESS_TIME_ZONE = _load_business_time_zone()
 
 
-@dataclass(frozen=True)
-class ValidationIssue:
-    path: str
-    code: str
-
-
-# Sorunu, dizi sıralarını sayı olarak karşılaştıran alan yolu anahtarına çevirir.
-def _issue_sort_key(
-    issue: ValidationIssue,
-) -> tuple[tuple[tuple[int, int, str], ...], str, str]:
-    segments = tuple(
-        (1, int(index), "") if index else (0, 0, name)
-        for name, index in _PATH_TOKEN.findall(issue.path)
-    )
-    return segments, issue.path, issue.code
-
-
-class ExtractionInvalid(Exception):
-    # Sorunları tekrarsız ve yol sırasıyla saklar, hata metnine yalnızca sayıyı yazar.
-    def __init__(self, issues: Iterable[ValidationIssue]) -> None:
-        self.issues: tuple[ValidationIssue, ...] = tuple(
-            sorted(set(issues), key=_issue_sort_key)
-        )
-        super().__init__(f"Model çıktısı doğrulanamadı ({len(self.issues)} sorun)")
+class ExtractionInvalid(OutputInvalid):
+    pass
 
 
 @dataclass(frozen=True)
@@ -143,70 +101,12 @@ class ExtractionResult:
     date_estimated: bool
 
 
-# JSON'da standart dışı olan NaN ve Infinity sabitlerini reddeder.
-def _reject_constant(name: str) -> NoReturn:
-    raise ValueError("Standart dışı JSON sabiti")
-
-
-# Model çıktısını gerekiyorsa katı JSON olarak çözer ve bir nesne olduğunu doğrular.
+# Model çıktısını katı JSON nesnesi olarak çözer, çözülemezse kök FORMAT sorunu verir.
 def _decode_output(output: object) -> dict[str, Any]:
-    decoded = output
-    if isinstance(output, str):
-        try:
-            decoded = json.loads(output, parse_constant=_reject_constant)
-        except ValueError, RecursionError:
-            raise ExtractionInvalid((ValidationIssue(ROOT_PATH, FORMAT),)) from None
-    if not isinstance(decoded, dict):
+    decoded = decode_object(output)
+    if decoded is None:
         raise ExtractionInvalid((ValidationIssue(ROOT_PATH, FORMAT),))
     return decoded
-
-
-# Metni medical-record'daki JavaScript trim() ile aynı karakterleri atarak kırpar.
-def _trim(value: str) -> str:
-    return value.strip(_TRIM_CHARACTERS)
-
-
-# Metin uzunluğunu medical-record gibi varyasyon seçicisini saymadan bulur.
-def _text_length(value: str) -> int:
-    length = len(value)
-    index = 0
-    while index < len(value) - 1:
-        if (
-            value[index] not in _VARIATION_SELECTORS
-            and value[index + 1] in _VARIATION_SELECTORS
-        ):
-            length -= 1
-            index += 2
-        else:
-            index += 1
-    return length
-
-
-# Metinde medical-record'un yasakladığı bir kontrol karakteri olup olmadığını söyler.
-def _has_control_character(value: str, *, multiline: bool) -> bool:
-    for character in value:
-        code = ord(character)
-        if code >= 0x20 and code != 0x7F:
-            continue
-        if not (multiline and character in _LINE_BREAKS):
-            return True
-    return False
-
-
-# Metinde UTF-8'e çevrilemeyen tek başına bir vekil karakter olup olmadığını söyler.
-def _has_lone_surrogate(value: str) -> bool:
-    return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
-
-
-# Metni YYYY-MM-DD biçiminde, geçerli ve yılı en az 1000 olan bir tarih olarak çözer.
-def _parse_date(value: str) -> date | None:
-    if _DATE_PATTERN.fullmatch(value) is None:
-        return None
-    try:
-        parsed = date.fromisoformat(value)
-    except ValueError:
-        return None
-    return parsed if parsed.year >= MIN_DATE_YEAR else None
 
 
 # Zamanı Europe/Istanbul tarihine çevirir, saat dilimi olmayan zamanı UTC kabul eder.
@@ -214,19 +114,6 @@ def _business_date(moment: datetime) -> date:
     if moment.utcoffset() is None:
         moment = moment.replace(tzinfo=UTC)
     return moment.astimezone(BUSINESS_TIME_ZONE).date()
-
-
-# confidence değerini sayı olarak okuyup [0, 1] aralığına kırpar, geçersizse TYPE ekler.
-def _read_confidence(value: object, issues: list[ValidationIssue]) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        issues.append(ValidationIssue("confidence", TYPE))
-        return 0.0
-    if isinstance(value, int):
-        return float(min(max(value, 0), 1))
-    if not math.isfinite(value):
-        issues.append(ValidationIssue("confidence", TYPE))
-        return 0.0
-    return max(0.0, min(1.0, value))
 
 
 class _ProposalReader:
@@ -313,7 +200,7 @@ class _ProposalReader:
         if not isinstance(raw, str):
             self._add(path, TYPE)
             return None
-        value = _trim(raw)
+        value = trim(raw)
         if not value:
             self._add(path, REQUIRED)
             return None
@@ -338,7 +225,7 @@ class _ProposalReader:
         if raw is None:
             value = ""
         elif isinstance(raw, str):
-            value = _trim(raw)
+            value = trim(raw)
         else:
             self._add(path, TYPE)
             return ""
@@ -346,11 +233,11 @@ class _ProposalReader:
             if required:
                 self._add(path, REQUIRED)
             return ""
-        if not min_length <= _text_length(value) <= max_length:
+        if not min_length <= text_length(value) <= max_length:
             self._add(path, LENGTH)
-        if _has_control_character(value, multiline=multiline):
+        if has_control_character(value, multiline=multiline):
             self._add(path, CONTROL_CHAR)
-        if _has_lone_surrogate(value):
+        if has_lone_surrogate(value):
             self._add(path, FORMAT)
         return value
 
@@ -362,11 +249,11 @@ class _ProposalReader:
         if not isinstance(raw, str):
             self._add(path, TYPE)
             return None
-        return _trim(raw)
+        return trim(raw)
 
     # Dolu bir tarihi biçim ve istenirse gelecek tarih kuralıyla denetler.
     def _check_date(self, value: str, path: str, *, not_future: bool = True) -> bool:
-        parsed = _parse_date(value)
+        parsed = parse_date(value)
         if parsed is None:
             self._add(path, FORMAT)
             return False
@@ -499,7 +386,7 @@ class _ProposalReader:
         if not isinstance(raw, str):
             self._add(path, TYPE)
             return unspecified
-        value = _trim(raw)
+        value = trim(raw)
         if not value:
             return unspecified
         if value not in LAB_RESULT_FLAGS:
@@ -533,7 +420,7 @@ class _ProposalReader:
         if (
             next_due
             and self._check_date(next_due, _NEXT_DUE_AT, not_future=False)
-            and _DATE_PATTERN.fullmatch(administered_at)
+            and DATE_PATTERN.fullmatch(administered_at)
             and next_due <= administered_at
         ):
             self._add(_NEXT_DUE_AT, ORDER)
@@ -626,7 +513,7 @@ def validate_extraction(
     issues: list[ValidationIssue] = []
     if not isinstance(is_medical_document, bool):
         issues.append(ValidationIssue("isMedicalDocument", TYPE))
-    confidence = _read_confidence(data.get("confidence"), issues)
+    confidence = read_confidence(data.get("confidence"), issues)
     reference_day = (
         today if today is not None else datetime.now(BUSINESS_TIME_ZONE).date()
     )

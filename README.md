@@ -29,14 +29,14 @@ This is a graduation project. The backend is complete; the AI service is the onl
 | `users` | User profiles | PostgreSQL |
 | `clinics` | Clinics, stock with purchase and sale prices, sales and monthly sales reports, clinic view of a pet, result upload orchestration | PostgreSQL |
 | `pets` | Pets, owner lookup, encrypted chip numbers | PostgreSQL |
-| `medical-record` | Records, vaccinations, prescriptions, lab results, documents, AI draft reviews | PostgreSQL, RabbitMQ, SeaweedFS |
+| `medical-record` | Records, vaccinations, prescriptions, lab results, documents, AI draft reviews, AI lab result explanations | PostgreSQL, RabbitMQ, SeaweedFS |
 
 Design decisions worth knowing:
 
 - **Database per service.** Cross-service relations are checked over gRPC, never with foreign keys.
 - **Zero trust.** Every read and write re-checks access: pet owners through ownership, clinics through an active consent with the right scope.
 - **Phantom tokens.** Clients hold opaque tokens; the gateway exchanges them for short-lived JWTs that internal services verify. Only `access` holds the private key.
-- **Outbox + CloudEvents.** A document upload writes the document and an outbox row in one transaction; a relay publishes CloudEvents to RabbitMQ with retries and a dead-letter queue.
+- **Outbox + CloudEvents.** A document upload writes the document and an outbox row in one transaction; a relay publishes CloudEvents to RabbitMQ with retries and a dead-letter queue. A new lab result record (approved draft or manual entry) writes the record, a pending explanation row and an explanation request in one transaction the same way.
 - **Human in the loop.** AI output is stored as a draft and only becomes a medical record after a clinic approves it.
 - **Access audit log.** Every S3 request is logged through Fluent Bit.
 
@@ -109,6 +109,7 @@ Every route except `/health` and `/auth/logout` needs `X-Client-Type: 1` (web) o
 | Documents | `POST /clinics/:clinicId/pets/:petId/documents` (multipart: `file` PDF/JPEG/PNG up to 10 MB, optional `note`), `GET /pets/:petId/documents` (optional `status`, paging), `GET /documents/:id`, `GET /documents/:id/file` (opens in the browser; `?download=1` downloads; content is checked against the stored SHA-256) |
 | Medical records | `GET /pets/:petId/records`, `/vaccinations`, `/prescriptions`, `/lab-results`, `POST /pets/:petId/records` |
 | AI draft review | `GET /draft-reviews`, `POST /draft-reviews/:id/review` |
+| Lab result explanation | `GET /records/:recordId/explanation` (pet owner only; `status` 1 pending, 2 ready with summary, items, confidence and `generatedAt`, 3 failed) |
 
 Money is an integer number of kuruş (`14990` = 149.90 TL). A sale stores the item's name and its purchase and sale prices as they were at the time of sale, so later price changes do not alter past profit. Days, weeks (Monday to Sunday, cut at the month's edges) and months in sales reports follow Istanbul time.
 

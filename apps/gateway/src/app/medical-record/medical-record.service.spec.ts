@@ -175,3 +175,57 @@ describe('ApiMedicalRecordService.getDocumentFile', () => {
     expect(storage.get).not.toHaveBeenCalled();
   });
 });
+
+describe('ApiMedicalRecordService.getLabExplanation', () => {
+  const RECORD_ID = '7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e';
+  let service: ApiMedicalRecordService;
+  let medicalClient: { getLabExplanation: jest.Mock };
+
+  beforeEach(() => {
+    medicalClient = { getLabExplanation: jest.fn() };
+    service = new ApiMedicalRecordService(
+      { getService: () => medicalClient } as unknown as ClientGrpc,
+      { get: jest.fn() } as unknown as DocumentStorageService,
+    );
+    service.onModuleInit();
+  });
+
+  it('kayıt kimliğini medical_record.GetLabExplanation ile sorar, yanıtı BaseResponse içinde sayısal durumla döner', async () => {
+    const explanation: medicalRecord.LabExplanationResponse = {
+      status: medicalRecord.LabExplanationStatus.LAB_EXPLANATION_READY,
+      summary: 'Değerlerin çoğu aralıkta.',
+      items: [{ testName: 'ALT', explanation: 'Karaciğer enzimi.' }],
+      confidence: 0.82,
+      generatedAt: '2026-10-21T09:30:09.000Z',
+    };
+    medicalClient.getLabExplanation.mockReturnValue(of(explanation));
+
+    const response = await service.getLabExplanation({ recordId: RECORD_ID });
+
+    expect(medicalClient.getLabExplanation).toHaveBeenCalledWith({
+      recordId: RECORD_ID,
+    });
+    expect(response).toMatchObject({
+      data: { ...explanation, status: 2 },
+      message: ResponseMessages.SUCCESS,
+      success: true,
+    });
+  });
+
+  it.each([
+    [7, ResponseMessages.FORBIDDEN],
+    [5, ResponseMessages.NOT_FOUND],
+  ])(
+    'gRPC hatası (code=%i, %s) istemciye aynen yükselir',
+    async (code, details) => {
+      const grpcError = Object.assign(new Error(details), { code, details });
+      medicalClient.getLabExplanation.mockReturnValue(
+        throwError(() => grpcError),
+      );
+
+      await expect(
+        service.getLabExplanation({ recordId: RECORD_ID }),
+      ).rejects.toBe(grpcError);
+    },
+  );
+});

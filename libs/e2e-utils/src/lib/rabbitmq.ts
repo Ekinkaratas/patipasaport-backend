@@ -7,21 +7,46 @@ export const EVENTS_EXCHANGE = 'patipasaport.events';
 export const AI_UPLOADED_QUEUE = 'ai-service.document-uploaded';
 export const DOCUMENT_EVENTS_QUEUE = 'medical-record.document-events';
 export const DOCUMENT_EVENTS_DLQ = `${DOCUMENT_EVENTS_QUEUE}.dlq`;
+export const AI_LAB_EXPLANATION_QUEUE = 'ai-service.lab-explanation-requested';
+export const LAB_EXPLANATION_EVENTS_QUEUE =
+  'medical-record.lab-explanation-events';
+export const LAB_EXPLANATION_EVENTS_DLQ = `${LAB_EXPLANATION_EVENTS_QUEUE}.dlq`;
 
-export type AiEventKind = 'processing_started' | 'analyzed' | 'analysis_failed';
+export type AiEventKind =
+  | 'processing_started'
+  | 'analyzed'
+  | 'analysis_failed'
+  | 'lab_explanation_generated'
+  | 'lab_explanation_failed';
 
-const AI_EVENTS: Record<AiEventKind, { type: string; schema: string }> = {
+const AI_EVENTS: Record<
+  AiEventKind,
+  { type: string; schema: string; subjectKey: string }
+> = {
   processing_started: {
     type: 'com.patipasaport.document.processing_started.v1',
     schema: 'urn:patipasaport:events:DocumentProcessingStarted:v1',
+    subjectKey: 'documentId',
   },
   analyzed: {
     type: 'com.patipasaport.document.analyzed.v1',
     schema: 'urn:patipasaport:events:DocumentAnalyzed:v1',
+    subjectKey: 'documentId',
   },
   analysis_failed: {
     type: 'com.patipasaport.document.analysis_failed.v1',
     schema: 'urn:patipasaport:events:DocumentAnalysisFailed:v1',
+    subjectKey: 'documentId',
+  },
+  lab_explanation_generated: {
+    type: 'com.patipasaport.lab_explanation.generated.v1',
+    schema: 'urn:patipasaport:events:LabExplanationGenerated:v1',
+    subjectKey: 'recordId',
+  },
+  lab_explanation_failed: {
+    type: 'com.patipasaport.lab_explanation.failed.v1',
+    schema: 'urn:patipasaport:events:LabExplanationFailed:v1',
+    subjectKey: 'recordId',
   },
 };
 
@@ -72,13 +97,13 @@ export class EventBus {
     data: Record<string, unknown>,
     envelope: Record<string, unknown> = {},
   ): Promise<string> {
-    const { type, schema } = AI_EVENTS[kind];
+    const { type, schema, subjectKey } = AI_EVENTS[kind];
     const event = {
       specversion: '1.0',
       id: randomUUID(),
       source: '/patipasaport/ai-service',
       type,
-      subject: data['documentId'],
+      subject: data[subjectKey],
       time: new Date().toISOString(),
       datacontenttype: 'application/json',
       dataschema: schema,

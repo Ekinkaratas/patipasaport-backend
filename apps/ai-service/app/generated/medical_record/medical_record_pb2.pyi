@@ -37,6 +37,13 @@ class LabResultFlag(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     NORMAL: _ClassVar[LabResultFlag]
     LOW: _ClassVar[LabResultFlag]
     HIGH: _ClassVar[LabResultFlag]
+
+class LabExplanationStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    LAB_EXPLANATION_STATUS_UNSPECIFIED: _ClassVar[LabExplanationStatus]
+    LAB_EXPLANATION_PENDING: _ClassVar[LabExplanationStatus]
+    LAB_EXPLANATION_READY: _ClassVar[LabExplanationStatus]
+    LAB_EXPLANATION_FAILED: _ClassVar[LabExplanationStatus]
 RECORD_TYPE_UNSPECIFIED: RecordType
 EXAMINATION: RecordType
 VACCINATION: RecordType
@@ -56,6 +63,10 @@ LAB_RESULT_FLAG_UNSPECIFIED: LabResultFlag
 NORMAL: LabResultFlag
 LOW: LabResultFlag
 HIGH: LabResultFlag
+LAB_EXPLANATION_STATUS_UNSPECIFIED: LabExplanationStatus
+LAB_EXPLANATION_PENDING: LabExplanationStatus
+LAB_EXPLANATION_READY: LabExplanationStatus
+LAB_EXPLANATION_FAILED: LabExplanationStatus
 
 class FileReference(_message.Message):
     __slots__ = ("document_id", "storage_path", "original_name", "mime_type", "size_bytes", "uploaded_at")
@@ -440,6 +451,42 @@ class ListLabResultsResponse(_message.Message):
     page: int
     page_size: int
     def __init__(self, lab_results: _Optional[_Iterable[_Union[LabResult, _Mapping]]] = ..., total: _Optional[int] = ..., page: _Optional[int] = ..., page_size: _Optional[int] = ...) -> None: ...
+
+class LabExplanationItem(_message.Message):
+    __slots__ = ("test_name", "explanation")
+    TEST_NAME_FIELD_NUMBER: _ClassVar[int]
+    EXPLANATION_FIELD_NUMBER: _ClassVar[int]
+    test_name: str
+    explanation: str
+    def __init__(self, test_name: _Optional[str] = ..., explanation: _Optional[str] = ...) -> None: ...
+
+class LabExplanation(_message.Message):
+    __slots__ = ("summary", "items")
+    SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    ITEMS_FIELD_NUMBER: _ClassVar[int]
+    summary: str
+    items: _containers.RepeatedCompositeFieldContainer[LabExplanationItem]
+    def __init__(self, summary: _Optional[str] = ..., items: _Optional[_Iterable[_Union[LabExplanationItem, _Mapping]]] = ...) -> None: ...
+
+class GetLabExplanationRequest(_message.Message):
+    __slots__ = ("record_id",)
+    RECORD_ID_FIELD_NUMBER: _ClassVar[int]
+    record_id: str
+    def __init__(self, record_id: _Optional[str] = ...) -> None: ...
+
+class LabExplanationResponse(_message.Message):
+    __slots__ = ("status", "summary", "items", "confidence", "generated_at")
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    ITEMS_FIELD_NUMBER: _ClassVar[int]
+    CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
+    GENERATED_AT_FIELD_NUMBER: _ClassVar[int]
+    status: LabExplanationStatus
+    summary: str
+    items: _containers.RepeatedCompositeFieldContainer[LabExplanationItem]
+    confidence: float
+    generated_at: str
+    def __init__(self, status: _Optional[_Union[LabExplanationStatus, str]] = ..., summary: _Optional[str] = ..., items: _Optional[_Iterable[_Union[LabExplanationItem, _Mapping]]] = ..., confidence: _Optional[float] = ..., generated_at: _Optional[str] = ...) -> None: ...
 
 class DraftReview(_message.Message):
     __slots__ = ("id", "pet_id", "clinic_id", "source_files", "status", "review_note", "created_record_id", "created_at", "reviewed_at", "reviewed_by_clinic_id", "document_id", "proposal", "approved_content", "model_version", "confidence")

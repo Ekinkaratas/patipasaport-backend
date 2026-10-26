@@ -9,9 +9,11 @@ import {
 } from './fixtures';
 import { DatabaseName } from './ports';
 import {
+  AI_LAB_EXPLANATION_QUEUE,
   AI_UPLOADED_QUEUE,
   DOCUMENT_EVENTS_DLQ,
   EventBus,
+  LAB_EXPLANATION_EVENTS_DLQ,
   messageSubject,
 } from './rabbitmq';
 import { ObjectStore } from './storage';
@@ -145,7 +147,9 @@ export class TestData {
       'SELECT id FROM pets WHERE id = ANY($1::uuid[]) OR owner_user_id = ANY($2::uuid[])',
       [[...this.petIds], userIds],
     );
-    const petIds = [...new Set([...this.petIds, ...petRows.map((row) => row.id)])];
+    const petIds = [
+      ...new Set([...this.petIds, ...petRows.map((row) => row.id)]),
+    ];
 
     if (this.options.medicalRecord) {
       await this.cleanupMedicalRecord(petIds);
@@ -203,29 +207,44 @@ export class TestData {
     const { rows: documents } = await medical.query<{
       id: string;
       storage_path: string;
-    }>('SELECT id, storage_path FROM documents WHERE pet_id = ANY($1::uuid[])', [
-      petIds,
-    ]);
+    }>(
+      'SELECT id, storage_path FROM documents WHERE pet_id = ANY($1::uuid[])',
+      [petIds],
+    );
     const documentIds = documents.map((row) => row.id);
+    const { rows: records } = await medical.query<{ id: string }>(
+      'SELECT id FROM medical_records WHERE pet_id = ANY($1::uuid[])',
+      [petIds],
+    );
+    const recordIds = records.map((row) => row.id);
+    const { rows: explained } = await medical.query<{ record_id: string }>(
+      'SELECT record_id FROM lab_result_explanations WHERE record_id = ANY($1::uuid[])',
+      [recordIds],
+    );
+    const subjects = [...documentIds, ...recordIds];
 
     const deadline = Date.now() + OUTBOX_DRAIN_TIMEOUT_MS;
-    while (documentIds.length > 0 && Date.now() < deadline) {
+    while (subjects.length > 0 && Date.now() < deadline) {
       const { rows } = await medical.query<{ pending: number }>(
         "SELECT count(*)::int AS pending FROM outbox WHERE payload->>'subject' = ANY($1::text[]) AND published_at IS NULL",
-        [documentIds],
+        [subjects],
       );
       if (rows[0].pending === 0) break;
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
     }
 
-    if (documentIds.length > 0 || this.messageIds.size > 0) {
+    if (subjects.length > 0 || this.messageIds.size > 0) {
       const bus = new EventBus();
       const tracked = (message: Parameters<typeof messageSubject>[0]) =>
-        documentIds.includes(messageSubject(message) ?? '') ||
+        subjects.includes(messageSubject(message) ?? '') ||
         this.messageIds.has(String(message.properties.messageId));
       try {
         await bus.takeWhere(AI_UPLOADED_QUEUE, tracked);
         await bus.takeWhere(DOCUMENT_EVENTS_DLQ, tracked);
+        if (explained.length > 0) {
+          await bus.takeWhere(AI_LAB_EXPLANATION_QUEUE, tracked);
+          await bus.takeWhere(LAB_EXPLANATION_EVENTS_DLQ, tracked);
+        }
       } finally {
         await bus.close();
       }
@@ -245,12 +264,8 @@ export class TestData {
     await medical.query('BEGIN');
     try {
       await medical.query('SET LOCAL session_replication_role = replica');
-      const { rows: records } = await medical.query<{ id: string }>(
-        'SELECT id FROM medical_records WHERE pet_id = ANY($1::uuid[])',
-        [petIds],
-      );
-      const recordIds = records.map((row) => row.id);
       for (const table of [
+        'lab_result_explanations',
         'record_attachments',
         'lab_results',
         'prescriptions',
@@ -271,7 +286,7 @@ export class TestData {
       );
       await medical.query(
         "DELETE FROM outbox WHERE payload->>'subject' = ANY($1::text[])",
-        [documentIds],
+        [subjects],
       );
       await medical.query(
         'DELETE FROM documents WHERE pet_id = ANY($1::uuid[])',

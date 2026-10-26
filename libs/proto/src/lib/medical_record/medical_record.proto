@@ -11,6 +11,7 @@ service MedicalRecordService {
   rpc ListVaccinations (ListVaccinationsRequest) returns (ListVaccinationsResponse);
   rpc ListPrescriptions (ListPrescriptionsRequest) returns (ListPrescriptionsResponse);
   rpc ListLabResults (ListLabResultsRequest) returns (ListLabResultsResponse);
+  rpc GetLabExplanation (GetLabExplanationRequest) returns (LabExplanationResponse);
 
   rpc RegisterDocument (RegisterDocumentRequest) returns (DocumentResponse);
   rpc GetDocument (GetDocumentRequest) returns (DocumentResponse);
@@ -50,6 +51,13 @@ enum LabResultFlag {
   NORMAL = 1;
   LOW = 2;
   HIGH = 3;
+}
+
+enum LabExplanationStatus {
+  LAB_EXPLANATION_STATUS_UNSPECIFIED = 0;
+  LAB_EXPLANATION_PENDING = 1;
+  LAB_EXPLANATION_READY = 2;
+  LAB_EXPLANATION_FAILED = 3;
 }
 
 // Dosya İÇERİĞİ değil, referansı taşınır.
@@ -293,6 +301,28 @@ message ListLabResultsResponse {
   int32 total = 2;
   int32 page = 3;
   int32 page_size = 4;
+}
+
+message LabExplanationItem {
+  string test_name = 1;
+  string explanation = 2;
+}
+
+message LabExplanation {
+  string summary = 1;
+  repeated LabExplanationItem items = 2;
+}
+
+message GetLabExplanationRequest {
+  string record_id = 1;
+}
+
+message LabExplanationResponse {
+  LabExplanationStatus status = 1;
+  string summary = 2;
+  repeated LabExplanationItem items = 3;
+  double confidence = 4;
+  string generated_at = 5;
 }
 
 // ---------- Klinik onayı (human-in-the-loop) ----------

@@ -13,6 +13,7 @@ import {
   CreateRecordRequestDto,
   GetDocumentFileRequestDto,
   GetDocumentRequestDto,
+  GetLabExplanationRequestDto,
   ListDocumentsByPetRequestDto,
   ListDraftReviewsRequestDto,
   ListLabResultsRequestDto,
@@ -54,6 +55,13 @@ export class ApiMedicalRecordController {
     @RequestWithParams('query') request: ListLabResultsRequestDto,
   ): Promise<BaseResponse<medicalRecord.ListLabResultsResponse>> {
     return this.medicalRecordService.listLabResults(request);
+  }
+
+  @Get('records/:recordId/explanation')
+  getLabExplanation(
+    @Param() request: GetLabExplanationRequestDto,
+  ): Promise<BaseResponse<medicalRecord.LabExplanationResponse>> {
+    return this.medicalRecordService.getLabExplanation(request);
   }
 
   @Post('pets/:petId/records')

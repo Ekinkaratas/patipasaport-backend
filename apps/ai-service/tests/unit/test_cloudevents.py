@@ -45,12 +45,89 @@ UUID_V4_LOWER = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 )
 MISSING = object()
+UNREGISTERED_TYPE = "com.patipasaport.unknown.v1"
 DOCUMENT_TYPES = [
     DOCUMENT_UPLOADED,
     DOCUMENT_PROCESSING_STARTED,
     DOCUMENT_ANALYZED,
     DOCUMENT_ANALYSIS_FAILED,
 ]
+LAB_TYPES = [
+    LAB_EXPLANATION_REQUESTED,
+    LAB_EXPLANATION_GENERATED,
+    LAB_EXPLANATION_FAILED,
+]
+LAB_REQUESTED_DATA: dict[str, Any] = {
+    "recordId": RECORD_ID,
+    "title": "Biyokimya paneli",
+    "sampledAt": "2026-10-20",
+    "species": "CAT",
+    "birthDate": "2019-05-01",
+    "isBirthDateEstimated": True,
+    "items": [
+        {
+            "testName": "ALT",
+            "value": "142",
+            "unit": "U/L",
+            "referenceRange": "12-130",
+            "flag": "HIGH",
+        },
+        {
+            "testName": "Kreatinin",
+            "value": "1.4",
+            "unit": "mg/dL",
+            "referenceRange": "0.8-2.4",
+            "flag": "NORMAL",
+        },
+    ],
+}
+LAB_GENERATED_DATA: dict[str, Any] = {
+    "recordId": RECORD_ID,
+    "modelVersion": "gemma-4-31b/explain-v1",
+    "confidence": 0.82,
+    "explanation": {
+        "summary": (
+            "Tahlildeki değerlerin çoğu referans aralığında. Karaciğerle ilgili ALT "
+            "değeri aralığın biraz üzerinde."
+        ),
+        "items": [
+            {
+                "testName": "ALT",
+                "explanation": (
+                    "ALT, karaciğer hücrelerinde bulunan bir enzimdir. Hafif "
+                    "yükseklik farklı nedenlerle görülebilir; ne anlama geldiğini "
+                    "veteriner hekiminiz muayene bulgularıyla birlikte "
+                    "değerlendirir."
+                ),
+            }
+        ],
+    },
+    "generatedAt": "2026-10-21T09:30:08.000Z",
+}
+CONTRACT_LAB_REQUESTED_EXAMPLE = b"""{
+  "specversion": "1.0",
+  "id": "0f6c1d3e-8a2b-4c5d-9e7f-1a2b3c4d5e6f",
+  "source": "/patipasaport/medical-record",
+  "type": "com.patipasaport.lab_explanation.requested.v1",
+  "subject": "7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
+  "time": "2026-10-21T09:30:00.000Z",
+  "datacontenttype": "application/json",
+  "dataschema": "urn:patipasaport:events:LabExplanationRequested:v1",
+  "data": {
+    "recordId": "7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
+    "title": "Biyokimya paneli",
+    "sampledAt": "2026-10-20",
+    "species": "CAT",
+    "birthDate": "2019-05-01",
+    "isBirthDateEstimated": true,
+    "items": [
+      { "testName": "ALT", "value": "142", "unit": "U/L",
+        "referenceRange": "12-130", "flag": "HIGH" },
+      { "testName": "Kreatinin", "value": "1.4", "unit": "mg/dL",
+        "referenceRange": "0.8-2.4", "flag": "NORMAL" }
+    ]
+  }
+}"""
 ENVELOPE_KEYS = [
     "specversion",
     "id",
@@ -227,7 +304,56 @@ def failed_message() -> events_pb2.DocumentAnalysisFailed:
     )
 
 
-# Verilen belge türü için alanları dolu örnek proto mesajını döndürür.
+# Sözleşme 16.1'deki alanlarla dolu bir LabExplanationRequested üretir.
+def lab_requested_message() -> events_pb2.LabExplanationRequested:
+    return events_pb2.LabExplanationRequested(
+        record_id=RECORD_ID,
+        title="Biyokimya paneli",
+        sampled_at="2026-10-20",
+        species="CAT",
+        birth_date="2019-05-01",
+        is_birth_date_estimated=True,
+        items=[
+            medical_record_pb2.LabResultItem(
+                test_name="ALT",
+                value="142",
+                unit="U/L",
+                reference_range="12-130",
+                flag=medical_record_pb2.LabResultFlag.HIGH,
+            ),
+            medical_record_pb2.LabResultItem(
+                test_name="Kreatinin",
+                value="1.4",
+                unit="mg/dL",
+                reference_range="0.8-2.4",
+                flag=medical_record_pb2.LabResultFlag.NORMAL,
+            ),
+        ],
+    )
+
+
+# Sözleşme 16.1'deki alanlarla dolu bir LabExplanationGenerated üretir.
+def lab_generated_message() -> events_pb2.LabExplanationGenerated:
+    return events_pb2.LabExplanationGenerated(
+        record_id=RECORD_ID,
+        model_version=LAB_GENERATED_DATA["modelVersion"],
+        confidence=LAB_GENERATED_DATA["confidence"],
+        explanation=medical_record_pb2.LabExplanation(
+            summary=LAB_GENERATED_DATA["explanation"]["summary"],
+            items=[
+                medical_record_pb2.LabExplanationItem(
+                    test_name="ALT",
+                    explanation=LAB_GENERATED_DATA["explanation"]["items"][0][
+                        "explanation"
+                    ],
+                )
+            ],
+        ),
+        generated_at=LAB_GENERATED_DATA["generatedAt"],
+    )
+
+
+# Verilen tür için alanları dolu örnek proto mesajını döndürür.
 def sample_message(event_type: str) -> Message:
     samples: dict[str, Message] = {
         DOCUMENT_UPLOADED: uploaded_message(),
@@ -238,6 +364,15 @@ def sample_message(event_type: str) -> Message:
         ),
         DOCUMENT_ANALYZED: analyzed_message(),
         DOCUMENT_ANALYSIS_FAILED: failed_message(),
+        LAB_EXPLANATION_REQUESTED: lab_requested_message(),
+        LAB_EXPLANATION_GENERATED: lab_generated_message(),
+        LAB_EXPLANATION_FAILED: events_pb2.LabExplanationFailed(
+            record_id=RECORD_ID,
+            model_version=LAB_GENERATED_DATA["modelVersion"],
+            error_code="AI_PROVIDER_UNAVAILABLE",
+            error_message="AI API'ye 5 denemede ulaşılamadı",
+            failed_at="2026-10-21T09:32:30.000Z",
+        ),
     }
     return samples[event_type]
 
@@ -269,6 +404,20 @@ def uploaded_body(subject: object = DOCUMENT_ID, **data_changes: Any) -> bytes:
     data = {**UPLOADED_DATA, **data_changes}
     data = {key: value for key, value in data.items() if value is not MISSING}
     return encode(make_envelope(subject=subject, data=data))
+
+
+# Tahlil açıklaması isteğinin alanlarını değiştirip gövde üretir; MISSING alanı siler.
+def lab_requested_body(subject: object = RECORD_ID, **data_changes: Any) -> bytes:
+    data = {**LAB_REQUESTED_DATA, **data_changes}
+    data = {key: value for key, value in data.items() if value is not MISSING}
+    return encode(
+        make_envelope(
+            type=LAB_EXPLANATION_REQUESTED,
+            dataschema=DATASCHEMAS[LAB_EXPLANATION_REQUESTED],
+            subject=subject,
+            data=data,
+        )
+    )
 
 
 # Verilen veriyle document.analyzed türünde bir zarfı gövdeye çevirir.
@@ -411,14 +560,17 @@ INVALID_CASES = [
         "type-kayit-defterinde-yok",
         encode(
             make_envelope(
-                type=LAB_EXPLANATION_REQUESTED,
-                dataschema=DATASCHEMAS[LAB_EXPLANATION_REQUESTED],
-                subject=RECORD_ID,
-                data={"recordId": RECORD_ID},
+                type=UNREGISTERED_TYPE,
+                dataschema="urn:patipasaport:events:Unknown:v1",
             )
         ),
         "UNEXPECTED_TYPE",
-        LAB_EXPLANATION_REQUESTED,
+        UNREGISTERED_TYPE,
+    ),
+    invalid(
+        "lab-turu-belge-kuyrugunda",
+        lab_requested_body(),
+        "UNEXPECTED_TYPE",
     ),
     invalid(
         "dataschema-gizli",
@@ -499,6 +651,55 @@ INVALID_CASES = [
         uploaded_body(subject=f" {DOCUMENT_ID} "),
         "SUBJECT_MISMATCH",
     ),
+    invalid(
+        "lab-kimlik-alani-yok",
+        lab_requested_body(recordId=MISSING),
+        "INVALID_ID",
+        LAB_EXPLANATION_REQUESTED,
+    ),
+    invalid(
+        "lab-kimlik-uuid-v1",
+        lab_requested_body(subject=BAD_IDS["uuid-v1"], recordId=BAD_IDS["uuid-v1"]),
+        "INVALID_ID",
+        LAB_EXPLANATION_REQUESTED,
+    ),
+    invalid(
+        "lab-subject-baska-uuid",
+        lab_requested_body(subject=OTHER_DOCUMENT_ID),
+        "SUBJECT_MISMATCH",
+        LAB_EXPLANATION_REQUESTED,
+    ),
+    invalid(
+        "lab-veri-mantiksal-alan-metin",
+        lab_requested_body(isBirthDateEstimated=SECRET_MARKER),
+        "INVALID_DATA",
+        LAB_EXPLANATION_REQUESTED,
+    ),
+    invalid(
+        "lab-veri-kalemler-metin",
+        lab_requested_body(items=SECRET_MARKER),
+        "INVALID_DATA",
+        LAB_EXPLANATION_REQUESTED,
+    ),
+    invalid(
+        "lab-veri-kalem-null",
+        lab_requested_body(items=[None]),
+        "INVALID_DATA",
+        LAB_EXPLANATION_REQUESTED,
+    ),
+    invalid(
+        "lab-dataschema-belge",
+        encode(
+            make_envelope(
+                type=LAB_EXPLANATION_REQUESTED,
+                dataschema=DATASCHEMAS[DOCUMENT_UPLOADED],
+                subject=RECORD_ID,
+                data=dict(LAB_REQUESTED_DATA),
+            )
+        ),
+        "INVALID_ENVELOPE",
+        LAB_EXPLANATION_REQUESTED,
+    ),
 ]
 PRECEDENCE_CASES = [
     invalid(
@@ -552,22 +753,29 @@ def test_event_types_and_dataschemas_match_contract() -> None:
     assert len(DATASCHEMAS) == len(CONTRACT_EVENT_TYPES)
 
 
-# Kayıt defterinde yalnızca proto sınıfı olan dört belge türünün bulunduğunu doğrular.
-def test_event_specs_hold_only_document_types() -> None:
+# Kayıt defterindeki yedi türün proto sınıfını ve kimlik alanını doğrular.
+def test_event_specs_hold_document_and_lab_types() -> None:
     message_classes = {
-        DOCUMENT_UPLOADED: events_pb2.DocumentUploaded,
-        DOCUMENT_PROCESSING_STARTED: events_pb2.DocumentProcessingStarted,
-        DOCUMENT_ANALYZED: events_pb2.DocumentAnalyzed,
-        DOCUMENT_ANALYSIS_FAILED: events_pb2.DocumentAnalysisFailed,
+        DOCUMENT_UPLOADED: (events_pb2.DocumentUploaded, "document_id"),
+        DOCUMENT_PROCESSING_STARTED: (
+            events_pb2.DocumentProcessingStarted,
+            "document_id",
+        ),
+        DOCUMENT_ANALYZED: (events_pb2.DocumentAnalyzed, "document_id"),
+        DOCUMENT_ANALYSIS_FAILED: (events_pb2.DocumentAnalysisFailed, "document_id"),
+        LAB_EXPLANATION_REQUESTED: (events_pb2.LabExplanationRequested, "record_id"),
+        LAB_EXPLANATION_GENERATED: (events_pb2.LabExplanationGenerated, "record_id"),
+        LAB_EXPLANATION_FAILED: (events_pb2.LabExplanationFailed, "record_id"),
     }
 
     assert list(EVENT_SPECS) == list(message_classes)
-    for event_type, message_class in message_classes.items():
+    assert set(EVENT_SPECS) == set(DATASCHEMAS)
+    for event_type, (message_class, id_field) in message_classes.items():
         assert EVENT_SPECS[event_type] == EventSpec(
             type=event_type,
             dataschema=DATASCHEMAS[event_type],
             message_class=message_class,
-            id_field="document_id",
+            id_field=id_field,
         )
 
 
@@ -599,6 +807,58 @@ def test_build_then_parse_round_trip(event_type: str) -> None:
         data=message,
     )
     assert type(parsed.data) is type(message)
+
+
+# Üç tahlil açıklaması türünde zarfın recordId ile kurulup aynen okunduğunu doğrular.
+@pytest.mark.parametrize("event_type", LAB_TYPES)
+def test_lab_build_then_parse_round_trip(event_type: str) -> None:
+    message = sample_message(event_type)
+
+    built = build_event(message, event_type, now=FIXED_NOW, event_id=EVENT_ID)
+    parsed = parse_event(built.body, event_type)
+
+    assert built.subject == RECORD_ID
+    assert json.loads(built.body)["dataschema"] == DATASCHEMAS[event_type]
+    assert parsed == IncomingEvent(
+        id=EVENT_ID,
+        type=event_type,
+        source=SOURCE,
+        subject=RECORD_ID,
+        time=FIXED_NOW,
+        data=message,
+    )
+
+
+# Sözleşme 16.1'deki lab_explanation.requested örneğinin eksiksiz okunduğunu doğrular.
+def test_parse_event_reads_contract_lab_requested_example() -> None:
+    event = parse_event(CONTRACT_LAB_REQUESTED_EXAMPLE, LAB_EXPLANATION_REQUESTED)
+
+    assert event == IncomingEvent(
+        id="0f6c1d3e-8a2b-4c5d-9e7f-1a2b3c4d5e6f",
+        type=LAB_EXPLANATION_REQUESTED,
+        source="/patipasaport/medical-record",
+        subject=RECORD_ID,
+        time=datetime(2026, 10, 21, 9, 30, tzinfo=UTC),
+        data=lab_requested_message(),
+    )
+
+
+# generated olayının data'sının sözleşme 16.1'deki örnekle aynı olduğunu doğrular.
+def test_build_event_writes_contract_lab_generated_data() -> None:
+    event = build_event(
+        lab_generated_message(),
+        LAB_EXPLANATION_GENERATED,
+        now=FIXED_NOW,
+        event_id=EVENT_ID,
+    )
+
+    envelope = json.loads(event.body)
+    assert envelope["type"] == "com.patipasaport.lab_explanation.generated.v1"
+    assert envelope["subject"] == RECORD_ID
+    assert envelope["dataschema"] == (
+        "urn:patipasaport:events:LabExplanationGenerated:v1"
+    )
+    assert envelope["data"] == LAB_GENERATED_DATA
 
 
 # Zarf alanlarının sözleşmedeki sırayla ve doğru değerlerle yazıldığını doğrular.
@@ -711,7 +971,12 @@ def test_build_event_omits_default_valued_fields() -> None:
     [
         pytest.param(uploaded_message(), "com.patipasaport.unknown.v1", id="tur-yok"),
         pytest.param(
-            analyzed_message(), LAB_EXPLANATION_GENERATED, id="tur-kayitli-degil"
+            analyzed_message(), LAB_EXPLANATION_GENERATED, id="lab-turu-yanlis-sinif"
+        ),
+        pytest.param(
+            events_pb2.LabExplanationFailed(record_id=" "),
+            LAB_EXPLANATION_FAILED,
+            id="lab-bosluk-kimlik",
         ),
         pytest.param(uploaded_message(), DOCUMENT_ANALYZED, id="yanlis-sinif"),
         pytest.param(dict(UPLOADED_DATA), DOCUMENT_UPLOADED, id="proto-degil"),
@@ -806,6 +1071,17 @@ def test_parse_event_accepts_enum_names_and_numbers() -> None:
             ),
         ),
     )
+
+
+# Tanınmayan flag adının ParseDict ile UNSPECIFIED olarak okunduğunu doğrular.
+def test_unknown_flag_name_is_read_as_unspecified() -> None:
+    body = lab_requested_body(items=[{"testName": "ALT", "flag": SECRET_MARKER}])
+
+    event = parse_event(body, LAB_EXPLANATION_REQUESTED)
+
+    assert isinstance(event.data, events_pb2.LabExplanationRequested)
+    [item] = event.data.items
+    assert item.flag == medical_record_pb2.LabResultFlag.LAB_RESULT_FLAG_UNSPECIFIED
 
 
 # Büyük harfli UUID v4 kimliğin subject ile birebir aynıysa kabul edildiğini doğrular.

@@ -8,3 +8,7 @@ export {
   BUSINESS_TIME_ZONE,
   todayInBusinessTimeZone,
 } from './shared/pet-fields.decorator';
+export {
+  isPlainMultilineText,
+  isPlainText,
+} from './shared/medical-fields.decorator';

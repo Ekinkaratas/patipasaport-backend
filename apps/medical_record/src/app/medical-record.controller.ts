@@ -4,6 +4,7 @@ import { AuthUser, CurrentUser, Roles } from '@libs/common';
 import {
   CreateRecordRequestDto,
   GetDocumentRequestDto,
+  GetLabExplanationRequestDto,
   ListDocumentsByPetRequestDto,
   ListDraftReviewsRequestDto,
   ListLabResultsRequestDto,
@@ -63,6 +64,15 @@ export class MedicalRecordController {
     @CurrentUser() user: AuthUser,
   ): Promise<medicalRecord.ListLabResultsResponse> {
     return this.medicalRecordService.listLabResults(request, user);
+  }
+
+  @Roles(['PET_OWNER'])
+  @GrpcMethod(medicalRecord.MEDICAL_RECORD_SERVICE_NAME, 'GetLabExplanation')
+  async getLabExplanation(
+    @Payload() request: GetLabExplanationRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<medicalRecord.LabExplanationResponse> {
+    return this.medicalRecordService.getLabExplanation(request, user);
   }
 
   @Roles(['CLINIC'])

@@ -43,11 +43,11 @@ const isControlCharacter = (code: number): boolean =>
 
 const isLineBreak = (code: number): boolean => code === 0x0a || code === 0x0d;
 
-const isPlainText = (value: unknown): boolean =>
+export const isPlainText = (value: unknown): boolean =>
   typeof value === 'string' &&
   [...value].every((char) => !isControlCharacter(char.charCodeAt(0)));
 
-const isPlainMultilineText = (value: unknown): boolean =>
+export const isPlainMultilineText = (value: unknown): boolean =>
   typeof value === 'string' &&
   [...value].every((char) => {
     const code = char.charCodeAt(0);

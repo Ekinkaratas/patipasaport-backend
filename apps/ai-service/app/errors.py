@@ -31,6 +31,13 @@ ERROR_MESSAGES: Mapping[str, str] = MappingProxyType(
     }
 )
 
+EXPLANATION_ERROR_MESSAGES: Mapping[str, str] = MappingProxyType(
+    {
+        **ERROR_MESSAGES,
+        AI_PROVIDER_UNAVAILABLE: "AI API'ye 5 denemede de ulaşılamadı",
+    }
+)
+
 
 class TransientError(Exception):
     pass

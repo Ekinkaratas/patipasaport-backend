@@ -7,7 +7,12 @@ from typing import Any
 import pytest
 
 from app.generated import medical_record_pb2
-from app.llm.schemas import EXTRACTION_SCHEMA, EXTRACTION_SCHEMA_NAME
+from app.llm.schemas import (
+    EXPLANATION_SCHEMA,
+    EXPLANATION_SCHEMA_NAME,
+    EXTRACTION_SCHEMA,
+    EXTRACTION_SCHEMA_NAME,
+)
 
 ALLOWED_KEYWORDS = frozenset(
     {"type", "properties", "required", "additionalProperties", "items", "enum", "anyOf"}
@@ -352,3 +357,111 @@ def test_schema_rejects_invalid_answers(mutate: Any, expected_path: str) -> None
     example = _completed_contract_example()
     mutate(example)
     assert expected_path in _violations(EXTRACTION_SCHEMA, example)
+
+
+EXPLANATION_EXAMPLE: dict[str, Any] = {
+    "confidence": 0.82,
+    "summary": "Tahlildeki değerlerin çoğu referans aralığında.",
+    "items": [
+        {
+            "testName": "ALT",
+            "explanation": "ALT, karaciğer hücrelerinde bulunan bir enzimdir.",
+        }
+    ],
+}
+
+
+# Açıklama şemasının adı lab_explanation'dır.
+def test_explanation_schema_name() -> None:
+    assert EXPLANATION_SCHEMA_NAME == "lab_explanation"
+
+
+# Açıklama şeması JSON'a çevrilip geri okunabilir.
+def test_explanation_schema_is_json_serializable() -> None:
+    text = json.dumps(EXPLANATION_SCHEMA, ensure_ascii=False)
+
+    assert json.loads(text) == EXPLANATION_SCHEMA
+
+
+# Kök nesne confidence, summary ve items alanlarını bu sırayla ve türlerle tanımlar.
+def test_explanation_root_fields() -> None:
+    properties = EXPLANATION_SCHEMA["properties"]
+
+    assert EXPLANATION_SCHEMA["type"] == "object"
+    assert list(properties) == ["confidence", "summary", "items"]
+    assert properties["confidence"] == {"type": "number"}
+    assert properties["summary"] == {"type": "string"}
+    assert properties["items"]["type"] == "array"
+    assert properties["items"]["items"]["properties"] == {
+        "testName": {"type": "string"},
+        "explanation": {"type": "string"},
+    }
+
+
+# Açıklama şemasının her düğümü bilinen anahtar kelimelerle geçerli bir yapı kurar.
+def test_explanation_schema_has_valid_structure() -> None:
+    for path, node in _walk(EXPLANATION_SCHEMA):
+        assert set(node) <= ALLOWED_KEYWORDS, path
+        assert "anyOf" not in node, path
+        assert node["type"] in JSON_TYPES, path
+        if node["type"] == "array":
+            assert isinstance(node["items"], dict), path
+
+
+# Açıklama şemasındaki iki nesne de katıdır, bütün alanları zorunludur.
+def test_explanation_objects_are_strict() -> None:
+    objects = [
+        (path, node)
+        for path, node in _walk(EXPLANATION_SCHEMA)
+        if node.get("type") == "object"
+    ]
+
+    assert len(objects) == 2
+    for path, node in objects:
+        assert node["additionalProperties"] is False, path
+        assert node["required"] == list(node["properties"]), path
+        for name in node["properties"]:
+            assert LOWER_CAMEL_CASE.fullmatch(name), f"{path}.{name}"
+
+
+# Açıklama alanları LabExplanation ve LabExplanationItem'ın JSON adlarıyla aynıdır.
+def test_explanation_fields_match_proto_json_names() -> None:
+    properties = EXPLANATION_SCHEMA["properties"]
+    item = properties["items"]["items"]
+
+    assert set(properties) - {"confidence"} == _json_names(
+        medical_record_pb2.LabExplanation
+    )
+    assert set(item["properties"]) == _json_names(medical_record_pb2.LabExplanationItem)
+
+
+# Sözleşme 7.4 biçimindeki çıktı ve boş items katı şemaya uyar.
+def test_explanation_examples_conform() -> None:
+    empty = {**EXPLANATION_EXAMPLE, "items": []}
+
+    assert _violations(EXPLANATION_SCHEMA, EXPLANATION_EXAMPLE) == []
+    assert _violations(EXPLANATION_SCHEMA, empty) == []
+
+
+# Açıklama şeması fazla alanı, eksik alanı ve yanlış türü kabul etmez.
+@pytest.mark.parametrize(
+    ("mutate", "expected_path"),
+    [
+        (lambda example: example.update({"diagnosis": "x"}), "$.diagnosis"),
+        (lambda example: example.pop("summary"), "$.summary"),
+        (lambda example: example["items"][0].pop("testName"), "$.items[0].testName"),
+        (
+            lambda example: example["items"][0].update({"severity": "x"}),
+            "$.items[0].severity",
+        ),
+        (lambda example: example.update({"confidence": "0.8"}), "$.confidence"),
+        (lambda example: example.update({"items": None}), "$.items"),
+    ],
+)
+def test_explanation_schema_rejects_invalid_answers(
+    mutate: Any, expected_path: str
+) -> None:
+    example = copy.deepcopy(EXPLANATION_EXAMPLE)
+    mutate(example)
+
+    assert expected_path in _violations(EXPLANATION_SCHEMA, example)

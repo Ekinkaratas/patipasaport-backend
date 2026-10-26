@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from app.config import ConfigError, Settings, load_settings
 from app.documents.pipeline import DocumentPipeline
+from app.explanations.pipeline import ExplanationPipeline
 from app.llm.client import LlmClient, create_llm_client
 from app.logs import configure_logging, get_logger
 from app.messaging.consumer import Flow
@@ -27,7 +28,7 @@ async def _close_llm_after_failure(llm: LlmClient, logger: logging.Logger) -> No
         )
 
 
-# Ayarları, belge okuma akışını ve mesajlaşmayı lifespan içinde kuran uygulamayı kurar.
+# Ayarları, iki akışı ve mesajlaşmayı lifespan içinde kuran uygulamayı oluşturur.
 def create_app(
     settings_loader: Callable[[], Settings] = load_settings,
     messaging_starter: MessagingStarter = start_messaging,
@@ -57,10 +58,15 @@ def create_app(
             )
             raise
         try:
-            pipeline = DocumentPipeline(storage, llm, settings.ai_model)
-            flows = [pipeline.flow(Topology())]
+            topology = Topology()
+            document = DocumentPipeline(storage, llm, settings.ai_model)
+            explanation = ExplanationPipeline(llm, settings.ai_model)
+            flows = [document.flow(topology), explanation.flow(topology)]
         except BaseException as error:
-            logger.error("Belge okuma akışı kurulamadı (%s)", type(error).__name__)
+            logger.error(
+                "Belge okuma ya da tahlil açıklama akışı kurulamadı (%s)",
+                type(error).__name__,
+            )
             await _close_llm_after_failure(llm, logger)
             raise
         try:

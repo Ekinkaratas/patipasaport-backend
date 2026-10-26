@@ -16,6 +16,7 @@ SPEC_VERSION = "1.0"
 CONTENT_TYPE = "application/cloudevents+json"
 DATA_CONTENT_TYPE = "application/json"
 SOURCE = "/patipasaport/ai-service"
+INVALID_DATA = "INVALID_DATA"
 
 DOCUMENT_UPLOADED = "com.patipasaport.document.uploaded.v1"
 DOCUMENT_PROCESSING_STARTED = "com.patipasaport.document.processing_started.v1"
@@ -72,6 +73,24 @@ EVENT_SPECS: Mapping[str, EventSpec] = MappingProxyType(
                 dataschema=DATASCHEMAS[DOCUMENT_ANALYSIS_FAILED],
                 message_class=events_pb2.DocumentAnalysisFailed,
                 id_field="document_id",
+            ),
+            EventSpec(
+                type=LAB_EXPLANATION_REQUESTED,
+                dataschema=DATASCHEMAS[LAB_EXPLANATION_REQUESTED],
+                message_class=events_pb2.LabExplanationRequested,
+                id_field="record_id",
+            ),
+            EventSpec(
+                type=LAB_EXPLANATION_GENERATED,
+                dataschema=DATASCHEMAS[LAB_EXPLANATION_GENERATED],
+                message_class=events_pb2.LabExplanationGenerated,
+                id_field="record_id",
+            ),
+            EventSpec(
+                type=LAB_EXPLANATION_FAILED,
+                dataschema=DATASCHEMAS[LAB_EXPLANATION_FAILED],
+                message_class=events_pb2.LabExplanationFailed,
+                id_field="record_id",
             ),
         )
     }
@@ -159,7 +178,7 @@ def _parse_data(data: dict[str, Any], message_class: type[Message]) -> Message:
     try:
         return json_format.ParseDict(data, message, ignore_unknown_fields=True)
     except json_format.ParseError, ValueError, TypeError, OverflowError:
-        raise InvalidMessageError("INVALID_DATA") from None
+        raise InvalidMessageError(INVALID_DATA) from None
 
 
 # Proto mesajını CloudEvents zarfına koyup yayınlanacak JSON gövdesini üretir.

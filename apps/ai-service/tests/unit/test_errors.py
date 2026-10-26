@@ -7,6 +7,7 @@ from app.errors import (
     AI_PROVIDER_REJECTED,
     AI_PROVIDER_UNAVAILABLE,
     ERROR_MESSAGES,
+    EXPLANATION_ERROR_MESSAGES,
     FILE_INTEGRITY_ERROR,
     FILE_NOT_FOUND,
     INTERNAL_ERROR,
@@ -76,6 +77,19 @@ def test_too_many_pages_message_states_eight_page_limit() -> None:
 def test_error_messages_are_read_only() -> None:
     with pytest.raises(TypeError):
         cast(dict[str, str], ERROR_MESSAGES)[FILE_NOT_FOUND] = "Değiştirilmiş"
+
+
+# Açıklama tablosunun yalnızca AI_PROVIDER_UNAVAILABLE mesajında ayrıştığını doğrular.
+def test_explanation_messages_differ_only_in_unavailable_message() -> None:
+    assert set(EXPLANATION_ERROR_MESSAGES) == set(CONTRACT_CODES)
+    for code in CONTRACT_CODES:
+        if code != AI_PROVIDER_UNAVAILABLE:
+            assert EXPLANATION_ERROR_MESSAGES[code] == ERROR_MESSAGES[code]
+    message = EXPLANATION_ERROR_MESSAGES[AI_PROVIDER_UNAVAILABLE]
+    assert message == "AI API'ye 5 denemede de ulaşılamadı"
+    assert "depo" not in message
+    with pytest.raises(TypeError):
+        cast(dict[str, str], EXPLANATION_ERROR_MESSAGES)[INTERNAL_ERROR] = "X"
 
 
 # PermanentError'ın kodu taşıdığını ve str() ile yalnızca kodu verdiğini doğrular.

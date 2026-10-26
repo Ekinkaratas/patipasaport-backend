@@ -9,7 +9,7 @@ Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL fore
 | Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`, `stock_sales`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `UpdateStockItem`, `AdjustStockItem`, `DeleteStockItem`, `CreateStockSale`, `ListStockSales`, `CancelStockSale`, `GetStockSalesSummary`, `GetClinicPetOverview`). `UploadPetResult` uygulandı: gateway dosyayı SeaweedFS'e yazar, clinics belge referansını medical_record `RegisterDocument`'a iletir (bkz. Medical Record bölümü) |
 | Pets | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`) |
 | Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor |
-| Medical Record | ✅ Uygulandı — proto, DTO'lar, CloudEvents, Prisma schema + migration (trigger'larla), 10 gRPC metodu, outbox + RabbitMQ, clinics.UploadPetResult ve gateway uçları (yükleme dahil); unit testler (medical_record 172, gateway 15) ve e2e testler (medical_record-e2e 11, gateway-e2e yükleme ve kayıt uçları) yazıldı. AI sözleşme dokümanı henüz yok |
+| Medical Record | ✅ Uygulandı — proto, DTO'lar, CloudEvents, Prisma schema + migration (trigger'larla), 10 gRPC metodu, outbox + RabbitMQ, clinics.UploadPetResult ve gateway uçları (yükleme dahil); unit testler (medical_record 172, gateway 15) ve e2e testler (medical_record-e2e 11, gateway-e2e yükleme ve kayıt uçları) yazıldı. AI sözleşme dokümanı henüz yok. Tahlil açıklaması eklendi: `lab_result_explanations` tablosu (migration `20261026100731_lab_result_explanations`), istek olayı, sonuç tüketicisi, `GetLabExplanation` ve `GET /records/:recordId/explanation` (bkz. Tahlil açıklaması bölümü) |
 
 ---
 
@@ -350,7 +350,7 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
 
 **Hata yanıtları:** dosya yok → `FILE_NOT_EMPTY`; tür desteklenmiyor → `MIME_TYPE_NOT_VALID`; 10 MB'tan büyük → `SIZE_BYTES_MAX|10485760` (hepsi `400`); rıza yok / başka klinik / pasif klinik → `403 FORBIDDEN`; depoya yazılamazsa → `503 SERVICE_UNAVAILABLE`.
 
-**Gateway'deki medical-record uçları:** `GET /pets/:petId/records|vaccinations|prescriptions|lab-results`, `GET /pets/:petId/documents`, `GET /documents/:id`, `GET /documents/:id/file` (hasta sahibi ve klinik); `POST /pets/:petId/records` (201), `GET /draft-reviews`, `POST /draft-reviews/:id/review` (yalnızca klinik). `RegisterDocument` dışarıya açık değildir.
+**Gateway'deki medical-record uçları:** `GET /pets/:petId/records|vaccinations|prescriptions|lab-results`, `GET /pets/:petId/documents`, `GET /documents/:id`, `GET /documents/:id/file` (hasta sahibi ve klinik); `POST /pets/:petId/records` (201), `GET /draft-reviews`, `POST /draft-reviews/:id/review` (yalnızca klinik); `GET /records/:recordId/explanation` (yalnızca hasta sahibi). `RegisterDocument` dışarıya açık değildir.
 
 ### Belge listesi ve dosya gönderimi
 
@@ -361,11 +361,29 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
   - Hatalar: yetki yoksa `403` / belge yoksa ya da başkasınınsa `404`; kayıt var ama dosya depoda yoksa `404 NOT_FOUND`; boyut ya da sha256 uyuşmazsa dosya gönderilmez, `500 INTERNAL_SERVER_ERROR` (error log'u yazılır); depoya ulaşılamazsa `503 SERVICE_UNAVAILABLE`.
   - Uç `Authorization` başlığı istediği için tarayıcıda düz bağlantıyla açılamaz; istemci dosyayı token'la indirip blob olarak gösterir ya da kaydeder.
 
+### Tahlil açıklaması
+
+AI, onaylı tahlil değerlerini hasta sahibi için sade Türkçeyle açıklar. Açıklamayı yalnızca hayvanın sahibi görür; klinik görmez ve onaylamaz.
+
+1. Türü `LAB_RESULT` olan bir kayıt oluşur: klinik taslağı onaylar (son içerik, düzeltildiyse düzeltilmiş hali, düzeltilmediyse AI önerisi) ya da tahlili `CreateRecord` ile elle girer.
+2. Transaction'dan önce `pets.GetPet` ile tür, doğum tarihi (YYYY-AA-GG) ve doğum tarihinin tahmini olup olmadığı alınır. `GetPet` herhangi bir hata verirse bu alanlar boş/`false` gönderilir, kayıt yine oluşur ve yalnızca kimlikleri içeren bir warn logu yazılır.
+3. Aynı transaction'da kayıt, `lab_result_explanations` satırı (`PENDING`) ve outbox olayı (`lab_explanation.requested.v1`, `subject` = kayıt id'si) yazılır. Olayın `data` alanında `recordId`, `title`, `sampledAt`, `species`, `birthDate`, `isBirthDateEstimated` ve kaydın kalemleri (`testName`, `value`, `unit`, `referenceRange`, `flag`; bayrak yoksa `LAB_RESULT_FLAG_UNSPECIFIED`) bulunur. Notlar, hayvanın adı, sahip ve klinik bilgisi mesaja konmaz.
+4. AI `lab_explanation.generated.v1` ya da `lab_explanation.failed.v1` yayınlar; medical-record satırı `READY` ya da `FAILED` yapar (tüketici kuralları aşağıda).
+5. Hasta sahibi `GET /records/:recordId/explanation` ile okur.
+
+Bu özellikten önce oluşmuş tahlil kayıtları için geriye dönük açıklama üretilmez; bu kayıtlarda uç `404` döner.
+
+**Okuma ucu** (`GetLabExplanation`):
+
+- Rolü `PET_OWNER` olmayan kullanıcı hiçbir sorgu yapılmadan `403 FORBIDDEN` alır.
+- Kayıt yoksa, kaydın hayvanı kullanıcıya ait değilse (`pets.GetPetOwner`) ya da kaydın açıklama satırı yoksa (tahlil olmayan ve eski kayıtlar dahil) `404 NOT_FOUND`.
+- Yanıt: `status` (`1` PENDING, `2` READY, `3` FAILED). `READY` ise `summary`, `items` (`testName`, `explanation`), `confidence` (0–1) ve `generatedAt` (ISO-8601) dolu gelir; `PENDING` ve `FAILED`'da yalnızca durum döner, hata kodu istemciye gösterilmez.
+
 
 ### Olaylar — CloudEvents + RabbitMQ
 
 - Zarf: CNCF **CloudEvents**, JSON yapılı biçim (`application/cloudevents+json`). Zorunlu alanlar: `id`, `source`, `type`, `specversion`, `subject`, `time`, `datacontenttype`, `dataschema`.
-  - `specversion`: `1.0`; `datacontenttype`: `application/json`; `subject`: `document_id`.
+  - `specversion`: `1.0`; `datacontenttype`: `application/json`; `subject`: belge olaylarında `document_id`, tahlil açıklaması olaylarında `record_id`.
   - `source`: medical-record için `/patipasaport/medical-record`, AI servisi için `/patipasaport/ai-service`.
   - `dataschema`: URN (örn. `urn:patipasaport:events:DocumentUploaded:v1`). Bir adres değil, şema adıdır; indirilmez, sunucu gerektirmez.
 - `data`: `events.proto`'daki mesajın protobuf resmi JSON eşlemesi; Node (ts-proto) ve FastAPI (`grpcio-tools`) aynı şemadan tip üretir.
@@ -377,6 +395,9 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
 | `com.patipasaport.document.processing_started.v1` | AI → medical-record | `DocumentProcessingStarted` |
 | `com.patipasaport.document.analyzed.v1` | AI → medical-record | `DocumentAnalyzed` |
 | `com.patipasaport.document.analysis_failed.v1` | AI → medical-record | `DocumentAnalysisFailed` |
+| `com.patipasaport.lab_explanation.requested.v1` | medical-record → AI | `LabExplanationRequested` |
+| `com.patipasaport.lab_explanation.generated.v1` | AI → medical-record | `LabExplanationGenerated` |
+| `com.patipasaport.lab_explanation.failed.v1` | AI → medical-record | `LabExplanationFailed` |
 
 **Güvenilirlik:** kalıcı quorum kuyruk, kalıcı mesaj, yayıncı onayı (publisher confirm), tüketicide iş bittikten sonra elle onay (manual ack), gecikmeli tekrar deneme ve dead-letter kuyruğu. Teslim en az bir kez (at-least-once) olduğundan tüketiciler idempotenttir: aynı `document_id` için ikinci sonuç yok sayılır.
 
@@ -390,6 +411,8 @@ Dosyalar bulut sağlayıcıya değil, kendi Docker ortamımızda çalışan Seaw
 | `patipasaport.events.dlx` | direct exchange | Routing key = hedef kuyruğun adı |
 | `ai-service.document-uploaded` | quorum kuyruk | ← `com.patipasaport.document.uploaded.v1` |
 | `medical-record.document-events` | quorum kuyruk | ← `processing_started.v1`, `analyzed.v1`, `analysis_failed.v1` |
+| `ai-service.lab-explanation-requested` | quorum kuyruk | ← `com.patipasaport.lab_explanation.requested.v1` |
+| `medical-record.lab-explanation-events` | quorum kuyruk | ← `lab_explanation.generated.v1`, `lab_explanation.failed.v1` |
 | `<kuyruk>.retry` | quorum kuyruk | `x-message-ttl` 30 sn; süre dolunca ana kuyruğa döner |
 | `<kuyruk>.dlq` | quorum kuyruk | Son durak; elle incelenir |
 
@@ -404,6 +427,18 @@ Ana ve retry kuyruklarının argümanları: `x-queue-type: quorum`, `x-dead-lett
 - Durum geçişleri: `processing_started` → `QUEUED` ise `PROCESSING`; `analyzed` → `QUEUED`/`PROCESSING` ise taslak açılır ve belge `DRAFT_READY` olur (tek transaction); `analysis_failed` → `QUEUED`/`PROCESSING` ise `FAILED`, `failure_reason` = `error_code`. Belge zaten son durumdaysa olay tekrar sayılır: onaylanır, yok sayılır.
 - AI önerisi olduğu gibi (`RecordContent`, sayısal enum'larla) saklanır; doğrulama klinik onayında yapılır.
 
+**Tahlil açıklaması tüketicisi** (`medical-record.lab-explanation-events`; tekrar deneme ve DLQ kuralları yukarıdakiyle aynı):
+
+- Tekrar denenmeden `.dlq`'ya gidenler: zarf geçersiz ya da tür beklenmiyor; `record_id` UUID v4 değil ya da `subject` ile uyuşmuyor; açıklama satırı yok; `generated`'da `model_version`, `failed`'da `error_code` boş ya da 64 karakterden uzun.
+- `generated`: satır `PENDING` değilse olay loglanıp yok sayılır. `PENDING` ise içerik doğrulanır. Geçerliyse satır `READY` olur; `summary`, `items`, `confidence` (0–1'e kırpılmış), `model_version` ve `generated_at` (olayın işlendiği an; olaydaki `generatedAt` kullanılmaz) yazılır. Geçersizse satır `FAILED` olur, `failure_reason` = `INVALID_AI_OUTPUT` (`model_version` da yazılır).
+- `failed`: satır `PENDING` ise `FAILED` olur, `failure_reason` = `error_code`; değilse olay yok sayılır.
+- Güncellemeler `status = PENDING` koşullu tek `UPDATE` ile yapılır; eş zamanlı ya da çift teslimde ilk sonuç kazanır.
+- İçerik kuralları (AI servisi de aynısını uygular):
+  - `confidence` sonlu bir sayı olmalıdır (NaN ve Infinity geçersiz), ardından [0, 1] aralığına kırpılır.
+  - `summary` zorunlu metindir; kırpıldıktan sonra 1–2000 karakter, satır sonu dışında kontrol karakteri yok.
+  - `items` 0–50 elemanlı dizidir. `testName` kırpılmış haliyle kaydın `lab_results.test_name` değerlerinden birine birebir (büyük/küçük harf duyarlı) eşit olmalı ve kontrol karakteri içermemelidir; `explanation` kırpıldıktan sonra 1–500 karakter, satır sonu serbest; aynı `testName` iki kez geçemez.
+  - Uzunluk ve karakter kuralları `RecordContent` doğrulamasındaki yardımcılarla aynıdır (varyasyon seçicisi sayılmaz). Değerler kırpılmış saklanır, şema dışı alanlar atılır.
+
 **Outbox:** medical-record RabbitMQ'ya doğrudan yazmaz. Olay, iş verisiyle aynı transaction'da `outbox` tablosuna yazılır. Gönderim döngüsü:
 
 - Saniyede bir, zamanı gelmiş en fazla 50 satırı `FOR UPDATE SKIP LOCKED` ile alır ve 60 sn'lik kira için `next_attempt_at`'i ileri atar. Böylece birden çok kopya aynı satırı göndermez ve gönderim sırasında transaction açık kalmaz.
@@ -416,6 +451,7 @@ Ana ve retry kuyruklarının argümanları: `x-queue-type: quorum`, `x-dead-lett
 
 - Belge: `QUEUED → PROCESSING → DRAFT_READY | FAILED`
 - Taslak: `PENDING → APPROVED | REJECTED`. Onaylanan kayıt değiştirilemez; düzeltme yeni kayıt olarak eklenir.
+- Tahlil açıklaması: `PENDING → READY | FAILED`
 
 ### Veri modeli — karışık
 
@@ -497,6 +533,23 @@ Her tablonun kendi `id`'si (UUID, PK) vardır. `pet_id` / `clinic_id` tekrar yaz
 
 **Değişmezlik (trigger, migration SQL'inde):** `forbid_medical_record_change()` fonksiyonu `medical_records`, `record_attachments`, `vaccinations`, `prescriptions` ve `lab_results` tablolarında `UPDATE` ve `DELETE`'i reddeder. Düzeltme yeni kayıt olarak eklenir. Tüm yabancı anahtarlar `ON DELETE RESTRICT`'tir.
 
+#### lab_result_explanations (tahlil kaydının AI açıklaması)
+
+Açıklama kayıttan sonra geldiği ve `medical_records` / `lab_results` değiştirilemediği için ayrı tablodadır; bu tabloda değişmezlik trigger'ı yoktur. Migration: `20261026100731_lab_result_explanations`.
+
+| Kolon | Tip | Not |
+|---|---|---|
+| id | UUID (PK) | |
+| record_id | UUID, FK → `medical_records.id`, unique | Her tahlil kaydına tek açıklama; `ON DELETE RESTRICT` |
+| status | enum `LabExplanationStatus`, default `PENDING` | `PENDING` / `READY` / `FAILED` |
+| summary | text, nullable | `READY`'de dolu |
+| items | jsonb, nullable | `[{ testName, explanation }]` |
+| confidence | double precision, nullable | 0–1 (kırpılmış) |
+| model_version | varchar(64), nullable | |
+| failure_reason | varchar(64), nullable | AI hata kodu ya da `INVALID_AI_OUTPUT` |
+| requested_at | timestamp, default now | |
+| generated_at | timestamp, nullable | Sonucun işlendiği an |
+
 #### outbox
 
 | Kolon | Tip | Not |
@@ -511,7 +564,7 @@ Her tablonun kendi `id`'si (UUID, PK) vardır. `pet_id` / `clinic_id` tekrar yaz
 | created_at | timestamp | |
 | published_at | timestamp, nullable | Doluysa gönderildi |
 
-**İndeksler:** `documents (clinic_id, status)`, `draft_reviews (clinic_id, status)`, `medical_records (pet_id, recorded_at)`, `record_attachments (document_id)`, `vaccinations (next_due_at)`, `lab_results (record_id)`, `outbox (published_at, next_attempt_at)` — gönderilmemiş ve zamanı gelmiş olayları hızlı bulmak için.
+**İndeksler:** `documents (clinic_id, status)`, `draft_reviews (clinic_id, status)`, `medical_records (pet_id, recorded_at)`, `record_attachments (document_id)`, `vaccinations (next_due_at)`, `lab_results (record_id)`, `lab_result_explanations (record_id)` unique, `outbox (published_at, next_attempt_at)` — gönderilmemiş ve zamanı gelmiş olayları hızlı bulmak için.
 
 ### Erişim kuralları (zero trust)
 
@@ -526,6 +579,7 @@ Her okuma ve yazmada erişim yeniden kontrol edilir. Klinik için `access.CheckA
 | `GetDocument` | hasta sahibi, klinik | sahiplik / belgeyi yükleyen klinik + `medical_write` |
 | `ListDocumentsByPet` | hasta sahibi, klinik | sahiplik (hayvanın tüm belgeleri) / yalnızca kliniğin kendi yükledikleri + `medical_write` |
 | `ReviewDraft` | klinik | taslağın kliniği + `medical_write` |
+| `GetLabExplanation` | yalnızca hasta sahibi | sahiplik; klinik `FORBIDDEN` |
 | `ListDraftReviews` | klinik | yalnızca kendi taslakları; `pet_id` verilirse o hayvanda `medical_write`, verilmezse `medical_write` rızası aktif olan hayvanlar (`ListMyConsents`) |
 
 - Rızası olan klinik hayvanın **tüm** kayıtlarını görür (diğer kliniklerin kayıtları dahil); hasta sahibi kendi hayvanının tüm kayıtlarını görür.

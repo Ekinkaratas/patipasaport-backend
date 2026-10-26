@@ -3,10 +3,13 @@ import {
   createCloudEvent,
   DOCUMENT_EVENT_SCHEMAS,
   DOCUMENT_EVENT_TYPES,
+  LAB_EXPLANATION_EVENT_SCHEMAS,
+  LAB_EXPLANATION_EVENT_TYPES,
   parseCloudEvent,
 } from './cloud-event';
 
 const DOCUMENT_ID = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
+const RECORD_ID = '7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -69,6 +72,32 @@ describe('createCloudEvent', () => {
       'com.patipasaport.document.analysis_failed.v1':
         'urn:patipasaport:events:DocumentAnalysisFailed:v1',
     }));
+
+  it('tahlil açıklaması olay türlerinin URN şeması tanımlıdır', () =>
+    expect(LAB_EXPLANATION_EVENT_SCHEMAS).toEqual({
+      'com.patipasaport.lab_explanation.requested.v1':
+        'urn:patipasaport:events:LabExplanationRequested:v1',
+      'com.patipasaport.lab_explanation.generated.v1':
+        'urn:patipasaport:events:LabExplanationGenerated:v1',
+      'com.patipasaport.lab_explanation.failed.v1':
+        'urn:patipasaport:events:LabExplanationFailed:v1',
+    }));
+
+  it('tahlil açıklaması isteği kendi şemasıyla kurulur', () => {
+    const event = createCloudEvent({
+      type: LAB_EXPLANATION_EVENT_TYPES.REQUESTED,
+      source: CLOUD_EVENT_SOURCES.MEDICAL_RECORD,
+      subject: RECORD_ID,
+      data: { recordId: RECORD_ID },
+    });
+
+    expect(event).toMatchObject({
+      type: 'com.patipasaport.lab_explanation.requested.v1',
+      subject: RECORD_ID,
+      dataschema: 'urn:patipasaport:events:LabExplanationRequested:v1',
+      data: { recordId: RECORD_ID },
+    });
+  });
 });
 
 // ---Amaç: kuyruktan gelen zarfın standart alanlarını doğrulayıp geçersizleri reddetmek ---
@@ -109,4 +138,34 @@ describe('parseCloudEvent', () => {
   ])('%s → null', (_n, override) =>
     expect(parseCloudEvent({ ...valid(), ...override })).toBeNull(),
   );
+
+  it.each([
+    [
+      'com.patipasaport.lab_explanation.generated.v1',
+      'urn:patipasaport:events:LabExplanationGenerated:v1',
+    ],
+    [
+      'com.patipasaport.lab_explanation.failed.v1',
+      'urn:patipasaport:events:LabExplanationFailed:v1',
+    ],
+  ])('tahlil açıklaması olayı %s tanınır', (type, dataschema) => {
+    const raw = {
+      ...valid(),
+      source: '/patipasaport/ai-service',
+      type,
+      subject: RECORD_ID,
+      dataschema,
+      data: { recordId: RECORD_ID },
+    };
+    expect(parseCloudEvent(raw)).toEqual(raw);
+  });
+
+  it('tahlil açıklaması olayında başka türün şeması → null', () =>
+    expect(
+      parseCloudEvent({
+        ...valid(),
+        type: 'com.patipasaport.lab_explanation.generated.v1',
+        dataschema: 'urn:patipasaport:events:LabExplanationFailed:v1',
+      }),
+    ).toBeNull());
 });

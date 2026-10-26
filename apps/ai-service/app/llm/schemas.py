@@ -139,3 +139,27 @@ EXTRACTION_SCHEMA: dict[str, Any] = {
     "required": ["isMedicalDocument", "confidence", "proposal"],
     "additionalProperties": False,
 }
+
+EXPLANATION_SCHEMA_NAME = "lab_explanation"
+
+EXPLANATION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "confidence": {"type": "number"},
+        "summary": {"type": "string"},
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "testName": {"type": "string"},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["testName", "explanation"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["confidence", "summary", "items"],
+    "additionalProperties": False,
+}

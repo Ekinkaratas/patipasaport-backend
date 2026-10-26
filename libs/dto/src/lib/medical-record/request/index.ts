@@ -1,5 +1,6 @@
 export * from './create-record.dto';
 export * from './get-document.dto';
+export * from './get-lab-explanation.dto';
 export * from './list-documents-by-pet.dto';
 export * from './list-draft-reviews.dto';
 export * from './list-lab-results.dto';

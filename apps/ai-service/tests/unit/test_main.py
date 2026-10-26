@@ -12,23 +12,33 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from app import main as main_module
 from app.config import ConfigError, Settings, load_settings
 from app.documents.pipeline import DocumentPipeline
-from app.generated import events_pb2
+from app.explanations.pipeline import ExplanationPipeline
+from app.generated import events_pb2, medical_record_pb2
 from app.llm.client import LlmClient, LlmReply, create_llm_client
+from app.llm.schemas import EXPLANATION_SCHEMA_NAME
 from app.logs import JsonFormatter
 from app.main import create_app
 from app.messaging.cloudevents import (
     DOCUMENT_ANALYZED,
     DOCUMENT_PROCESSING_STARTED,
     DOCUMENT_UPLOADED,
+    LAB_EXPLANATION_GENERATED,
+    LAB_EXPLANATION_REQUESTED,
     IncomingEvent,
     OutgoingEvent,
 )
 from app.messaging.consumer import Flow
 from app.messaging.publisher import Publisher
 from app.messaging.runtime import Messaging, start_messaging
-from app.messaging.topology import DOCUMENT_PREFETCH, DOCUMENT_QUEUE
+from app.messaging.topology import (
+    DOCUMENT_PREFETCH,
+    DOCUMENT_QUEUE,
+    EXPLANATION_PREFETCH,
+    EXPLANATION_QUEUE,
+)
 from app.storage import DocumentStorage, create_storage
 
 UVICORN_LOGGER_NAMES = ("uvicorn", "uvicorn.error", "uvicorn.access")
@@ -71,6 +81,16 @@ VALID_OUTPUT = json.dumps(
         },
     }
 )
+RECORD_ID = "7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e"
+VALID_EXPLANATION_OUTPUT = json.dumps(
+    {
+        "confidence": 0.7,
+        "summary": "Değerlerin hepsi referans aralığında.",
+        "items": [],
+    },
+    ensure_ascii=False,
+)
+FLOW_ERROR_MESSAGE = "Belge okuma ya da tahlil açıklama akışı kurulamadı ({})"
 
 
 class StartupError(Exception):
@@ -143,10 +163,15 @@ class FakeLlm:
         self.requests: list[Mapping[str, Any]] = []
         self.aclose_calls = 0
 
-    # İsteği kaydeder ve geçerli bir model çıktısı döndürür.
+    # İsteği kaydeder ve şemaya göre geçerli bir okuma ya da açıklama çıktısı döndürür.
     async def complete_json(self, **request: Any) -> LlmReply:
         self.requests.append(request)
-        return LlmReply(VALID_OUTPUT, prompt_tokens=None, completion_tokens=None)
+        output = (
+            VALID_EXPLANATION_OUTPUT
+            if request["schema_name"] == EXPLANATION_SCHEMA_NAME
+            else VALID_OUTPUT
+        )
+        return LlmReply(output, prompt_tokens=None, completion_tokens=None)
 
     # Kapanışı sayar, zaman çizelgesine yazar; tanımlıysa hatayı fırlatır.
     async def aclose(self) -> None:
@@ -310,6 +335,31 @@ def uploaded_event(size_bytes: int) -> IncomingEvent:
     )
 
 
+# Tek kalemli, geçerli bir lab_explanation.requested olayı üretir.
+def requested_event() -> IncomingEvent:
+    return IncomingEvent(
+        id="0f6c1d3e-8a2b-4c5d-9e7f-1a2b3c4d5e6f",
+        type=LAB_EXPLANATION_REQUESTED,
+        source="/patipasaport/medical-record",
+        subject=RECORD_ID,
+        time=datetime(2024, 3, 20, 9, 30, tzinfo=UTC),
+        data=events_pb2.LabExplanationRequested(
+            record_id=RECORD_ID,
+            title="Hemogram",
+            sampled_at="2024-03-15",
+            items=[
+                medical_record_pb2.LabResultItem(
+                    test_name="WBC",
+                    value="12.4",
+                    unit="10^3/uL",
+                    reference_range="5.5-19.5",
+                    flag=medical_record_pb2.LabResultFlag.NORMAL,
+                )
+            ],
+        ),
+    )
+
+
 # Çıktının her satırını JSON nesnesi olarak okuyup liste halinde döndürür.
 def parse_lines(output: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in output.splitlines() if line.strip()]
@@ -407,6 +457,19 @@ def test_dependencies_receive_loaded_settings() -> None:
     assert harness.timeline[:3] == ["storage_factory", "llm_factory", "messaging.start"]
 
 
+# Lifespan'ın starter'a önce belge, sonra açıklama akışını verdiğini doğrular.
+def test_lifespan_passes_document_and_explanation_flows() -> None:
+    harness = Harness()
+
+    with TestClient(harness.app()):
+        [(_, flows)] = harness.starter.calls
+
+    assert [flow.queue for flow in flows] == [DOCUMENT_QUEUE, EXPLANATION_QUEUE]
+    document, explanation = (getattr(flow.handle, "__self__", None) for flow in flows)
+    assert isinstance(document, DocumentPipeline)
+    assert isinstance(explanation, ExplanationPipeline)
+
+
 # Lifespan'ın depo ve istemciden belge akışını kurup starter'a verdiğini doğrular.
 def test_lifespan_passes_document_flow_built_from_storage_and_llm() -> None:
     harness = Harness()
@@ -414,7 +477,7 @@ def test_lifespan_passes_document_flow_built_from_storage_and_llm() -> None:
     with TestClient(harness.app()):
         [(_, flows)] = harness.starter.calls
 
-    [flow] = flows
+    flow = flows[0]
     assert flow.queue == DOCUMENT_QUEUE
     assert flow.event_type == DOCUMENT_UPLOADED
     assert flow.prefetch == DOCUMENT_PREFETCH
@@ -433,6 +496,32 @@ def test_lifespan_passes_document_flow_built_from_storage_and_llm() -> None:
         DOCUMENT_PROCESSING_STARTED,
         DOCUMENT_ANALYZED,
     ]
+
+
+# Lifespan'ın aynı istemciden açıklama akışını kurup starter'a verdiğini doğrular.
+def test_lifespan_passes_explanation_flow_built_from_llm() -> None:
+    harness = Harness()
+
+    with TestClient(harness.app()):
+        [(_, flows)] = harness.starter.calls
+
+    flow = flows[1]
+    assert flow.queue == EXPLANATION_QUEUE
+    assert flow.event_type == LAB_EXPLANATION_REQUESTED
+    assert flow.prefetch == EXPLANATION_PREFETCH
+    pipeline = getattr(flow.handle, "__self__", None)
+    assert isinstance(pipeline, ExplanationPipeline)
+    assert pipeline.model_version == f"{FAKE_MODEL}/explain-v1"
+    assert flow.build_failure == pipeline.build_failure
+    publisher = FakePublisher()
+
+    asyncio.run(flow.handle(requested_event(), cast(Publisher, publisher)))
+
+    [request] = harness.llm.requests
+    assert request["schema_name"] == EXPLANATION_SCHEMA_NAME
+    assert tuple(request["image_data_urls"]) == ()
+    assert harness.storage.reads == []
+    assert [event.type for event in publisher.events] == [LAB_EXPLANATION_GENERATED]
 
 
 # Starter'ın döndürdüğü mesajlaşma nesnesinin app.state'e konduğunu doğrular.
@@ -534,7 +623,33 @@ def test_pipeline_error_closes_llm_and_logs_type_only(
             pass
 
     assert_single_bootstrap_error(
-        capsys.readouterr().out, "Belge okuma akışı kurulamadı (ValueError)"
+        capsys.readouterr().out, FLOW_ERROR_MESSAGE.format("ValueError")
+    )
+    assert harness.starter.calls == []
+    assert harness.llm.aclose_calls == 1
+    assert harness.timeline == ["storage_factory", "llm_factory", "llm.aclose"]
+
+
+# Açıklama akışı kurulamazsa istemcinin kapanıp starter'ın çağrılmadığını doğrular.
+def test_explanation_pipeline_error_closes_llm_and_logs_type_only(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    error = StartupError(" ".join(FAKE_SECRETS))
+
+    # Açıklama akışı yerine geçip her çağrıda kurulum hatası fırlatır.
+    def failing_pipeline(*args: object, **kwargs: object) -> ExplanationPipeline:
+        raise error
+
+    monkeypatch.setattr(main_module, "ExplanationPipeline", failing_pipeline)
+    harness = Harness()
+
+    with pytest.raises(StartupError) as raised:
+        with TestClient(harness.app()):
+            pass
+
+    assert raised.value is error
+    assert_single_bootstrap_error(
+        capsys.readouterr().out, FLOW_ERROR_MESSAGE.format("StartupError")
     )
     assert harness.starter.calls == []
     assert harness.llm.aclose_calls == 1
