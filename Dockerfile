@@ -12,7 +12,7 @@
 #   ayrı bir aşamada kurulup runtime imajına kopyalanıyor.
 # ============================================================
 
-ARG NODE_VERSION=24-alpine
+ARG NODE_VERSION=24.22.1-alpine
 
 FROM node:${NODE_VERSION} AS deps
 WORKDIR /workspace

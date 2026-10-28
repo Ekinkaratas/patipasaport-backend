@@ -1,3 +1,5 @@
+**EN** | [TR](README_TR.md)
+
 # PatiPasaport
 
 A pet health passport platform: pet owners keep their animals' medical history in one place and decide, per clinic, who may see or add to it. Clinics upload lab results and images, an AI service drafts structured records from them, and a clinic reviews every draft before it becomes part of the permanent record. For every approved or manually entered lab result, the AI service also writes a plain-language explanation that only the pet owner sees.
@@ -50,7 +52,7 @@ Nx monorepo · Node.js 24 · NestJS 11 (gRPC microservices + Express 5 gateway) 
 
 ## Getting started
 
-Requirements: Node.js 24, Docker with Compose, and OpenSSL.
+Requirements: Node.js 24.22.1 or newer, Docker with Compose, and OpenSSL.
 
 ```sh
 npm ci
