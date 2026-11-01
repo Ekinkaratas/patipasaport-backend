@@ -108,3 +108,93 @@ class LabExplanationFailed(_message.Message):
     error_message: str
     failed_at: str
     def __init__(self, record_id: _Optional[str] = ..., model_version: _Optional[str] = ..., error_code: _Optional[str] = ..., error_message: _Optional[str] = ..., failed_at: _Optional[str] = ...) -> None: ...
+
+class LabMeasurement(_message.Message):
+    __slots__ = ("sampled_at", "value", "unit", "reference_range", "flag")
+    SAMPLED_AT_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    UNIT_FIELD_NUMBER: _ClassVar[int]
+    REFERENCE_RANGE_FIELD_NUMBER: _ClassVar[int]
+    FLAG_FIELD_NUMBER: _ClassVar[int]
+    sampled_at: str
+    value: str
+    unit: str
+    reference_range: str
+    flag: _medical_record_pb2.LabResultFlag
+    def __init__(self, sampled_at: _Optional[str] = ..., value: _Optional[str] = ..., unit: _Optional[str] = ..., reference_range: _Optional[str] = ..., flag: _Optional[_Union[_medical_record_pb2.LabResultFlag, str]] = ...) -> None: ...
+
+class LabSeries(_message.Message):
+    __slots__ = ("test_name", "measurements")
+    TEST_NAME_FIELD_NUMBER: _ClassVar[int]
+    MEASUREMENTS_FIELD_NUMBER: _ClassVar[int]
+    test_name: str
+    measurements: _containers.RepeatedCompositeFieldContainer[LabMeasurement]
+    def __init__(self, test_name: _Optional[str] = ..., measurements: _Optional[_Iterable[_Union[LabMeasurement, _Mapping]]] = ...) -> None: ...
+
+class ClinicalNote(_message.Message):
+    __slots__ = ("type", "title", "notes", "recorded_at")
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    TITLE_FIELD_NUMBER: _ClassVar[int]
+    NOTES_FIELD_NUMBER: _ClassVar[int]
+    RECORDED_AT_FIELD_NUMBER: _ClassVar[int]
+    type: _medical_record_pb2.RecordType
+    title: str
+    notes: str
+    recorded_at: str
+    def __init__(self, type: _Optional[_Union[_medical_record_pb2.RecordType, str]] = ..., title: _Optional[str] = ..., notes: _Optional[str] = ..., recorded_at: _Optional[str] = ...) -> None: ...
+
+class HealthAssessmentRequested(_message.Message):
+    __slots__ = ("request_id", "as_of", "species", "breed", "sex", "is_neutered", "birth_date", "is_birth_date_estimated", "lab_series", "vaccinations", "prescriptions", "clinical_notes")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    AS_OF_FIELD_NUMBER: _ClassVar[int]
+    SPECIES_FIELD_NUMBER: _ClassVar[int]
+    BREED_FIELD_NUMBER: _ClassVar[int]
+    SEX_FIELD_NUMBER: _ClassVar[int]
+    IS_NEUTERED_FIELD_NUMBER: _ClassVar[int]
+    BIRTH_DATE_FIELD_NUMBER: _ClassVar[int]
+    IS_BIRTH_DATE_ESTIMATED_FIELD_NUMBER: _ClassVar[int]
+    LAB_SERIES_FIELD_NUMBER: _ClassVar[int]
+    VACCINATIONS_FIELD_NUMBER: _ClassVar[int]
+    PRESCRIPTIONS_FIELD_NUMBER: _ClassVar[int]
+    CLINICAL_NOTES_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    as_of: str
+    species: str
+    breed: str
+    sex: str
+    is_neutered: bool
+    birth_date: str
+    is_birth_date_estimated: bool
+    lab_series: _containers.RepeatedCompositeFieldContainer[LabSeries]
+    vaccinations: _containers.RepeatedCompositeFieldContainer[_medical_record_pb2.VaccinationDetails]
+    prescriptions: _containers.RepeatedCompositeFieldContainer[_medical_record_pb2.PrescriptionDetails]
+    clinical_notes: _containers.RepeatedCompositeFieldContainer[ClinicalNote]
+    def __init__(self, request_id: _Optional[str] = ..., as_of: _Optional[str] = ..., species: _Optional[str] = ..., breed: _Optional[str] = ..., sex: _Optional[str] = ..., is_neutered: _Optional[bool] = ..., birth_date: _Optional[str] = ..., is_birth_date_estimated: _Optional[bool] = ..., lab_series: _Optional[_Iterable[_Union[LabSeries, _Mapping]]] = ..., vaccinations: _Optional[_Iterable[_Union[_medical_record_pb2.VaccinationDetails, _Mapping]]] = ..., prescriptions: _Optional[_Iterable[_Union[_medical_record_pb2.PrescriptionDetails, _Mapping]]] = ..., clinical_notes: _Optional[_Iterable[_Union[ClinicalNote, _Mapping]]] = ...) -> None: ...
+
+class HealthAssessmentGenerated(_message.Message):
+    __slots__ = ("request_id", "model_version", "confidence", "assessment", "generated_at")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
+    CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
+    ASSESSMENT_FIELD_NUMBER: _ClassVar[int]
+    GENERATED_AT_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    model_version: str
+    confidence: float
+    assessment: _medical_record_pb2.HealthAssessment
+    generated_at: str
+    def __init__(self, request_id: _Optional[str] = ..., model_version: _Optional[str] = ..., confidence: _Optional[float] = ..., assessment: _Optional[_Union[_medical_record_pb2.HealthAssessment, _Mapping]] = ..., generated_at: _Optional[str] = ...) -> None: ...
+
+class HealthAssessmentFailed(_message.Message):
+    __slots__ = ("request_id", "model_version", "error_code", "error_message", "failed_at")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
+    ERROR_CODE_FIELD_NUMBER: _ClassVar[int]
+    ERROR_MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    FAILED_AT_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    model_version: str
+    error_code: str
+    error_message: str
+    failed_at: str
+    def __init__(self, request_id: _Optional[str] = ..., model_version: _Optional[str] = ..., error_code: _Optional[str] = ..., error_message: _Optional[str] = ..., failed_at: _Optional[str] = ...) -> None: ...

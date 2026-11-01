@@ -255,6 +255,294 @@ export function labExplanationStatusToJSON(object: LabExplanationStatus): string
   }
 }
 
+export enum HealthAssessmentStatus {
+  HEALTH_ASSESSMENT_STATUS_UNSPECIFIED = 0,
+  HEALTH_ASSESSMENT_PENDING = 1,
+  HEALTH_ASSESSMENT_READY = 2,
+  HEALTH_ASSESSMENT_FAILED = 3,
+  UNRECOGNIZED = -1,
+}
+
+export function healthAssessmentStatusFromJSON(object: any): HealthAssessmentStatus {
+  switch (object) {
+    case 0:
+    case "HEALTH_ASSESSMENT_STATUS_UNSPECIFIED":
+      return HealthAssessmentStatus.HEALTH_ASSESSMENT_STATUS_UNSPECIFIED;
+    case 1:
+    case "HEALTH_ASSESSMENT_PENDING":
+      return HealthAssessmentStatus.HEALTH_ASSESSMENT_PENDING;
+    case 2:
+    case "HEALTH_ASSESSMENT_READY":
+      return HealthAssessmentStatus.HEALTH_ASSESSMENT_READY;
+    case 3:
+    case "HEALTH_ASSESSMENT_FAILED":
+      return HealthAssessmentStatus.HEALTH_ASSESSMENT_FAILED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return HealthAssessmentStatus.UNRECOGNIZED;
+  }
+}
+
+export function healthAssessmentStatusToJSON(object: HealthAssessmentStatus): string {
+  switch (object) {
+    case HealthAssessmentStatus.HEALTH_ASSESSMENT_STATUS_UNSPECIFIED:
+      return "HEALTH_ASSESSMENT_STATUS_UNSPECIFIED";
+    case HealthAssessmentStatus.HEALTH_ASSESSMENT_PENDING:
+      return "HEALTH_ASSESSMENT_PENDING";
+    case HealthAssessmentStatus.HEALTH_ASSESSMENT_READY:
+      return "HEALTH_ASSESSMENT_READY";
+    case HealthAssessmentStatus.HEALTH_ASSESSMENT_FAILED:
+      return "HEALTH_ASSESSMENT_FAILED";
+    case HealthAssessmentStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export enum HealthRiskLevel {
+  HEALTH_RISK_LEVEL_UNSPECIFIED = 0,
+  HEALTH_RISK_LOW = 1,
+  HEALTH_RISK_MODERATE = 2,
+  HEALTH_RISK_HIGH = 3,
+  HEALTH_RISK_URGENT = 4,
+  UNRECOGNIZED = -1,
+}
+
+export function healthRiskLevelFromJSON(object: any): HealthRiskLevel {
+  switch (object) {
+    case 0:
+    case "HEALTH_RISK_LEVEL_UNSPECIFIED":
+      return HealthRiskLevel.HEALTH_RISK_LEVEL_UNSPECIFIED;
+    case 1:
+    case "HEALTH_RISK_LOW":
+      return HealthRiskLevel.HEALTH_RISK_LOW;
+    case 2:
+    case "HEALTH_RISK_MODERATE":
+      return HealthRiskLevel.HEALTH_RISK_MODERATE;
+    case 3:
+    case "HEALTH_RISK_HIGH":
+      return HealthRiskLevel.HEALTH_RISK_HIGH;
+    case 4:
+    case "HEALTH_RISK_URGENT":
+      return HealthRiskLevel.HEALTH_RISK_URGENT;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return HealthRiskLevel.UNRECOGNIZED;
+  }
+}
+
+export function healthRiskLevelToJSON(object: HealthRiskLevel): string {
+  switch (object) {
+    case HealthRiskLevel.HEALTH_RISK_LEVEL_UNSPECIFIED:
+      return "HEALTH_RISK_LEVEL_UNSPECIFIED";
+    case HealthRiskLevel.HEALTH_RISK_LOW:
+      return "HEALTH_RISK_LOW";
+    case HealthRiskLevel.HEALTH_RISK_MODERATE:
+      return "HEALTH_RISK_MODERATE";
+    case HealthRiskLevel.HEALTH_RISK_HIGH:
+      return "HEALTH_RISK_HIGH";
+    case HealthRiskLevel.HEALTH_RISK_URGENT:
+      return "HEALTH_RISK_URGENT";
+    case HealthRiskLevel.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export enum LabTrend {
+  LAB_TREND_UNSPECIFIED = 0,
+  LAB_TREND_SINGLE = 1,
+  LAB_TREND_RISING = 2,
+  LAB_TREND_FALLING = 3,
+  LAB_TREND_STABLE = 4,
+  UNRECOGNIZED = -1,
+}
+
+export function labTrendFromJSON(object: any): LabTrend {
+  switch (object) {
+    case 0:
+    case "LAB_TREND_UNSPECIFIED":
+      return LabTrend.LAB_TREND_UNSPECIFIED;
+    case 1:
+    case "LAB_TREND_SINGLE":
+      return LabTrend.LAB_TREND_SINGLE;
+    case 2:
+    case "LAB_TREND_RISING":
+      return LabTrend.LAB_TREND_RISING;
+    case 3:
+    case "LAB_TREND_FALLING":
+      return LabTrend.LAB_TREND_FALLING;
+    case 4:
+    case "LAB_TREND_STABLE":
+      return LabTrend.LAB_TREND_STABLE;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return LabTrend.UNRECOGNIZED;
+  }
+}
+
+export function labTrendToJSON(object: LabTrend): string {
+  switch (object) {
+    case LabTrend.LAB_TREND_UNSPECIFIED:
+      return "LAB_TREND_UNSPECIFIED";
+    case LabTrend.LAB_TREND_SINGLE:
+      return "LAB_TREND_SINGLE";
+    case LabTrend.LAB_TREND_RISING:
+      return "LAB_TREND_RISING";
+    case LabTrend.LAB_TREND_FALLING:
+      return "LAB_TREND_FALLING";
+    case LabTrend.LAB_TREND_STABLE:
+      return "LAB_TREND_STABLE";
+    case LabTrend.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export enum ConditionLikelihood {
+  CONDITION_LIKELIHOOD_UNSPECIFIED = 0,
+  CONDITION_LIKELIHOOD_LOW = 1,
+  CONDITION_LIKELIHOOD_MEDIUM = 2,
+  CONDITION_LIKELIHOOD_HIGH = 3,
+  UNRECOGNIZED = -1,
+}
+
+export function conditionLikelihoodFromJSON(object: any): ConditionLikelihood {
+  switch (object) {
+    case 0:
+    case "CONDITION_LIKELIHOOD_UNSPECIFIED":
+      return ConditionLikelihood.CONDITION_LIKELIHOOD_UNSPECIFIED;
+    case 1:
+    case "CONDITION_LIKELIHOOD_LOW":
+      return ConditionLikelihood.CONDITION_LIKELIHOOD_LOW;
+    case 2:
+    case "CONDITION_LIKELIHOOD_MEDIUM":
+      return ConditionLikelihood.CONDITION_LIKELIHOOD_MEDIUM;
+    case 3:
+    case "CONDITION_LIKELIHOOD_HIGH":
+      return ConditionLikelihood.CONDITION_LIKELIHOOD_HIGH;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return ConditionLikelihood.UNRECOGNIZED;
+  }
+}
+
+export function conditionLikelihoodToJSON(object: ConditionLikelihood): string {
+  switch (object) {
+    case ConditionLikelihood.CONDITION_LIKELIHOOD_UNSPECIFIED:
+      return "CONDITION_LIKELIHOOD_UNSPECIFIED";
+    case ConditionLikelihood.CONDITION_LIKELIHOOD_LOW:
+      return "CONDITION_LIKELIHOOD_LOW";
+    case ConditionLikelihood.CONDITION_LIKELIHOOD_MEDIUM:
+      return "CONDITION_LIKELIHOOD_MEDIUM";
+    case ConditionLikelihood.CONDITION_LIKELIHOOD_HIGH:
+      return "CONDITION_LIKELIHOOD_HIGH";
+    case ConditionLikelihood.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export enum RecommendationCategory {
+  RECOMMENDATION_CATEGORY_UNSPECIFIED = 0,
+  RECOMMENDATION_NUTRITION = 1,
+  RECOMMENDATION_CARE = 2,
+  RECOMMENDATION_FOLLOW_UP_TEST = 3,
+  RECOMMENDATION_VET_VISIT = 4,
+  RECOMMENDATION_VACCINATION = 5,
+  UNRECOGNIZED = -1,
+}
+
+export function recommendationCategoryFromJSON(object: any): RecommendationCategory {
+  switch (object) {
+    case 0:
+    case "RECOMMENDATION_CATEGORY_UNSPECIFIED":
+      return RecommendationCategory.RECOMMENDATION_CATEGORY_UNSPECIFIED;
+    case 1:
+    case "RECOMMENDATION_NUTRITION":
+      return RecommendationCategory.RECOMMENDATION_NUTRITION;
+    case 2:
+    case "RECOMMENDATION_CARE":
+      return RecommendationCategory.RECOMMENDATION_CARE;
+    case 3:
+    case "RECOMMENDATION_FOLLOW_UP_TEST":
+      return RecommendationCategory.RECOMMENDATION_FOLLOW_UP_TEST;
+    case 4:
+    case "RECOMMENDATION_VET_VISIT":
+      return RecommendationCategory.RECOMMENDATION_VET_VISIT;
+    case 5:
+    case "RECOMMENDATION_VACCINATION":
+      return RecommendationCategory.RECOMMENDATION_VACCINATION;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return RecommendationCategory.UNRECOGNIZED;
+  }
+}
+
+export function recommendationCategoryToJSON(object: RecommendationCategory): string {
+  switch (object) {
+    case RecommendationCategory.RECOMMENDATION_CATEGORY_UNSPECIFIED:
+      return "RECOMMENDATION_CATEGORY_UNSPECIFIED";
+    case RecommendationCategory.RECOMMENDATION_NUTRITION:
+      return "RECOMMENDATION_NUTRITION";
+    case RecommendationCategory.RECOMMENDATION_CARE:
+      return "RECOMMENDATION_CARE";
+    case RecommendationCategory.RECOMMENDATION_FOLLOW_UP_TEST:
+      return "RECOMMENDATION_FOLLOW_UP_TEST";
+    case RecommendationCategory.RECOMMENDATION_VET_VISIT:
+      return "RECOMMENDATION_VET_VISIT";
+    case RecommendationCategory.RECOMMENDATION_VACCINATION:
+      return "RECOMMENDATION_VACCINATION";
+    case RecommendationCategory.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export enum VaccinationDueStatus {
+  VACCINATION_DUE_STATUS_UNSPECIFIED = 0,
+  VACCINATION_OVERDUE = 1,
+  VACCINATION_DUE_SOON = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function vaccinationDueStatusFromJSON(object: any): VaccinationDueStatus {
+  switch (object) {
+    case 0:
+    case "VACCINATION_DUE_STATUS_UNSPECIFIED":
+      return VaccinationDueStatus.VACCINATION_DUE_STATUS_UNSPECIFIED;
+    case 1:
+    case "VACCINATION_OVERDUE":
+      return VaccinationDueStatus.VACCINATION_OVERDUE;
+    case 2:
+    case "VACCINATION_DUE_SOON":
+      return VaccinationDueStatus.VACCINATION_DUE_SOON;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return VaccinationDueStatus.UNRECOGNIZED;
+  }
+}
+
+export function vaccinationDueStatusToJSON(object: VaccinationDueStatus): string {
+  switch (object) {
+    case VaccinationDueStatus.VACCINATION_DUE_STATUS_UNSPECIFIED:
+      return "VACCINATION_DUE_STATUS_UNSPECIFIED";
+    case VaccinationDueStatus.VACCINATION_OVERDUE:
+      return "VACCINATION_OVERDUE";
+    case VaccinationDueStatus.VACCINATION_DUE_SOON:
+      return "VACCINATION_DUE_SOON";
+    case VaccinationDueStatus.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 /** Dosya İÇERİĞİ değil, referansı taşınır. */
 export interface FileReference {
   documentId: string;
@@ -508,6 +796,63 @@ export interface LabExplanationResponse {
   items: LabExplanationItem[];
   confidence: number;
   generatedAt: string;
+}
+
+export interface HealthFinding {
+  testName: string;
+  /** AI servisi ön analizden yazar, model üretmez */
+  trend: LabTrend;
+  interpretation: string;
+}
+
+export interface PossibleCondition {
+  name: string;
+  likelihood: ConditionLikelihood;
+  /** girdideki test adları */
+  evidence: string[];
+  explanation: string;
+}
+
+export interface HealthRecommendation {
+  category: RecommendationCategory;
+  text: string;
+}
+
+export interface VaccinationReminder {
+  vaccineName: string;
+  /** YYYY-MM-DD */
+  nextDueAt: string;
+  status: VaccinationDueStatus;
+}
+
+export interface HealthAssessment {
+  summary: string;
+  riskLevel: HealthRiskLevel;
+  findings: HealthFinding[];
+  possibleConditions: PossibleCondition[];
+  recommendations: HealthRecommendation[];
+  vaccinationReminders: VaccinationReminder[];
+  questionsForVet: string[];
+}
+
+export interface RequestHealthAssessmentRequest {
+  petId: string;
+}
+
+export interface GetLatestHealthAssessmentRequest {
+  petId: string;
+}
+
+/** assessment, confidence ve generated_at yalnızca READY durumunda doludur. */
+export interface HealthAssessmentResponse {
+  status: HealthAssessmentStatus;
+  assessment: HealthAssessment | undefined;
+  confidence: number;
+  /** ISO-8601 */
+  requestedAt: string;
+  /** ISO-8601 */
+  generatedAt: string;
+  isStale: boolean;
 }
 
 /** AI'ın ürettiği taslak. Klinik onaylamadan kalıcı kayda DÖNÜŞMEZ. */
@@ -1870,6 +2215,262 @@ export const LabExplanationResponse: MessageFns<LabExplanationResponse> = {
   },
 };
 
+export const HealthFinding: MessageFns<HealthFinding> = {
+  fromJSON(object: any): HealthFinding {
+    return {
+      testName: isSet(object.testName)
+        ? globalThis.String(object.testName)
+        : isSet(object.test_name)
+        ? globalThis.String(object.test_name)
+        : "",
+      trend: isSet(object.trend) ? labTrendFromJSON(object.trend) : 0,
+      interpretation: isSet(object.interpretation) ? globalThis.String(object.interpretation) : "",
+    };
+  },
+
+  toJSON(message: HealthFinding): unknown {
+    const obj: any = {};
+    if (message.testName !== "") {
+      obj.testName = message.testName;
+    }
+    if (message.trend !== 0) {
+      obj.trend = labTrendToJSON(message.trend);
+    }
+    if (message.interpretation !== "") {
+      obj.interpretation = message.interpretation;
+    }
+    return obj;
+  },
+};
+
+export const PossibleCondition: MessageFns<PossibleCondition> = {
+  fromJSON(object: any): PossibleCondition {
+    return {
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+      likelihood: isSet(object.likelihood) ? conditionLikelihoodFromJSON(object.likelihood) : 0,
+      evidence: globalThis.Array.isArray(object?.evidence) ? object.evidence.map((e: any) => globalThis.String(e)) : [],
+      explanation: isSet(object.explanation) ? globalThis.String(object.explanation) : "",
+    };
+  },
+
+  toJSON(message: PossibleCondition): unknown {
+    const obj: any = {};
+    if (message.name !== "") {
+      obj.name = message.name;
+    }
+    if (message.likelihood !== 0) {
+      obj.likelihood = conditionLikelihoodToJSON(message.likelihood);
+    }
+    if (message.evidence?.length) {
+      obj.evidence = message.evidence;
+    }
+    if (message.explanation !== "") {
+      obj.explanation = message.explanation;
+    }
+    return obj;
+  },
+};
+
+export const HealthRecommendation: MessageFns<HealthRecommendation> = {
+  fromJSON(object: any): HealthRecommendation {
+    return {
+      category: isSet(object.category) ? recommendationCategoryFromJSON(object.category) : 0,
+      text: isSet(object.text) ? globalThis.String(object.text) : "",
+    };
+  },
+
+  toJSON(message: HealthRecommendation): unknown {
+    const obj: any = {};
+    if (message.category !== 0) {
+      obj.category = recommendationCategoryToJSON(message.category);
+    }
+    if (message.text !== "") {
+      obj.text = message.text;
+    }
+    return obj;
+  },
+};
+
+export const VaccinationReminder: MessageFns<VaccinationReminder> = {
+  fromJSON(object: any): VaccinationReminder {
+    return {
+      vaccineName: isSet(object.vaccineName)
+        ? globalThis.String(object.vaccineName)
+        : isSet(object.vaccine_name)
+        ? globalThis.String(object.vaccine_name)
+        : "",
+      nextDueAt: isSet(object.nextDueAt)
+        ? globalThis.String(object.nextDueAt)
+        : isSet(object.next_due_at)
+        ? globalThis.String(object.next_due_at)
+        : "",
+      status: isSet(object.status) ? vaccinationDueStatusFromJSON(object.status) : 0,
+    };
+  },
+
+  toJSON(message: VaccinationReminder): unknown {
+    const obj: any = {};
+    if (message.vaccineName !== "") {
+      obj.vaccineName = message.vaccineName;
+    }
+    if (message.nextDueAt !== "") {
+      obj.nextDueAt = message.nextDueAt;
+    }
+    if (message.status !== 0) {
+      obj.status = vaccinationDueStatusToJSON(message.status);
+    }
+    return obj;
+  },
+};
+
+export const HealthAssessment: MessageFns<HealthAssessment> = {
+  fromJSON(object: any): HealthAssessment {
+    return {
+      summary: isSet(object.summary) ? globalThis.String(object.summary) : "",
+      riskLevel: isSet(object.riskLevel)
+        ? healthRiskLevelFromJSON(object.riskLevel)
+        : isSet(object.risk_level)
+        ? healthRiskLevelFromJSON(object.risk_level)
+        : 0,
+      findings: globalThis.Array.isArray(object?.findings)
+        ? object.findings.map((e: any) => HealthFinding.fromJSON(e))
+        : [],
+      possibleConditions: globalThis.Array.isArray(object?.possibleConditions)
+        ? object.possibleConditions.map((e: any) => PossibleCondition.fromJSON(e))
+        : globalThis.Array.isArray(object?.possible_conditions)
+        ? object.possible_conditions.map((e: any) => PossibleCondition.fromJSON(e))
+        : [],
+      recommendations: globalThis.Array.isArray(object?.recommendations)
+        ? object.recommendations.map((e: any) => HealthRecommendation.fromJSON(e))
+        : [],
+      vaccinationReminders: globalThis.Array.isArray(object?.vaccinationReminders)
+        ? object.vaccinationReminders.map((e: any) => VaccinationReminder.fromJSON(e))
+        : globalThis.Array.isArray(object?.vaccination_reminders)
+        ? object.vaccination_reminders.map((e: any) => VaccinationReminder.fromJSON(e))
+        : [],
+      questionsForVet: globalThis.Array.isArray(object?.questionsForVet)
+        ? object.questionsForVet.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.questions_for_vet)
+        ? object.questions_for_vet.map((e: any) => globalThis.String(e))
+        : [],
+    };
+  },
+
+  toJSON(message: HealthAssessment): unknown {
+    const obj: any = {};
+    if (message.summary !== "") {
+      obj.summary = message.summary;
+    }
+    if (message.riskLevel !== 0) {
+      obj.riskLevel = healthRiskLevelToJSON(message.riskLevel);
+    }
+    if (message.findings?.length) {
+      obj.findings = message.findings.map((e) => HealthFinding.toJSON(e));
+    }
+    if (message.possibleConditions?.length) {
+      obj.possibleConditions = message.possibleConditions.map((e) => PossibleCondition.toJSON(e));
+    }
+    if (message.recommendations?.length) {
+      obj.recommendations = message.recommendations.map((e) => HealthRecommendation.toJSON(e));
+    }
+    if (message.vaccinationReminders?.length) {
+      obj.vaccinationReminders = message.vaccinationReminders.map((e) => VaccinationReminder.toJSON(e));
+    }
+    if (message.questionsForVet?.length) {
+      obj.questionsForVet = message.questionsForVet;
+    }
+    return obj;
+  },
+};
+
+export const RequestHealthAssessmentRequest: MessageFns<RequestHealthAssessmentRequest> = {
+  fromJSON(object: any): RequestHealthAssessmentRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+    };
+  },
+
+  toJSON(message: RequestHealthAssessmentRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    return obj;
+  },
+};
+
+export const GetLatestHealthAssessmentRequest: MessageFns<GetLatestHealthAssessmentRequest> = {
+  fromJSON(object: any): GetLatestHealthAssessmentRequest {
+    return {
+      petId: isSet(object.petId)
+        ? globalThis.String(object.petId)
+        : isSet(object.pet_id)
+        ? globalThis.String(object.pet_id)
+        : "",
+    };
+  },
+
+  toJSON(message: GetLatestHealthAssessmentRequest): unknown {
+    const obj: any = {};
+    if (message.petId !== "") {
+      obj.petId = message.petId;
+    }
+    return obj;
+  },
+};
+
+export const HealthAssessmentResponse: MessageFns<HealthAssessmentResponse> = {
+  fromJSON(object: any): HealthAssessmentResponse {
+    return {
+      status: isSet(object.status) ? healthAssessmentStatusFromJSON(object.status) : 0,
+      assessment: isSet(object.assessment) ? HealthAssessment.fromJSON(object.assessment) : undefined,
+      confidence: isSet(object.confidence) ? globalThis.Number(object.confidence) : 0,
+      requestedAt: isSet(object.requestedAt)
+        ? globalThis.String(object.requestedAt)
+        : isSet(object.requested_at)
+        ? globalThis.String(object.requested_at)
+        : "",
+      generatedAt: isSet(object.generatedAt)
+        ? globalThis.String(object.generatedAt)
+        : isSet(object.generated_at)
+        ? globalThis.String(object.generated_at)
+        : "",
+      isStale: isSet(object.isStale)
+        ? globalThis.Boolean(object.isStale)
+        : isSet(object.is_stale)
+        ? globalThis.Boolean(object.is_stale)
+        : false,
+    };
+  },
+
+  toJSON(message: HealthAssessmentResponse): unknown {
+    const obj: any = {};
+    if (message.status !== 0) {
+      obj.status = healthAssessmentStatusToJSON(message.status);
+    }
+    if (message.assessment !== undefined) {
+      obj.assessment = HealthAssessment.toJSON(message.assessment);
+    }
+    if (message.confidence !== 0) {
+      obj.confidence = floatToJson(message.confidence);
+    }
+    if (message.requestedAt !== "") {
+      obj.requestedAt = message.requestedAt;
+    }
+    if (message.generatedAt !== "") {
+      obj.generatedAt = message.generatedAt;
+    }
+    if (message.isStale !== false) {
+      obj.isStale = message.isStale;
+    }
+    return obj;
+  },
+};
+
 export const DraftReview: MessageFns<DraftReview> = {
   fromJSON(object: any): DraftReview {
     return {
@@ -2135,6 +2736,12 @@ export interface MedicalRecordServiceClient {
 
   getLabExplanation(request: GetLabExplanationRequest): Observable<LabExplanationResponse>;
 
+  /** Hayvanın onaylı kayıtlarının tamamını AI'a değerlendirtir (Akış C). */
+
+  requestHealthAssessment(request: RequestHealthAssessmentRequest): Observable<HealthAssessmentResponse>;
+
+  getLatestHealthAssessment(request: GetLatestHealthAssessmentRequest): Observable<HealthAssessmentResponse>;
+
   registerDocument(request: RegisterDocumentRequest): Observable<DocumentResponse>;
 
   getDocument(request: GetDocumentRequest): Observable<DocumentResponse>;
@@ -2177,6 +2784,16 @@ export interface MedicalRecordServiceController {
     request: GetLabExplanationRequest,
   ): Promise<LabExplanationResponse> | Observable<LabExplanationResponse> | LabExplanationResponse;
 
+  /** Hayvanın onaylı kayıtlarının tamamını AI'a değerlendirtir (Akış C). */
+
+  requestHealthAssessment(
+    request: RequestHealthAssessmentRequest,
+  ): Promise<HealthAssessmentResponse> | Observable<HealthAssessmentResponse> | HealthAssessmentResponse;
+
+  getLatestHealthAssessment(
+    request: GetLatestHealthAssessmentRequest,
+  ): Promise<HealthAssessmentResponse> | Observable<HealthAssessmentResponse> | HealthAssessmentResponse;
+
   registerDocument(
     request: RegisterDocumentRequest,
   ): Promise<DocumentResponse> | Observable<DocumentResponse> | DocumentResponse;
@@ -2207,6 +2824,8 @@ export function MedicalRecordServiceControllerMethods() {
       "listPrescriptions",
       "listLabResults",
       "getLabExplanation",
+      "requestHealthAssessment",
+      "getLatestHealthAssessment",
       "registerDocument",
       "getDocument",
       "listDocumentsByPet",

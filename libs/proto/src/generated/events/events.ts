@@ -5,7 +5,20 @@
 // source: events/events.proto
 
 /* eslint-disable */
-import { LabExplanation, LabResultItem, RecordContent } from "../medical_record/medical_record";
+import {
+  HealthAssessment,
+  LabExplanation,
+  LabResultFlag,
+  labResultFlagFromJSON,
+  labResultFlagToJSON,
+  LabResultItem,
+  PrescriptionDetails,
+  RecordContent,
+  RecordType,
+  recordTypeFromJSON,
+  recordTypeToJSON,
+  VaccinationDetails,
+} from "../medical_record/medical_record";
 
 export const protobufPackage = "events";
 
@@ -63,6 +76,57 @@ export interface LabExplanationGenerated {
 
 export interface LabExplanationFailed {
   recordId: string;
+  modelVersion: string;
+  errorCode: string;
+  errorMessage: string;
+  failedAt: string;
+}
+
+export interface LabMeasurement {
+  sampledAt: string;
+  value: string;
+  unit: string;
+  referenceRange: string;
+  flag: LabResultFlag;
+}
+
+export interface LabSeries {
+  testName: string;
+  measurements: LabMeasurement[];
+}
+
+export interface ClinicalNote {
+  type: RecordType;
+  title: string;
+  notes: string;
+  recordedAt: string;
+}
+
+export interface HealthAssessmentRequested {
+  requestId: string;
+  asOf: string;
+  species: string;
+  breed: string;
+  sex: string;
+  isNeutered: boolean;
+  birthDate: string;
+  isBirthDateEstimated: boolean;
+  labSeries: LabSeries[];
+  vaccinations: VaccinationDetails[];
+  prescriptions: PrescriptionDetails[];
+  clinicalNotes: ClinicalNote[];
+}
+
+export interface HealthAssessmentGenerated {
+  requestId: string;
+  modelVersion: string;
+  confidence: number;
+  assessment: HealthAssessment | undefined;
+  generatedAt: string;
+}
+
+export interface HealthAssessmentFailed {
+  requestId: string;
   modelVersion: string;
   errorCode: string;
   errorMessage: string;
@@ -404,6 +468,292 @@ export const LabExplanationFailed: MessageFns<LabExplanationFailed> = {
     const obj: any = {};
     if (message.recordId !== "") {
       obj.recordId = message.recordId;
+    }
+    if (message.modelVersion !== "") {
+      obj.modelVersion = message.modelVersion;
+    }
+    if (message.errorCode !== "") {
+      obj.errorCode = message.errorCode;
+    }
+    if (message.errorMessage !== "") {
+      obj.errorMessage = message.errorMessage;
+    }
+    if (message.failedAt !== "") {
+      obj.failedAt = message.failedAt;
+    }
+    return obj;
+  },
+};
+
+export const LabMeasurement: MessageFns<LabMeasurement> = {
+  fromJSON(object: any): LabMeasurement {
+    return {
+      sampledAt: isSet(object.sampledAt)
+        ? globalThis.String(object.sampledAt)
+        : isSet(object.sampled_at)
+        ? globalThis.String(object.sampled_at)
+        : "",
+      value: isSet(object.value) ? globalThis.String(object.value) : "",
+      unit: isSet(object.unit) ? globalThis.String(object.unit) : "",
+      referenceRange: isSet(object.referenceRange)
+        ? globalThis.String(object.referenceRange)
+        : isSet(object.reference_range)
+        ? globalThis.String(object.reference_range)
+        : "",
+      flag: isSet(object.flag) ? labResultFlagFromJSON(object.flag) : 0,
+    };
+  },
+
+  toJSON(message: LabMeasurement): unknown {
+    const obj: any = {};
+    if (message.sampledAt !== "") {
+      obj.sampledAt = message.sampledAt;
+    }
+    if (message.value !== "") {
+      obj.value = message.value;
+    }
+    if (message.unit !== "") {
+      obj.unit = message.unit;
+    }
+    if (message.referenceRange !== "") {
+      obj.referenceRange = message.referenceRange;
+    }
+    if (message.flag !== 0) {
+      obj.flag = labResultFlagToJSON(message.flag);
+    }
+    return obj;
+  },
+};
+
+export const LabSeries: MessageFns<LabSeries> = {
+  fromJSON(object: any): LabSeries {
+    return {
+      testName: isSet(object.testName)
+        ? globalThis.String(object.testName)
+        : isSet(object.test_name)
+        ? globalThis.String(object.test_name)
+        : "",
+      measurements: globalThis.Array.isArray(object?.measurements)
+        ? object.measurements.map((e: any) => LabMeasurement.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: LabSeries): unknown {
+    const obj: any = {};
+    if (message.testName !== "") {
+      obj.testName = message.testName;
+    }
+    if (message.measurements?.length) {
+      obj.measurements = message.measurements.map((e) => LabMeasurement.toJSON(e));
+    }
+    return obj;
+  },
+};
+
+export const ClinicalNote: MessageFns<ClinicalNote> = {
+  fromJSON(object: any): ClinicalNote {
+    return {
+      type: isSet(object.type) ? recordTypeFromJSON(object.type) : 0,
+      title: isSet(object.title) ? globalThis.String(object.title) : "",
+      notes: isSet(object.notes) ? globalThis.String(object.notes) : "",
+      recordedAt: isSet(object.recordedAt)
+        ? globalThis.String(object.recordedAt)
+        : isSet(object.recorded_at)
+        ? globalThis.String(object.recorded_at)
+        : "",
+    };
+  },
+
+  toJSON(message: ClinicalNote): unknown {
+    const obj: any = {};
+    if (message.type !== 0) {
+      obj.type = recordTypeToJSON(message.type);
+    }
+    if (message.title !== "") {
+      obj.title = message.title;
+    }
+    if (message.notes !== "") {
+      obj.notes = message.notes;
+    }
+    if (message.recordedAt !== "") {
+      obj.recordedAt = message.recordedAt;
+    }
+    return obj;
+  },
+};
+
+export const HealthAssessmentRequested: MessageFns<HealthAssessmentRequested> = {
+  fromJSON(object: any): HealthAssessmentRequested {
+    return {
+      requestId: isSet(object.requestId)
+        ? globalThis.String(object.requestId)
+        : isSet(object.request_id)
+        ? globalThis.String(object.request_id)
+        : "",
+      asOf: isSet(object.asOf)
+        ? globalThis.String(object.asOf)
+        : isSet(object.as_of)
+        ? globalThis.String(object.as_of)
+        : "",
+      species: isSet(object.species) ? globalThis.String(object.species) : "",
+      breed: isSet(object.breed) ? globalThis.String(object.breed) : "",
+      sex: isSet(object.sex) ? globalThis.String(object.sex) : "",
+      isNeutered: isSet(object.isNeutered)
+        ? globalThis.Boolean(object.isNeutered)
+        : isSet(object.is_neutered)
+        ? globalThis.Boolean(object.is_neutered)
+        : false,
+      birthDate: isSet(object.birthDate)
+        ? globalThis.String(object.birthDate)
+        : isSet(object.birth_date)
+        ? globalThis.String(object.birth_date)
+        : "",
+      isBirthDateEstimated: isSet(object.isBirthDateEstimated)
+        ? globalThis.Boolean(object.isBirthDateEstimated)
+        : isSet(object.is_birth_date_estimated)
+        ? globalThis.Boolean(object.is_birth_date_estimated)
+        : false,
+      labSeries: globalThis.Array.isArray(object?.labSeries)
+        ? object.labSeries.map((e: any) => LabSeries.fromJSON(e))
+        : globalThis.Array.isArray(object?.lab_series)
+        ? object.lab_series.map((e: any) => LabSeries.fromJSON(e))
+        : [],
+      vaccinations: globalThis.Array.isArray(object?.vaccinations)
+        ? object.vaccinations.map((e: any) => VaccinationDetails.fromJSON(e))
+        : [],
+      prescriptions: globalThis.Array.isArray(object?.prescriptions)
+        ? object.prescriptions.map((e: any) => PrescriptionDetails.fromJSON(e))
+        : [],
+      clinicalNotes: globalThis.Array.isArray(object?.clinicalNotes)
+        ? object.clinicalNotes.map((e: any) => ClinicalNote.fromJSON(e))
+        : globalThis.Array.isArray(object?.clinical_notes)
+        ? object.clinical_notes.map((e: any) => ClinicalNote.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: HealthAssessmentRequested): unknown {
+    const obj: any = {};
+    if (message.requestId !== "") {
+      obj.requestId = message.requestId;
+    }
+    if (message.asOf !== "") {
+      obj.asOf = message.asOf;
+    }
+    if (message.species !== "") {
+      obj.species = message.species;
+    }
+    if (message.breed !== "") {
+      obj.breed = message.breed;
+    }
+    if (message.sex !== "") {
+      obj.sex = message.sex;
+    }
+    if (message.isNeutered !== false) {
+      obj.isNeutered = message.isNeutered;
+    }
+    if (message.birthDate !== "") {
+      obj.birthDate = message.birthDate;
+    }
+    if (message.isBirthDateEstimated !== false) {
+      obj.isBirthDateEstimated = message.isBirthDateEstimated;
+    }
+    if (message.labSeries?.length) {
+      obj.labSeries = message.labSeries.map((e) => LabSeries.toJSON(e));
+    }
+    if (message.vaccinations?.length) {
+      obj.vaccinations = message.vaccinations.map((e) => VaccinationDetails.toJSON(e));
+    }
+    if (message.prescriptions?.length) {
+      obj.prescriptions = message.prescriptions.map((e) => PrescriptionDetails.toJSON(e));
+    }
+    if (message.clinicalNotes?.length) {
+      obj.clinicalNotes = message.clinicalNotes.map((e) => ClinicalNote.toJSON(e));
+    }
+    return obj;
+  },
+};
+
+export const HealthAssessmentGenerated: MessageFns<HealthAssessmentGenerated> = {
+  fromJSON(object: any): HealthAssessmentGenerated {
+    return {
+      requestId: isSet(object.requestId)
+        ? globalThis.String(object.requestId)
+        : isSet(object.request_id)
+        ? globalThis.String(object.request_id)
+        : "",
+      modelVersion: isSet(object.modelVersion)
+        ? globalThis.String(object.modelVersion)
+        : isSet(object.model_version)
+        ? globalThis.String(object.model_version)
+        : "",
+      confidence: isSet(object.confidence) ? globalThis.Number(object.confidence) : 0,
+      assessment: isSet(object.assessment) ? HealthAssessment.fromJSON(object.assessment) : undefined,
+      generatedAt: isSet(object.generatedAt)
+        ? globalThis.String(object.generatedAt)
+        : isSet(object.generated_at)
+        ? globalThis.String(object.generated_at)
+        : "",
+    };
+  },
+
+  toJSON(message: HealthAssessmentGenerated): unknown {
+    const obj: any = {};
+    if (message.requestId !== "") {
+      obj.requestId = message.requestId;
+    }
+    if (message.modelVersion !== "") {
+      obj.modelVersion = message.modelVersion;
+    }
+    if (message.confidence !== 0) {
+      obj.confidence = floatToJson(message.confidence);
+    }
+    if (message.assessment !== undefined) {
+      obj.assessment = HealthAssessment.toJSON(message.assessment);
+    }
+    if (message.generatedAt !== "") {
+      obj.generatedAt = message.generatedAt;
+    }
+    return obj;
+  },
+};
+
+export const HealthAssessmentFailed: MessageFns<HealthAssessmentFailed> = {
+  fromJSON(object: any): HealthAssessmentFailed {
+    return {
+      requestId: isSet(object.requestId)
+        ? globalThis.String(object.requestId)
+        : isSet(object.request_id)
+        ? globalThis.String(object.request_id)
+        : "",
+      modelVersion: isSet(object.modelVersion)
+        ? globalThis.String(object.modelVersion)
+        : isSet(object.model_version)
+        ? globalThis.String(object.model_version)
+        : "",
+      errorCode: isSet(object.errorCode)
+        ? globalThis.String(object.errorCode)
+        : isSet(object.error_code)
+        ? globalThis.String(object.error_code)
+        : "",
+      errorMessage: isSet(object.errorMessage)
+        ? globalThis.String(object.errorMessage)
+        : isSet(object.error_message)
+        ? globalThis.String(object.error_message)
+        : "",
+      failedAt: isSet(object.failedAt)
+        ? globalThis.String(object.failedAt)
+        : isSet(object.failed_at)
+        ? globalThis.String(object.failed_at)
+        : "",
+    };
+  },
+
+  toJSON(message: HealthAssessmentFailed): unknown {
+    const obj: any = {};
+    if (message.requestId !== "") {
+      obj.requestId = message.requestId;
     }
     if (message.modelVersion !== "") {
       obj.modelVersion = message.modelVersion;

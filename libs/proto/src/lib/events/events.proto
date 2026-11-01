@@ -61,3 +61,54 @@ message LabExplanationFailed {
   string error_message = 4;
   string failed_at = 5;
 }
+
+message LabMeasurement {
+  string sampled_at = 1;
+  string value = 2;
+  string unit = 3;
+  string reference_range = 4;
+  medical_record.LabResultFlag flag = 5;
+}
+
+message LabSeries {
+  string test_name = 1;
+  repeated LabMeasurement measurements = 2;
+}
+
+message ClinicalNote {
+  medical_record.RecordType type = 1;
+  string title = 2;
+  string notes = 3;
+  string recorded_at = 4;
+}
+
+message HealthAssessmentRequested {
+  string request_id = 1;
+  string as_of = 2;
+  string species = 3;
+  string breed = 4;
+  string sex = 5;
+  bool is_neutered = 6;
+  string birth_date = 7;
+  bool is_birth_date_estimated = 8;
+  repeated LabSeries lab_series = 9;
+  repeated medical_record.VaccinationDetails vaccinations = 10;
+  repeated medical_record.PrescriptionDetails prescriptions = 11;
+  repeated ClinicalNote clinical_notes = 12;
+}
+
+message HealthAssessmentGenerated {
+  string request_id = 1;
+  string model_version = 2;
+  double confidence = 3;
+  medical_record.HealthAssessment assessment = 4;
+  string generated_at = 5;
+}
+
+message HealthAssessmentFailed {
+  string request_id = 1;
+  string model_version = 2;
+  string error_code = 3;
+  string error_message = 4;
+  string failed_at = 5;
+}

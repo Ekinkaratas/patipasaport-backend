@@ -44,6 +44,51 @@ class LabExplanationStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     LAB_EXPLANATION_PENDING: _ClassVar[LabExplanationStatus]
     LAB_EXPLANATION_READY: _ClassVar[LabExplanationStatus]
     LAB_EXPLANATION_FAILED: _ClassVar[LabExplanationStatus]
+
+class HealthAssessmentStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    HEALTH_ASSESSMENT_STATUS_UNSPECIFIED: _ClassVar[HealthAssessmentStatus]
+    HEALTH_ASSESSMENT_PENDING: _ClassVar[HealthAssessmentStatus]
+    HEALTH_ASSESSMENT_READY: _ClassVar[HealthAssessmentStatus]
+    HEALTH_ASSESSMENT_FAILED: _ClassVar[HealthAssessmentStatus]
+
+class HealthRiskLevel(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    HEALTH_RISK_LEVEL_UNSPECIFIED: _ClassVar[HealthRiskLevel]
+    HEALTH_RISK_LOW: _ClassVar[HealthRiskLevel]
+    HEALTH_RISK_MODERATE: _ClassVar[HealthRiskLevel]
+    HEALTH_RISK_HIGH: _ClassVar[HealthRiskLevel]
+    HEALTH_RISK_URGENT: _ClassVar[HealthRiskLevel]
+
+class LabTrend(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    LAB_TREND_UNSPECIFIED: _ClassVar[LabTrend]
+    LAB_TREND_SINGLE: _ClassVar[LabTrend]
+    LAB_TREND_RISING: _ClassVar[LabTrend]
+    LAB_TREND_FALLING: _ClassVar[LabTrend]
+    LAB_TREND_STABLE: _ClassVar[LabTrend]
+
+class ConditionLikelihood(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    CONDITION_LIKELIHOOD_UNSPECIFIED: _ClassVar[ConditionLikelihood]
+    CONDITION_LIKELIHOOD_LOW: _ClassVar[ConditionLikelihood]
+    CONDITION_LIKELIHOOD_MEDIUM: _ClassVar[ConditionLikelihood]
+    CONDITION_LIKELIHOOD_HIGH: _ClassVar[ConditionLikelihood]
+
+class RecommendationCategory(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    RECOMMENDATION_CATEGORY_UNSPECIFIED: _ClassVar[RecommendationCategory]
+    RECOMMENDATION_NUTRITION: _ClassVar[RecommendationCategory]
+    RECOMMENDATION_CARE: _ClassVar[RecommendationCategory]
+    RECOMMENDATION_FOLLOW_UP_TEST: _ClassVar[RecommendationCategory]
+    RECOMMENDATION_VET_VISIT: _ClassVar[RecommendationCategory]
+    RECOMMENDATION_VACCINATION: _ClassVar[RecommendationCategory]
+
+class VaccinationDueStatus(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    VACCINATION_DUE_STATUS_UNSPECIFIED: _ClassVar[VaccinationDueStatus]
+    VACCINATION_OVERDUE: _ClassVar[VaccinationDueStatus]
+    VACCINATION_DUE_SOON: _ClassVar[VaccinationDueStatus]
 RECORD_TYPE_UNSPECIFIED: RecordType
 EXAMINATION: RecordType
 VACCINATION: RecordType
@@ -67,6 +112,33 @@ LAB_EXPLANATION_STATUS_UNSPECIFIED: LabExplanationStatus
 LAB_EXPLANATION_PENDING: LabExplanationStatus
 LAB_EXPLANATION_READY: LabExplanationStatus
 LAB_EXPLANATION_FAILED: LabExplanationStatus
+HEALTH_ASSESSMENT_STATUS_UNSPECIFIED: HealthAssessmentStatus
+HEALTH_ASSESSMENT_PENDING: HealthAssessmentStatus
+HEALTH_ASSESSMENT_READY: HealthAssessmentStatus
+HEALTH_ASSESSMENT_FAILED: HealthAssessmentStatus
+HEALTH_RISK_LEVEL_UNSPECIFIED: HealthRiskLevel
+HEALTH_RISK_LOW: HealthRiskLevel
+HEALTH_RISK_MODERATE: HealthRiskLevel
+HEALTH_RISK_HIGH: HealthRiskLevel
+HEALTH_RISK_URGENT: HealthRiskLevel
+LAB_TREND_UNSPECIFIED: LabTrend
+LAB_TREND_SINGLE: LabTrend
+LAB_TREND_RISING: LabTrend
+LAB_TREND_FALLING: LabTrend
+LAB_TREND_STABLE: LabTrend
+CONDITION_LIKELIHOOD_UNSPECIFIED: ConditionLikelihood
+CONDITION_LIKELIHOOD_LOW: ConditionLikelihood
+CONDITION_LIKELIHOOD_MEDIUM: ConditionLikelihood
+CONDITION_LIKELIHOOD_HIGH: ConditionLikelihood
+RECOMMENDATION_CATEGORY_UNSPECIFIED: RecommendationCategory
+RECOMMENDATION_NUTRITION: RecommendationCategory
+RECOMMENDATION_CARE: RecommendationCategory
+RECOMMENDATION_FOLLOW_UP_TEST: RecommendationCategory
+RECOMMENDATION_VET_VISIT: RecommendationCategory
+RECOMMENDATION_VACCINATION: RecommendationCategory
+VACCINATION_DUE_STATUS_UNSPECIFIED: VaccinationDueStatus
+VACCINATION_OVERDUE: VaccinationDueStatus
+VACCINATION_DUE_SOON: VaccinationDueStatus
 
 class FileReference(_message.Message):
     __slots__ = ("document_id", "storage_path", "original_name", "mime_type", "size_bytes", "uploaded_at")
@@ -487,6 +559,92 @@ class LabExplanationResponse(_message.Message):
     confidence: float
     generated_at: str
     def __init__(self, status: _Optional[_Union[LabExplanationStatus, str]] = ..., summary: _Optional[str] = ..., items: _Optional[_Iterable[_Union[LabExplanationItem, _Mapping]]] = ..., confidence: _Optional[float] = ..., generated_at: _Optional[str] = ...) -> None: ...
+
+class HealthFinding(_message.Message):
+    __slots__ = ("test_name", "trend", "interpretation")
+    TEST_NAME_FIELD_NUMBER: _ClassVar[int]
+    TREND_FIELD_NUMBER: _ClassVar[int]
+    INTERPRETATION_FIELD_NUMBER: _ClassVar[int]
+    test_name: str
+    trend: LabTrend
+    interpretation: str
+    def __init__(self, test_name: _Optional[str] = ..., trend: _Optional[_Union[LabTrend, str]] = ..., interpretation: _Optional[str] = ...) -> None: ...
+
+class PossibleCondition(_message.Message):
+    __slots__ = ("name", "likelihood", "evidence", "explanation")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    LIKELIHOOD_FIELD_NUMBER: _ClassVar[int]
+    EVIDENCE_FIELD_NUMBER: _ClassVar[int]
+    EXPLANATION_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    likelihood: ConditionLikelihood
+    evidence: _containers.RepeatedScalarFieldContainer[str]
+    explanation: str
+    def __init__(self, name: _Optional[str] = ..., likelihood: _Optional[_Union[ConditionLikelihood, str]] = ..., evidence: _Optional[_Iterable[str]] = ..., explanation: _Optional[str] = ...) -> None: ...
+
+class HealthRecommendation(_message.Message):
+    __slots__ = ("category", "text")
+    CATEGORY_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    category: RecommendationCategory
+    text: str
+    def __init__(self, category: _Optional[_Union[RecommendationCategory, str]] = ..., text: _Optional[str] = ...) -> None: ...
+
+class VaccinationReminder(_message.Message):
+    __slots__ = ("vaccine_name", "next_due_at", "status")
+    VACCINE_NAME_FIELD_NUMBER: _ClassVar[int]
+    NEXT_DUE_AT_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    vaccine_name: str
+    next_due_at: str
+    status: VaccinationDueStatus
+    def __init__(self, vaccine_name: _Optional[str] = ..., next_due_at: _Optional[str] = ..., status: _Optional[_Union[VaccinationDueStatus, str]] = ...) -> None: ...
+
+class HealthAssessment(_message.Message):
+    __slots__ = ("summary", "risk_level", "findings", "possible_conditions", "recommendations", "vaccination_reminders", "questions_for_vet")
+    SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    RISK_LEVEL_FIELD_NUMBER: _ClassVar[int]
+    FINDINGS_FIELD_NUMBER: _ClassVar[int]
+    POSSIBLE_CONDITIONS_FIELD_NUMBER: _ClassVar[int]
+    RECOMMENDATIONS_FIELD_NUMBER: _ClassVar[int]
+    VACCINATION_REMINDERS_FIELD_NUMBER: _ClassVar[int]
+    QUESTIONS_FOR_VET_FIELD_NUMBER: _ClassVar[int]
+    summary: str
+    risk_level: HealthRiskLevel
+    findings: _containers.RepeatedCompositeFieldContainer[HealthFinding]
+    possible_conditions: _containers.RepeatedCompositeFieldContainer[PossibleCondition]
+    recommendations: _containers.RepeatedCompositeFieldContainer[HealthRecommendation]
+    vaccination_reminders: _containers.RepeatedCompositeFieldContainer[VaccinationReminder]
+    questions_for_vet: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, summary: _Optional[str] = ..., risk_level: _Optional[_Union[HealthRiskLevel, str]] = ..., findings: _Optional[_Iterable[_Union[HealthFinding, _Mapping]]] = ..., possible_conditions: _Optional[_Iterable[_Union[PossibleCondition, _Mapping]]] = ..., recommendations: _Optional[_Iterable[_Union[HealthRecommendation, _Mapping]]] = ..., vaccination_reminders: _Optional[_Iterable[_Union[VaccinationReminder, _Mapping]]] = ..., questions_for_vet: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class RequestHealthAssessmentRequest(_message.Message):
+    __slots__ = ("pet_id",)
+    PET_ID_FIELD_NUMBER: _ClassVar[int]
+    pet_id: str
+    def __init__(self, pet_id: _Optional[str] = ...) -> None: ...
+
+class GetLatestHealthAssessmentRequest(_message.Message):
+    __slots__ = ("pet_id",)
+    PET_ID_FIELD_NUMBER: _ClassVar[int]
+    pet_id: str
+    def __init__(self, pet_id: _Optional[str] = ...) -> None: ...
+
+class HealthAssessmentResponse(_message.Message):
+    __slots__ = ("status", "assessment", "confidence", "requested_at", "generated_at", "is_stale")
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    ASSESSMENT_FIELD_NUMBER: _ClassVar[int]
+    CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
+    REQUESTED_AT_FIELD_NUMBER: _ClassVar[int]
+    GENERATED_AT_FIELD_NUMBER: _ClassVar[int]
+    IS_STALE_FIELD_NUMBER: _ClassVar[int]
+    status: HealthAssessmentStatus
+    assessment: HealthAssessment
+    confidence: float
+    requested_at: str
+    generated_at: str
+    is_stale: bool
+    def __init__(self, status: _Optional[_Union[HealthAssessmentStatus, str]] = ..., assessment: _Optional[_Union[HealthAssessment, _Mapping]] = ..., confidence: _Optional[float] = ..., requested_at: _Optional[str] = ..., generated_at: _Optional[str] = ..., is_stale: _Optional[bool] = ...) -> None: ...
 
 class DraftReview(_message.Message):
     __slots__ = ("id", "pet_id", "clinic_id", "source_files", "status", "review_note", "created_record_id", "created_at", "reviewed_at", "reviewed_by_clinic_id", "document_id", "proposal", "approved_content", "model_version", "confidence")
