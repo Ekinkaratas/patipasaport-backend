@@ -2,15 +2,15 @@
 
 Servis bazlı (database-per-service) yapı. Servisler arası ilişkiler SQL foreign key ile değil, **uygulama seviyesinde** (gRPC çağrısı ile doğrulanarak) tutulur — çünkü her servisin veritabanı ayrı bir sunucudadır ve veritabanları birbirine native referans veremez. Aynı servisin kendi tabloları arasında foreign key kullanılabilir.
 
-| Servis | Durum |
-|---|---|
-| Auth | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`Register`, `RegisterClinicAccount`, `Login`, `RefreshToken`, `Logout`) |
-| Users | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`CreateUser`, `CreateClinicUser`, `DeleteUser`, `GetMe`, `UpdateMe`, `DeactivateMe`, `DeactivateClinicUsers`, `GetUserRole`, `GetUserAuthInfo`, `GetUserDisplayNames`, `GetUserContact`). `ListUsersByClinic` proto'dan kaldırıldı — `STAFF` rolü kaldırıldığı için işlevsiz kalmıştı |
-| Clinics | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`, `stock_sales`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `UpdateStockItem`, `AdjustStockItem`, `DeleteStockItem`, `CreateStockSale`, `ListStockSales`, `CancelStockSale`, `GetStockSalesSummary`, `GetClinicPetOverview`). `UploadPetResult` uygulandı: gateway dosyayı SeaweedFS'e yazar, clinics belge referansını medical_record `RegisterDocument`'a iletir (bkz. Medical Record bölümü) |
-| Pets | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`) |
-| Access | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor |
-| Medical Record | ✅ Uygulandı — proto, DTO'lar, CloudEvents, Prisma schema + migration'lar (trigger'larla), 11 gRPC metodu, outbox + RabbitMQ, clinics.UploadPetResult ve gateway uçları (yükleme dahil); unit ve e2e testler yazıldı. Tahlil açıklaması: `lab_result_explanations` tablosu (migration'lar `20261026100731_lab_result_explanations` ve `20261026133613_lab_explanation_status_default`), istek olayı, sonuç tüketicisi, `GetLabExplanation` ve `GET /records/:recordId/explanation` (bkz. Tahlil açıklaması bölümü) |
-| AI (Python/FastAPI) | ✅ Uygulandı — kendi veritabanı yok; `apps/ai-service`, Compose servisi `ai-service`. Belge okuma ve tahlil açıklaması isteklerini RabbitMQ'dan tüketir, sonucu olay olarak yayınlar (bkz. Medical Record bölümü, AI servisi) |
+| Servis              | Durum                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth                | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`Register`, `RegisterClinicAccount`, `Login`, `RefreshToken`, `Logout`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Users               | ✅ Kesinleşti — Prisma schema + migration uygulandı; servis metotları yazıldı (`CreateUser`, `CreateClinicUser`, `DeleteUser`, `GetMe`, `UpdateMe`, `DeactivateMe`, `DeactivateClinicUsers`, `GetUserRole`, `GetUserAuthInfo`, `GetUserDisplayNames`, `GetUserContact`). `ListUsersByClinic` proto'dan kaldırıldı — `STAFF` rolü kaldırıldığı için işlevsiz kalmıştı                                                                                                                                                                                                                                                                                                                                                |
+| Clinics             | ✅ Kesinleşti — Prisma schema + migration uygulandı (`clinics`, `stock_items`, `stock_sales`); servis metotları yazıldı (`GetClinic`, `CreateClinic`, `DeactivateClinic`, `AddStockItem`, `ListStockItems`, `UpdateStockItem`, `AdjustStockItem`, `DeleteStockItem`, `CreateStockSale`, `ListStockSales`, `CancelStockSale`, `GetStockSalesSummary`, `GetClinicPetOverview`). `UploadPetResult` uygulandı: gateway dosyayı SeaweedFS'e yazar, clinics belge referansını medical_record `RegisterDocument`'a iletir (bkz. Medical Record bölümü)                                                                                                                                                                     |
+| Pets                | ✅ Kesinleşti — Prisma schema + migration uygulandı (MongoDB'den PostgreSQL'e geçildi); servis metotları yazıldı (`GetPet`, `SearchClinicPets`, `ListMyPets`, `GetPetOwner`, `CreatePet`, `UpdatePet`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Access              | ✅ Rıza tabloları kesinleşti — Prisma schema + migration + trigger'lar uygulandı; token RPC'leri (`CreateOpaqueToken`, `RevokeToken`, `ExchangeToken`) ve rıza RPC'leri (`GrantConsent`, `RevokeConsent`, `GetConsentStatus`, `ListMyConsents`, `CheckAccess`) yazıldı; Pets `GetPetOwner` ve Clinics `GetClinic` uçlarıyla uçtan uca çalışıyor                                                                                                                                                                                                                                                                                                                                                                     |
+| Medical Record      | ✅ Uygulandı — proto, DTO'lar, CloudEvents, Prisma schema + migration'lar (trigger'larla), 11 gRPC metodu, outbox + RabbitMQ, clinics.UploadPetResult ve gateway uçları (yükleme dahil); unit ve e2e testler yazıldı. Tahlil açıklaması: `lab_result_explanations` tablosu (migration'lar `20261026100731_lab_result_explanations` ve `20261026133613_lab_explanation_status_default`), istek olayı, sonuç tüketicisi, `GetLabExplanation` ve `GET /records/:recordId/explanation` (bkz. Tahlil açıklaması bölümü). Sağlık değerlendirmesi: `health_assessments` tablosu ve migration'ı (`20261101090419_health_assessments`) eklendi; servis kodu, olaylar ve uçlar henüz yok (bkz. Sağlık değerlendirmesi bölümü) |
+| AI (Python/FastAPI) | ✅ Uygulandı — kendi veritabanı yok; `apps/ai-service`, Compose servisi `ai-service`. Belge okuma ve tahlil açıklaması isteklerini RabbitMQ'dan tüketir, sonucu olay olarak yayınlar (bkz. Medical Record bölümü, AI servisi)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ---
 
@@ -20,28 +20,28 @@ Prisma: `apps/auth/prisma/schema.prisma`
 
 ### credentials
 
-| Kolon | Tip | Not |
-|---|---|---|
-| user_id | UUID (PK) | `users.id` ile aynı değer |
-| email | varchar(254), unique | Giriş kimliği — **source of truth burası** |
-| password_hash | text | argon2id |
-| created_at | timestamp | |
-| updated_at | timestamp | |
+| Kolon         | Tip                  | Not                                        |
+| ------------- | -------------------- | ------------------------------------------ |
+| user_id       | UUID (PK)            | `users.id` ile aynı değer                  |
+| email         | varchar(254), unique | Giriş kimliği — **source of truth burası** |
+| password_hash | text                 | argon2id                                   |
+| created_at    | timestamp            |                                            |
+| updated_at    | timestamp            |                                            |
 
 ### sessions
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | |
-| user_id | UUID, FK → `credentials.user_id` | `ON DELETE CASCADE` — kimlik silinince oturumları da silinir |
-| family_id | UUID, index | **Oturum ailesi** — her login yeni bir aile açar, refresh (rotation) aynı aileyi devralır. Her aile bir cihaz oturumuna karşılık gelir |
-| refresh_token_hash | text, unique | **Hash'lenmiş** (SHA-256) — düz metin saklanmaz; refresh/logout aramaları bu alan üzerinden (unique index) |
-| client_type | enum | `WEB` / `MOBILE` — token bu türe bağlanır; refresh'te istekteki `client_type` bununla karşılaştırılır, uyuşmazsa 401 |
-| remember_me | boolean, default `false` | "Oturumu hatırla" seçimi — refresh'te yeni oturumun süresi buna göre hesaplanır |
-| issued_at | timestamp | |
-| expires_at | timestamp | `remember_me = false` → 12 saat, `true` → 30 gün (`auth.constants.ts`) |
-| revoked_at | timestamp, nullable | Dolu ise oturum geçersiz |
-| updated_at | timestamp | |
+| Kolon              | Tip                              | Not                                                                                                                                    |
+| ------------------ | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| id                 | UUID (PK)                        |                                                                                                                                        |
+| user_id            | UUID, FK → `credentials.user_id` | `ON DELETE CASCADE` — kimlik silinince oturumları da silinir                                                                           |
+| family_id          | UUID, index                      | **Oturum ailesi** — her login yeni bir aile açar, refresh (rotation) aynı aileyi devralır. Her aile bir cihaz oturumuna karşılık gelir |
+| refresh_token_hash | text, unique                     | **Hash'lenmiş** (SHA-256) — düz metin saklanmaz; refresh/logout aramaları bu alan üzerinden (unique index)                             |
+| client_type        | enum                             | `WEB` / `MOBILE` — token bu türe bağlanır; refresh'te istekteki `client_type` bununla karşılaştırılır, uyuşmazsa 401                   |
+| remember_me        | boolean, default `false`         | "Oturumu hatırla" seçimi — refresh'te yeni oturumun süresi buna göre hesaplanır                                                        |
+| issued_at          | timestamp                        |                                                                                                                                        |
+| expires_at         | timestamp                        | `remember_me = false` → 12 saat, `true` → 30 gün (`auth.constants.ts`)                                                                 |
+| revoked_at         | timestamp, nullable              | Dolu ise oturum geçersiz                                                                                                               |
+| updated_at         | timestamp                        |                                                                                                                                        |
 
 **Refresh token rotation:**
 
@@ -58,11 +58,11 @@ Prisma: `apps/auth/prisma/schema.prisma`
 
 ### Redis (`redis-auth`) — hatalı giriş kilidi
 
-| Anahtar | TTL | Anlamı |
-|---|---|---|
-| `auth:login-fail:<email>` | 15 dk (ilk denemede başlar, uzamaz) | Penceredeki deneme sayacı — deneme **şifre kontrolünden önce** sayılır, başarılı giriş siler |
-| `auth:login-lock:<email>` | Kilit süresi | Varsa hesap kilitli (`TOO_MANY_REQUESTS`) |
-| `auth:login-lock-level:<email>` | 24 saat (her hatalı denemede yenilenir) | Art arda kilit sayısı (kademe) |
+| Anahtar                         | TTL                                     | Anlamı                                                                                       |
+| ------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `auth:login-fail:<email>`       | 15 dk (ilk denemede başlar, uzamaz)     | Penceredeki deneme sayacı — deneme **şifre kontrolünden önce** sayılır, başarılı giriş siler |
+| `auth:login-lock:<email>`       | Kilit süresi                            | Varsa hesap kilitli (`TOO_MANY_REQUESTS`)                                                    |
+| `auth:login-lock-level:<email>` | 24 saat (her hatalı denemede yenilenir) | Art arda kilit sayısı (kademe)                                                               |
 
 15 dakikada 5 hatalı deneme hesabı kilitler; art arda kilitler **5 → 15 → 30 → 60 dk** (sonra 60 dk sabit). 24 saat hatasız geçerse kademe sıfırlanır. Kilit yalnızca email bazlıdır; kayıtsız email için de uygulanır (email sızıntısını önlemek için).
 
@@ -74,17 +74,17 @@ Prisma: `apps/users/prisma/schema.prisma`
 
 ### users
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | Auth Service'in ürettiği id — default yok |
-| email | varchar(254), unique | **Kopya** — source of truth `auth_db.credentials`; değişiklik önce auth'ta yapılır |
-| full_name | varchar(64) | Hasta sahibinde ad soyad (`FullName` kuralı); klinik hesabında kliniğin adı (klinik adı kuralı, 2–64) |
-| tel_no | varchar(16), unique | E.164 formatında; hasta sahibinde mobil (`+905XXXXXXXXX`), klinik hesabında sabit hat, 0850 ya da mobil (`+90[2-58]XXXXXXXXX`); 16 = E.164 üst sınırı |
-| role | enum, default `PET_OWNER` | `PET_OWNER` / `CLINIC` — `users.proto` `UserRole` ile aynı; `CLINIC` kliniğin ortak hesabıdır (`STAFF` kaldırıldı, proto numarası `reserved`); `CreateUser` yalnızca `PET_OWNER` üretir, `CLINIC` hesabı yalnızca klinik oluşturma akışında `CreateClinicUser` ile açılır |
-| clinic_id | UUID, nullable | Klinik hesabıysa (`CLINIC`) dolu, hasta sahibiyse null (proto'ya boş string olarak döner) |
-| is_active | boolean, default `true` | Hesap durumu (silmeden devre dışı bırakma) — çevrim içi bilgisi **değil**. `false` ise login ve refresh `ACCOUNT_DISABLED` alır. Hasta sahibi `DeactivateMe` ile, klinik hesabı klinik pasifleştirilirken `DeactivateClinicUsers` ile `false` yapılır; eldeki access token en fazla 15 dk daha geçerli kalır |
-| created_at | timestamp | |
-| updated_at | timestamp | |
+| Kolon      | Tip                       | Not                                                                                                                                                                                                                                                                                                          |
+| ---------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| id         | UUID (PK)                 | Auth Service'in ürettiği id — default yok                                                                                                                                                                                                                                                                    |
+| email      | varchar(254), unique      | **Kopya** — source of truth `auth_db.credentials`; değişiklik önce auth'ta yapılır                                                                                                                                                                                                                           |
+| full_name  | varchar(64)               | Hasta sahibinde ad soyad (`FullName` kuralı); klinik hesabında kliniğin adı (klinik adı kuralı, 2–64)                                                                                                                                                                                                        |
+| tel_no     | varchar(16), unique       | E.164 formatında; hasta sahibinde mobil (`+905XXXXXXXXX`), klinik hesabında sabit hat, 0850 ya da mobil (`+90[2-58]XXXXXXXXX`); 16 = E.164 üst sınırı                                                                                                                                                        |
+| role       | enum, default `PET_OWNER` | `PET_OWNER` / `CLINIC` — `users.proto` `UserRole` ile aynı; `CLINIC` kliniğin ortak hesabıdır (`STAFF` kaldırıldı, proto numarası `reserved`); `CreateUser` yalnızca `PET_OWNER` üretir, `CLINIC` hesabı yalnızca klinik oluşturma akışında `CreateClinicUser` ile açılır                                    |
+| clinic_id  | UUID, nullable            | Klinik hesabıysa (`CLINIC`) dolu, hasta sahibiyse null (proto'ya boş string olarak döner)                                                                                                                                                                                                                    |
+| is_active  | boolean, default `true`   | Hesap durumu (silmeden devre dışı bırakma) — çevrim içi bilgisi **değil**. `false` ise login ve refresh `ACCOUNT_DISABLED` alır. Hasta sahibi `DeactivateMe` ile, klinik hesabı klinik pasifleştirilirken `DeactivateClinicUsers` ile `false` yapılır; eldeki access token en fazla 15 dk daha geçerli kalır |
+| created_at | timestamp                 |                                                                                                                                                                                                                                                                                                              |
+| updated_at | timestamp                 |                                                                                                                                                                                                                                                                                                              |
 
 **Index:** `(clinic_id, role)` — `DeactivateClinicUsers` için (kliniğin ortak hesabını `clinic_id` ile bulur).
 
@@ -100,16 +100,16 @@ Prisma: `apps/clinics/prisma/schema.prisma`
 
 ### clinics
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | |
-| full_name | varchar(128) | Proto `Clinic.name`. DTO 2–64 karakterle sınırlar (harf, rakam, boşluk, `. ' & -`) çünkü aynı değer kliniğin ortak hesabında `users.full_name`'e (varchar(64)) yazılır |
-| tax_number | varchar(11), unique | VKN (10 hane) veya şahıs işletmesi için TCKN (11 hane); resmi kontrol hanesi algoritmalarıyla doğrulanır. Pasif klinikte `X` + 10 rastgele rakam |
-| contact_email | varchar(254), unique | Kurumsal iletişim adresi. Klinik oluşturulurken aynı değer ortak hesabın giriş e-postası olarak da yazılır (`users.email`, `auth_db.credentials.email`); giriş yine auth_db üzerinden yapılır ve sütunlar sonradan birbirini izlemez. Proto `Clinic.email` |
-| tel_no | varchar(16), unique | E.164 formatında; Türkiye sabit hat, 0850 ya da mobil (`+90[2-58]XXXXXXXXX`). Proto `Clinic.phone` |
-| is_active | boolean, default `true` | `false` ise klinik pasif; Access Service `GrantConsent`'te pasif kliniği `NOT_FOUND` sayar, stok işlemleri `FORBIDDEN` alır |
-| created_at | timestamp | |
-| updated_at | timestamp | |
+| Kolon         | Tip                     | Not                                                                                                                                                                                                                                                        |
+| ------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id            | UUID (PK)               |                                                                                                                                                                                                                                                            |
+| full_name     | varchar(128)            | Proto `Clinic.name`. DTO 2–64 karakterle sınırlar (harf, rakam, boşluk, `. ' & -`) çünkü aynı değer kliniğin ortak hesabında `users.full_name`'e (varchar(64)) yazılır                                                                                     |
+| tax_number    | varchar(11), unique     | VKN (10 hane) veya şahıs işletmesi için TCKN (11 hane); resmi kontrol hanesi algoritmalarıyla doğrulanır. Pasif klinikte `X` + 10 rastgele rakam                                                                                                           |
+| contact_email | varchar(254), unique    | Kurumsal iletişim adresi. Klinik oluşturulurken aynı değer ortak hesabın giriş e-postası olarak da yazılır (`users.email`, `auth_db.credentials.email`); giriş yine auth_db üzerinden yapılır ve sütunlar sonradan birbirini izlemez. Proto `Clinic.email` |
+| tel_no        | varchar(16), unique     | E.164 formatında; Türkiye sabit hat, 0850 ya da mobil (`+90[2-58]XXXXXXXXX`). Proto `Clinic.phone`                                                                                                                                                         |
+| is_active     | boolean, default `true` | `false` ise klinik pasif; Access Service `GrantConsent`'te pasif kliniği `NOT_FOUND` sayar, stok işlemleri `FORBIDDEN` alır                                                                                                                                |
+| created_at    | timestamp               |                                                                                                                                                                                                                                                            |
+| updated_at    | timestamp               |                                                                                                                                                                                                                                                            |
 
 **Oluşturma akışı:** `CreateClinic` iç RPC'dir (gateway'e açılmaz, yönetici çağırır). Önce klinik satırı yazılır (`TAX_NUMBER_` / `EMAIL_` / `PHONE_ALREADY_EXISTS` burada yakalanır), ardından `auth.RegisterClinicAccount` kliniğin ortak hesabını açar (users `CreateClinicUser` → credentials; credential yazılamazsa `DeleteUser` ile geri alınır). Auth hata verirse klinik satırı silinir. Bilinen sınır: auth kaydı yazdıktan sonra clinics→auth çağrısı zaman aşımına uğrarsa klinik satırı silinir ve hesap sahipsiz kalır (error loguna yazılır).
 
@@ -117,21 +117,21 @@ Prisma: `apps/clinics/prisma/schema.prisma`
 
 ### stock_items
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | |
-| clinic_id | UUID, FK → `clinics.id`, index | `ON DELETE RESTRICT` — stoku olan klinik silinemez (zaten silinmez, pasifleştirilir) |
-| name | varchar(64) | Kural: `AddStockItemRequestDto` |
-| category | enum `StockCategory` | `VACCINE` / `MEDICINE` / `SUPPLY` / `FOOD` / `OTHER` — `STOCK_CATEGORIES` (`libs/common`) ile birebir aynı |
-| unit | enum `StockUnit` | `PIECE` / `BOX` / `BOTTLE` / `AMPOULE` / `TABLET` / `DOSE` / `ML` / `MG` / `G` — `STOCK_UNITS` ile birebir aynı |
-| quantity | integer | 0–100.000 (DTO) |
-| critical_level | integer | 0–100.000 (DTO); `0` = uyarı yok |
-| expires_at | date, nullable | Son kullanma tarihi; boşsa yok |
-| purchase_price | integer, nullable | Alış fiyatı, kuruş (`14990` = 149,90 TL); tam sayı, 0–1.000.000.000 (DTO + CHECK). Yeni kalemde zorunlu: gönderilmezse, `null` ya da boş metin (`""`) gelirse `400 PURCHASE_PRICE_MUST_BE_NUMBER` / `SALE_PRICE_MUST_BE_NUMBER`; boş değer hiçbir durumda 0 sayılmaz. Fiyatlar eklenmeden önce girilmiş kalemlerde boştur ve iki fiyat da girilene kadar satılamaz |
-| sale_price | integer, nullable | Varsayılan satış fiyatı, kuruş; kuralları `purchase_price` ile aynı |
-| created_by | UUID | Kaydı giren kullanıcının `users.id`'si — JWT'den alınır, istemciden değil |
-| created_at | timestamp | |
-| updated_at | timestamp | |
+| Kolon          | Tip                            | Not                                                                                                                                                                                                                                                                                                                                                                |
+| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| id             | UUID (PK)                      |                                                                                                                                                                                                                                                                                                                                                                    |
+| clinic_id      | UUID, FK → `clinics.id`, index | `ON DELETE RESTRICT` — stoku olan klinik silinemez (zaten silinmez, pasifleştirilir)                                                                                                                                                                                                                                                                               |
+| name           | varchar(64)                    | Kural: `AddStockItemRequestDto`                                                                                                                                                                                                                                                                                                                                    |
+| category       | enum `StockCategory`           | `VACCINE` / `MEDICINE` / `SUPPLY` / `FOOD` / `OTHER` — `STOCK_CATEGORIES` (`libs/common`) ile birebir aynı                                                                                                                                                                                                                                                         |
+| unit           | enum `StockUnit`               | `PIECE` / `BOX` / `BOTTLE` / `AMPOULE` / `TABLET` / `DOSE` / `ML` / `MG` / `G` — `STOCK_UNITS` ile birebir aynı                                                                                                                                                                                                                                                    |
+| quantity       | integer                        | 0–100.000 (DTO)                                                                                                                                                                                                                                                                                                                                                    |
+| critical_level | integer                        | 0–100.000 (DTO); `0` = uyarı yok                                                                                                                                                                                                                                                                                                                                   |
+| expires_at     | date, nullable                 | Son kullanma tarihi; boşsa yok                                                                                                                                                                                                                                                                                                                                     |
+| purchase_price | integer, nullable              | Alış fiyatı, kuruş (`14990` = 149,90 TL); tam sayı, 0–1.000.000.000 (DTO + CHECK). Yeni kalemde zorunlu: gönderilmezse, `null` ya da boş metin (`""`) gelirse `400 PURCHASE_PRICE_MUST_BE_NUMBER` / `SALE_PRICE_MUST_BE_NUMBER`; boş değer hiçbir durumda 0 sayılmaz. Fiyatlar eklenmeden önce girilmiş kalemlerde boştur ve iki fiyat da girilene kadar satılamaz |
+| sale_price     | integer, nullable              | Varsayılan satış fiyatı, kuruş; kuralları `purchase_price` ile aynı                                                                                                                                                                                                                                                                                                |
+| created_by     | UUID                           | Kaydı giren kullanıcının `users.id`'si — JWT'den alınır, istemciden değil                                                                                                                                                                                                                                                                                          |
+| created_at     | timestamp                      |                                                                                                                                                                                                                                                                                                                                                                    |
+| updated_at     | timestamp                      |                                                                                                                                                                                                                                                                                                                                                                    |
 
 **Index:** `(clinic_id, category)` — `ListStockItems` kategori filtresi için.
 
@@ -139,11 +139,11 @@ Prisma: `apps/clinics/prisma/schema.prisma`
 
 **Güncelleme, artış/azalış ve silme** (`UpdateStockItem`, `AdjustStockItem`, `DeleteStockItem`; yalnızca CLINIC rolü ve kendi kliniği):
 
-| Gateway ucu | Kural |
-|---|---|
-| `PATCH /clinics/:clinicId/stock-items/:itemId` | Yalnızca gönderilen alanlar değişir: `name`, `quantity`, `criticalLevel`, `expiresAt`, `purchasePrice`, `salePrice`. Kategori ve birim değiştirilemez. `expiresAt: null` tarihi kaldırır; yeni tarih geçmişte olamaz. Gönderilmeyen fiyat değişmez; fiyat kaldırılamaz ve boş bırakılamaz (`null` ya da boş metin → `400 *_PRICE_MUST_BE_NUMBER`, mevcut fiyat korunur); fiyat değişikliği geçmiş satışları etkilemez. Hiç alan yoksa `400 BAD_REQUEST`. |
-| `POST /clinics/:clinicId/stock-items/:itemId/adjust` | Gövde `{ delta }`: sıfırdan farklı tam sayı, -100.000…100.000 (`DELTA_*`). Tek koşullu `UPDATE` ile atomik uygulanır. Sonuç 0'ın altına düşecekse `400 QUANTITY_MIN\|0`, 100.000'i geçecekse `400 QUANTITY_MAX\|100000`; stok değişmez. Satış dışı hareketler (fire, sayım düzeltmesi, mal kabul) için kullanılır. |
-| `DELETE /clinics/:clinicId/stock-items/:itemId` | Kalıcı silme; yanıtta silinen kalem döner. Kalemin satışları silinmez, `stock_sales.stock_item_id` boşalır. |
+| Gateway ucu                                          | Kural                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PATCH /clinics/:clinicId/stock-items/:itemId`       | Yalnızca gönderilen alanlar değişir: `name`, `quantity`, `criticalLevel`, `expiresAt`, `purchasePrice`, `salePrice`. Kategori ve birim değiştirilemez. `expiresAt: null` tarihi kaldırır; yeni tarih geçmişte olamaz. Gönderilmeyen fiyat değişmez; fiyat kaldırılamaz ve boş bırakılamaz (`null` ya da boş metin → `400 *_PRICE_MUST_BE_NUMBER`, mevcut fiyat korunur); fiyat değişikliği geçmiş satışları etkilemez. Hiç alan yoksa `400 BAD_REQUEST`. |
+| `POST /clinics/:clinicId/stock-items/:itemId/adjust` | Gövde `{ delta }`: sıfırdan farklı tam sayı, -100.000…100.000 (`DELTA_*`). Tek koşullu `UPDATE` ile atomik uygulanır. Sonuç 0'ın altına düşecekse `400 QUANTITY_MIN\|0`, 100.000'i geçecekse `400 QUANTITY_MAX\|100000`; stok değişmez. Satış dışı hareketler (fire, sayım düzeltmesi, mal kabul) için kullanılır.                                                                                                                                       |
+| `DELETE /clinics/:clinicId/stock-items/:itemId`      | Kalıcı silme; yanıtta silinen kalem döner. Kalemin satışları silinmez, `stock_sales.stock_item_id` boşalır.                                                                                                                                                                                                                                                                                                                                              |
 
 Yoldaki klinik token'daki klinik değilse `403 FORBIDDEN`; kalem yoksa ya da başka kliniğe aitse `404 NOT_FOUND`; pasif klinik işlem yapamaz. PATCH ve adjust güncel kalemi döner (200). `updated_by` tutulmaz (klinikler tek hesabı paylaşır).
 
@@ -151,20 +151,20 @@ Yoldaki klinik token'daki klinik değilse `403 FORBIDDEN`; kalem yoksa ya da ba�
 
 ### stock_sales
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | |
-| clinic_id | UUID, FK → `clinics.id` | `ON DELETE RESTRICT` |
-| stock_item_id | UUID, FK → `stock_items.id`, nullable, index | `ON DELETE SET NULL` — kalem silinse de satış ve rapordaki yeri korunur |
-| item_name | varchar(64) | Satış anındaki kalem adı (kopya) |
-| category | enum `StockCategory` | Satış anındaki kategori (kopya) |
-| unit | enum `StockUnit` | Satış anındaki birim (kopya) |
-| quantity | integer | 1–100.000 (DTO + CHECK) |
-| unit_sale_price | integer | Birim satış fiyatı, kuruş. İstekte `unitPrice` varsa o, yoksa kalemin o anki `sale_price` değeri; 0–1.000.000.000 (DTO + CHECK). `unitPrice` `null` ya da boş metin olarak gelirse `400 UNIT_PRICE_MUST_BE_NUMBER` |
-| unit_purchase_price | integer | Satış anındaki alış fiyatı (birim maliyet), kuruş; 0–1.000.000.000 (CHECK) |
-| sold_at | timestamp(3) | UTC |
-| cancelled_at | timestamp(3), nullable | Doluysa satış iptal edilmiştir ve raporlara girmez |
-| created_by | UUID | Satışı giren kullanıcının `users.id`'si — JWT'den alınır |
+| Kolon               | Tip                                          | Not                                                                                                                                                                                                                |
+| ------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| id                  | UUID (PK)                                    |                                                                                                                                                                                                                    |
+| clinic_id           | UUID, FK → `clinics.id`                      | `ON DELETE RESTRICT`                                                                                                                                                                                               |
+| stock_item_id       | UUID, FK → `stock_items.id`, nullable, index | `ON DELETE SET NULL` — kalem silinse de satış ve rapordaki yeri korunur                                                                                                                                            |
+| item_name           | varchar(64)                                  | Satış anındaki kalem adı (kopya)                                                                                                                                                                                   |
+| category            | enum `StockCategory`                         | Satış anındaki kategori (kopya)                                                                                                                                                                                    |
+| unit                | enum `StockUnit`                             | Satış anındaki birim (kopya)                                                                                                                                                                                       |
+| quantity            | integer                                      | 1–100.000 (DTO + CHECK)                                                                                                                                                                                            |
+| unit_sale_price     | integer                                      | Birim satış fiyatı, kuruş. İstekte `unitPrice` varsa o, yoksa kalemin o anki `sale_price` değeri; 0–1.000.000.000 (DTO + CHECK). `unitPrice` `null` ya da boş metin olarak gelirse `400 UNIT_PRICE_MUST_BE_NUMBER` |
+| unit_purchase_price | integer                                      | Satış anındaki alış fiyatı (birim maliyet), kuruş; 0–1.000.000.000 (CHECK)                                                                                                                                         |
+| sold_at             | timestamp(3)                                 | UTC                                                                                                                                                                                                                |
+| cancelled_at        | timestamp(3), nullable                       | Doluysa satış iptal edilmiştir ve raporlara girmez                                                                                                                                                                 |
+| created_by          | UUID                                         | Satışı giren kullanıcının `users.id`'si — JWT'den alınır                                                                                                                                                           |
 
 **Index:** `(clinic_id, sold_at)` — satış listesi ve aylık rapor için; `(stock_item_id)` — FK için.
 
@@ -172,12 +172,12 @@ Toplam satış, toplam maliyet ve kâr saklanmaz; okurken `quantity × birim fiy
 
 **Uçlar** (`CreateStockSale`, `ListStockSales`, `CancelStockSale`, `GetStockSalesSummary`; yalnızca CLINIC rolü ve kendi kliniği, pasif klinik işlem yapamaz):
 
-| Gateway ucu | Kural |
-|---|---|
-| `POST /clinics/:clinicId/stock-items/:itemId/sales` | Gövde `{ quantity, unitPrice? }`. Stok aynı transaction içinde tek koşullu `UPDATE` ile düşer; yetmiyorsa `400 QUANTITY_MIN\|0` ve satış yazılmaz, eşzamanlı satışlar stoku eksiye düşüremez. Alış ya da satış fiyatı boş kalemde `400 PURCHASE_PRICE_NOT_EMPTY` / `SALE_PRICE_NOT_EMPTY`. `201` yanıtında satış ve güncel kalem döner. |
-| `GET /clinics/:clinicId/stock-sales` | `fromDate`, `toDate` (YYYY-AA-GG, İstanbul günü, ikisi de dahil ve isteğe bağlı; bitiş başlangıçtan önce olamaz), `page`, `pageSize` (8/16/32/64/128). Yeniden eskiye sıralıdır; iptal edilen satışlar `cancelledAt` dolu olarak listelenir. |
-| `POST /clinics/:clinicId/stock-sales/:saleId/cancel` | Yalnızca satışın yapıldığı İstanbul takvim ayı içinde; daha eski ya da zaten iptal edilmiş satış `409 CONFLICT`. Satılan miktar aynı transaction içinde stoka geri eklenir; stok 100.000'i aşacaksa `400 QUANTITY_MAX\|100000` ve iptal yapılmaz. Kalem silinmişse stoka dokunmadan iptal edilir (`item` boş döner). |
-| `GET /clinics/:clinicId/stock-sales/summary?month=YYYY-AA` | İstanbul takvim ayı. `month` yoksa içinde bulunulan ay; gelecek ay sıfır döner; geçersiz biçim `400 MONTH_WRONG DATA FORMAT`. İptal edilen satışlar hariçtir. |
+| Gateway ucu                                                | Kural                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /clinics/:clinicId/stock-items/:itemId/sales`        | Gövde `{ quantity, unitPrice? }`. Stok aynı transaction içinde tek koşullu `UPDATE` ile düşer; yetmiyorsa `400 QUANTITY_MIN\|0` ve satış yazılmaz, eşzamanlı satışlar stoku eksiye düşüremez. Alış ya da satış fiyatı boş kalemde `400 PURCHASE_PRICE_NOT_EMPTY` / `SALE_PRICE_NOT_EMPTY`. `201` yanıtında satış ve güncel kalem döner. |
+| `GET /clinics/:clinicId/stock-sales`                       | `fromDate`, `toDate` (YYYY-AA-GG, İstanbul günü, ikisi de dahil ve isteğe bağlı; bitiş başlangıçtan önce olamaz), `page`, `pageSize` (8/16/32/64/128). Yeniden eskiye sıralıdır; iptal edilen satışlar `cancelledAt` dolu olarak listelenir.                                                                                            |
+| `POST /clinics/:clinicId/stock-sales/:saleId/cancel`       | Yalnızca satışın yapıldığı İstanbul takvim ayı içinde; daha eski ya da zaten iptal edilmiş satış `409 CONFLICT`. Satılan miktar aynı transaction içinde stoka geri eklenir; stok 100.000'i aşacaksa `400 QUANTITY_MAX\|100000` ve iptal yapılmaz. Kalem silinmişse stoka dokunmadan iptal edilir (`item` boş döner).                    |
+| `GET /clinics/:clinicId/stock-sales/summary?month=YYYY-AA` | İstanbul takvim ayı. `month` yoksa içinde bulunulan ay; gelecek ay sıfır döner; geçersiz biçim `400 MONTH_WRONG DATA FORMAT`. İptal edilen satışlar hariçtir.                                                                                                                                                                           |
 
 **Aylık rapor yanıtı:**
 
@@ -198,22 +198,22 @@ Prisma: `apps/pets/prisma/schema.prisma`
 
 ### pets
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | Pets Service üretir (UUID v4) |
-| name | varchar(32), collation `tr-TR-x-icu` | 1–32 karakter; yalnızca harf (Türkçe dahil) ve kelimeler arasında tek boşluk — rakam, emoji ve `' _ + -` kabul edilmez. `SearchClinicPets`'teki büyük/küçük harf duyarsız ad araması Türkçe kurala göre çalışır (`I`↔`ı`, `İ`↔`i`); Prisma sütun collation'ını tanımadığı için ayar migration'da tutulur |
-| species | enum `PetSpecies` | `PET_SPECIES` kodlarından biri — aşağıdaki "Tür ve cins listesi" |
-| breed | varchar(32), zorunlu | Kaydın türüne ait `PET_BREEDS` listesinden biri; melez veya cinsi bilinmeyen hayvan için `MIXED`. Tür–cins uyumu uygulamada doğrulanır (liste değişince migration gerekmesin diye enum değil) |
-| sex | enum `PetSex` | `MALE` / `FEMALE` — proto `PetSex` |
-| birth_date | date, nullable | `YYYY-AA-GG`. Kesin tarih veya tahmini yaştan hesaplanan tarih — yaş saklanmaz, her okumada bu tarihten hesaplanır. Türkiye saatine (`Europe/Istanbul`) göre bugünden sonraki tarih kabul edilmez |
-| is_birth_date_estimated | boolean, default `false` | `true`: tarih kullanıcının girdiği yaştan türetildi ("~3 yaş" gösterimi); `true` ise `birth_date` zorunlu. Proto: `Pet` 13, `CreatePetRequest` 9, `UpdatePetRequest` 7 |
-| is_neutered | boolean, default `false` | |
-| owner_user_id | UUID, index | `users.id` — uygulama seviyesinde referans |
-| chip_no_encrypted | text, nullable | AES-256-GCM, random IV — semantically secure, **aranamaz**. Düz metin ISO 11784/11785 biçiminde tam 15 rakam |
-| chip_no_index | varchar(64), nullable, unique | HMAC-SHA256 blind index — arama bu alan üzerinden. PostgreSQL unique kısıtında NULL'lar birbirinden farklı sayıldığı için çipsiz kayıtlar kısıta takılmaz |
-| chip_no_last4 | char(4), nullable | `chip_number_masked` ("****1234") için — her okumada şifre çözmemek adına |
-| created_at | timestamp | |
-| updated_at | timestamp | |
+| Kolon                   | Tip                                  | Not                                                                                                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id                      | UUID (PK)                            | Pets Service üretir (UUID v4)                                                                                                                                                                                                                                                                              |
+| name                    | varchar(32), collation `tr-TR-x-icu` | 1–32 karakter; yalnızca harf (Türkçe dahil) ve kelimeler arasında tek boşluk — rakam, emoji ve `' _ + -` kabul edilmez. `SearchClinicPets`'teki büyük/küçük harf duyarsız ad araması Türkçe kurala göre çalışır (`I`↔`ı`, `İ`↔`i`); Prisma sütun collation'ını tanımadığı için ayar migration'da tutulur |
+| species                 | enum `PetSpecies`                    | `PET_SPECIES` kodlarından biri — aşağıdaki "Tür ve cins listesi"                                                                                                                                                                                                                                           |
+| breed                   | varchar(32), zorunlu                 | Kaydın türüne ait `PET_BREEDS` listesinden biri; melez veya cinsi bilinmeyen hayvan için `MIXED`. Tür–cins uyumu uygulamada doğrulanır (liste değişince migration gerekmesin diye enum değil)                                                                                                              |
+| sex                     | enum `PetSex`                        | `MALE` / `FEMALE` — proto `PetSex`                                                                                                                                                                                                                                                                         |
+| birth_date              | date, nullable                       | `YYYY-AA-GG`. Kesin tarih veya tahmini yaştan hesaplanan tarih — yaş saklanmaz, her okumada bu tarihten hesaplanır. Türkiye saatine (`Europe/Istanbul`) göre bugünden sonraki tarih kabul edilmez                                                                                                          |
+| is_birth_date_estimated | boolean, default `false`             | `true`: tarih kullanıcının girdiği yaştan türetildi ("~3 yaş" gösterimi); `true` ise `birth_date` zorunlu. Proto: `Pet` 13, `CreatePetRequest` 9, `UpdatePetRequest` 7                                                                                                                                     |
+| is_neutered             | boolean, default `false`             |                                                                                                                                                                                                                                                                                                            |
+| owner_user_id           | UUID, index                          | `users.id` — uygulama seviyesinde referans                                                                                                                                                                                                                                                                 |
+| chip_no_encrypted       | text, nullable                       | AES-256-GCM, random IV — semantically secure, **aranamaz**. Düz metin ISO 11784/11785 biçiminde tam 15 rakam                                                                                                                                                                                               |
+| chip_no_index           | varchar(64), nullable, unique        | HMAC-SHA256 blind index — arama bu alan üzerinden. PostgreSQL unique kısıtında NULL'lar birbirinden farklı sayıldığı için çipsiz kayıtlar kısıta takılmaz                                                                                                                                                  |
+| chip_no_last4           | char(4), nullable                    | `chip_number_masked` ("\*\*\*\*1234") için — her okumada şifre çözmemek adına                                                                                                                                                                                                                              |
+| created_at              | timestamp                            |                                                                                                                                                                                                                                                                                                            |
+| updated_at              | timestamp                            |                                                                                                                                                                                                                                                                                                            |
 
 > Çip numarası neden ikiye ayrıldı: Deterministic encryption (aynı girdi → aynı çıktı) aranabilirlik sağlar ama frekans analizine açıktır. Blind index yaklaşımı ile asıl veri semantically secure şekilde şifreli kalır, arama ayrı bir HMAC sütunu üzerinden yapılır.
 
@@ -221,18 +221,19 @@ Prisma: `apps/pets/prisma/schema.prisma`
 
 Tanım: `libs/common/src/lib/enums/messages/pet-species.ts` (`PET_SPECIES`) ve `pet-breeds.ts` (`PET_BREEDS`, anahtar = tür, değer = cins listesi). Değerler İngilizce koddur; arayüz Türkçe adını gösterir. Listede yalnızca küçük hayvan kliniklerine uygun evcil türler vardır (vahşi ve egzotik türler yok). Her türde en fazla 8 cins tutulur, melez ve cinsi bilinmeyenler için her türe ayrıca `MIXED` eklenir.
 
-| Tür | Cinsler |
-|---|---|
-| `DOG` | `GOLDEN_RETRIEVER`, `LABRADOR_RETRIEVER`, `GERMAN_SHEPHERD`, `KANGAL`, `SIBERIAN_HUSKY`, `POODLE`, `POMERANIAN`, `YORKSHIRE_TERRIER`, `MIXED` |
-| `CAT` | `BRITISH_SHORTHAIR`, `SCOTTISH_FOLD`, `PERSIAN`, `TURKISH_VAN`, `TURKISH_ANGORA`, `SIAMESE`, `MAINE_COON`, `RAGDOLL`, `MIXED` |
-| `BIRD` | `BUDGERIGAR`, `CANARY`, `COCKATIEL`, `LOVEBIRD`, `AFRICAN_GREY`, `MIXED` |
-| `RABBIT` | `HOLLAND_LOP`, `NETHERLAND_DWARF`, `LIONHEAD`, `ANGORA`, `REX`, `MIXED` |
-| `HAMSTER` | `SYRIAN`, `CAMPBELL_DWARF`, `WINTER_WHITE_DWARF`, `ROBOROVSKI`, `MIXED` |
-| `GUINEA_PIG` | `AMERICAN`, `ABYSSINIAN`, `PERUVIAN`, `TEDDY`, `MIXED` |
-| `FERRET` | `MIXED` — gelinciğin cinsi yoktur, yalnızca renk varyantı vardır |
-| `TURTLE` | `RED_EARED_SLIDER`, `YELLOW_BELLIED_SLIDER`, `RUSSIAN_TORTOISE`, `MIXED` — yerli mahmuzlu tosbağa koruma altında olduğu için listede yok |
+| Tür          | Cinsler                                                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DOG`        | `GOLDEN_RETRIEVER`, `LABRADOR_RETRIEVER`, `GERMAN_SHEPHERD`, `KANGAL`, `SIBERIAN_HUSKY`, `POODLE`, `POMERANIAN`, `YORKSHIRE_TERRIER`, `MIXED` |
+| `CAT`        | `BRITISH_SHORTHAIR`, `SCOTTISH_FOLD`, `PERSIAN`, `TURKISH_VAN`, `TURKISH_ANGORA`, `SIAMESE`, `MAINE_COON`, `RAGDOLL`, `MIXED`                 |
+| `BIRD`       | `BUDGERIGAR`, `CANARY`, `COCKATIEL`, `LOVEBIRD`, `AFRICAN_GREY`, `MIXED`                                                                      |
+| `RABBIT`     | `HOLLAND_LOP`, `NETHERLAND_DWARF`, `LIONHEAD`, `ANGORA`, `REX`, `MIXED`                                                                       |
+| `HAMSTER`    | `SYRIAN`, `CAMPBELL_DWARF`, `WINTER_WHITE_DWARF`, `ROBOROVSKI`, `MIXED`                                                                       |
+| `GUINEA_PIG` | `AMERICAN`, `ABYSSINIAN`, `PERUVIAN`, `TEDDY`, `MIXED`                                                                                        |
+| `FERRET`     | `MIXED` — gelinciğin cinsi yoktur, yalnızca renk varyantı vardır                                                                              |
+| `TURTLE`     | `RED_EARED_SLIDER`, `YELLOW_BELLIED_SLIDER`, `RUSSIAN_TORTOISE`, `MIXED` — yerli mahmuzlu tosbağa koruma altında olduğu için listede yok      |
 
 **Kurallar:**
+
 - `PET_BREEDS`'in anahtarları `PET_SPECIES` ile birebir aynı olmak zorundadır (`satisfies Record<PetSpecies, …>`); yeni bir tür eklenip cinsleri yazılmazsa kod derlenmez.
 - `CreatePet`: cins, istekteki türün listesinden olmalıdır (ör. `DOG` + `CANARY` reddedilir).
 - `UpdatePet`'te `species` alanı yoktur; DTO yalnızca cinsin herhangi bir listede olduğunu doğrular, kayıtlı türle uyumu Pets Service kontrol eder.
@@ -245,23 +246,23 @@ Prisma: `apps/access/prisma/schema.prisma`
 
 ### consents (güncel rıza durumu)
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | |
-| clinic_id | UUID | Clinics Service referansı — izin hangi kliniğe verildi |
-| pet_id | UUID | Pets Service referansı — izin hangi hayvan için verildi |
-| pet_owner_id | UUID, index | Users Service referansı — rızayı veren hasta sahibi; "verdiğim izinler" listesi için |
-| medical_read | boolean, default `false` | Scope |
-| medical_write | boolean, default `false` | Scope |
-| vaccination_read | boolean, default `false` | Scope |
-| prescription_read | boolean, default `false` | Scope |
-| chip_number_read | boolean, default `false` | Scope — çip numarasını açık görme. Klinik çip düzeltmesi (`UpdatePet`) de bu scope'u ister: göremediği veriyi değiştiremez |
-| owner_contact_read | boolean, default `false` | Scope |
-| status | enum, default `ACTIVE` | `ACTIVE` / `REVOKED` |
-| expires_at | timestamp | Rıza penceresinin üst sınırı (`GrantConsentRequest.expires_at`) |
-| revoked_at | timestamp, nullable | Son iptal zamanı |
-| created_at | timestamp | |
-| updated_at | timestamp | |
+| Kolon              | Tip                      | Not                                                                                                                        |
+| ------------------ | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| id                 | UUID (PK)                |                                                                                                                            |
+| clinic_id          | UUID                     | Clinics Service referansı — izin hangi kliniğe verildi                                                                     |
+| pet_id             | UUID                     | Pets Service referansı — izin hangi hayvan için verildi                                                                    |
+| pet_owner_id       | UUID, index              | Users Service referansı — rızayı veren hasta sahibi; "verdiğim izinler" listesi için                                       |
+| medical_read       | boolean, default `false` | Scope                                                                                                                      |
+| medical_write      | boolean, default `false` | Scope                                                                                                                      |
+| vaccination_read   | boolean, default `false` | Scope                                                                                                                      |
+| prescription_read  | boolean, default `false` | Scope                                                                                                                      |
+| chip_number_read   | boolean, default `false` | Scope — çip numarasını açık görme. Klinik çip düzeltmesi (`UpdatePet`) de bu scope'u ister: göremediği veriyi değiştiremez |
+| owner_contact_read | boolean, default `false` | Scope                                                                                                                      |
+| status             | enum, default `ACTIVE`   | `ACTIVE` / `REVOKED`                                                                                                       |
+| expires_at         | timestamp                | Rıza penceresinin üst sınırı (`GrantConsentRequest.expires_at`)                                                            |
+| revoked_at         | timestamp, nullable      | Son iptal zamanı                                                                                                           |
+| created_at         | timestamp                |                                                                                                                            |
+| updated_at         | timestamp                |                                                                                                                            |
 
 **Composite unique:** `(clinic_id, pet_id)` — bir klinik ile bir hayvan arasında tek rıza satırı. İptal edilen rıza yeniden verilirse **aynı satır** güncellenir (`upsert`), yeni satır açılmaz; geçmiş `consent_events`'te korunur.
 
@@ -271,15 +272,15 @@ Geçerli rıza = `status = ACTIVE` **ve** `expires_at > şimdi` **ve** istenen s
 
 ### consent_events (değiştirilemez denetim izi)
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | Trigger üretir (`gen_random_uuid()`) |
-| consent_id | UUID, FK → `consents.id` | `ON DELETE RESTRICT` — geçmişi olan rıza silinemez |
-| action | enum | `GRANTED` / `UPDATED` / `REVOKED` |
-| medical_read … owner_contact_read | boolean (6 sütun) | İşlem anındaki scope'ların kopyası |
-| expires_at | timestamp | İşlem anındaki rıza penceresi |
-| actor_id | UUID | İşlemi yapan kullanıcı (`users.id`) |
-| created_at | timestamp | |
+| Kolon                             | Tip                      | Not                                                |
+| --------------------------------- | ------------------------ | -------------------------------------------------- |
+| id                                | UUID (PK)                | Trigger üretir (`gen_random_uuid()`)               |
+| consent_id                        | UUID, FK → `consents.id` | `ON DELETE RESTRICT` — geçmişi olan rıza silinemez |
+| action                            | enum                     | `GRANTED` / `UPDATED` / `REVOKED`                  |
+| medical_read … owner_contact_read | boolean (6 sütun)        | İşlem anındaki scope'ların kopyası                 |
+| expires_at                        | timestamp                | İşlem anındaki rıza penceresi                      |
+| actor_id                          | UUID                     | İşlemi yapan kullanıcı (`users.id`)                |
+| created_at                        | timestamp                |                                                    |
 
 **Index:** `(consent_id, created_at)` — bir rızanın geçmişini sırayla okumak için.
 
@@ -380,6 +381,16 @@ Bu özellikten önce oluşmuş tahlil kayıtları için geriye dönük açıklam
 - Kayıt yoksa, kaydın hayvanı kullanıcıya ait değilse (`pets.GetPetOwner`) ya da kaydın açıklama satırı yoksa (tahlil olmayan ve eski kayıtlar dahil) `404 NOT_FOUND`.
 - Yanıt: `status` (`1` PENDING, `2` READY, `3` FAILED). `READY` ise `summary`, `items` (`testName`, `explanation`), `confidence` (0–1) ve `generatedAt` (ISO-8601) dolu gelir; `PENDING` ve `FAILED`'da yalnızca durum döner, hata kodu istemciye gösterilmez.
 
+### Sağlık değerlendirmesi
+
+> **Durum:** yalnızca tablo ve migration var; istek akışı, olaylar (`health_assessment.*.v1`) ve uçlar sonraki aşamalarda yazılacak. Sözleşme: `docs/ai-service-contract.md` bölüm 7A.
+
+AI, hayvanın onaylanmış tüm kayıtlarını (tahliller ve zaman içindeki değişimleri, aşılar, reçeteler, muayene ve ameliyat notları) birlikte değerlendirir. Değerlendirmeyi hayvanın sahibi ve `medical_read` kapsamlı aktif onayı olan klinik görür ve isteyebilir; yalnızca kullanıcı istediğinde üretilir.
+
+- Hayvan başına tek satır tutulur (`pet_id` unique); yeni değerlendirme eskisinin yerine geçer.
+- Her istek satıra yeni bir `request_id` yazar. AI'ın sonuç olayı bu kimlikle eşlenir; eski bir isteğin geç gelen sonucu yok sayılır.
+- `input_hash`, değerlendirmeye giren kayıtların ve hayvan bilgilerinin SHA-256'sıdır. Kayıtlar değişmediyse ve sonuç `READY` ise AI yeniden çağrılmaz; değiştiyse okuma ucu `isStale` döner.
+- Aynı hayvan için yeni AI isteği en az 10 dakika arayla yapılabilir; 30 dakikadan uzun süren `PENDING` takılmış sayılır.
 
 ### Olaylar — CloudEvents + RabbitMQ
 
@@ -390,15 +401,15 @@ Bu özellikten önce oluşmuş tahlil kayıtları için geriye dönük açıklam
 - `data`: `events.proto`'daki mesajın protobuf resmi JSON eşlemesi; Node (ts-proto) ve FastAPI (`grpcio-tools`) aynı şemadan tip üretir.
 - Correlation id mesaj başlığında taşınır; mesajlarda kişisel veri (ad, telefon, e-posta) bulunmaz, yalnızca kimlik ve dosya referansı.
 
-| `type` | Yayınlayan → Dinleyen | `data` |
-|---|---|---|
-| `com.patipasaport.document.uploaded.v1` | medical-record → AI | `DocumentUploaded` |
-| `com.patipasaport.document.processing_started.v1` | AI → medical-record | `DocumentProcessingStarted` |
-| `com.patipasaport.document.analyzed.v1` | AI → medical-record | `DocumentAnalyzed` |
-| `com.patipasaport.document.analysis_failed.v1` | AI → medical-record | `DocumentAnalysisFailed` |
-| `com.patipasaport.lab_explanation.requested.v1` | medical-record → AI | `LabExplanationRequested` |
-| `com.patipasaport.lab_explanation.generated.v1` | AI → medical-record | `LabExplanationGenerated` |
-| `com.patipasaport.lab_explanation.failed.v1` | AI → medical-record | `LabExplanationFailed` |
+| `type`                                            | Yayınlayan → Dinleyen | `data`                      |
+| ------------------------------------------------- | --------------------- | --------------------------- |
+| `com.patipasaport.document.uploaded.v1`           | medical-record → AI   | `DocumentUploaded`          |
+| `com.patipasaport.document.processing_started.v1` | AI → medical-record   | `DocumentProcessingStarted` |
+| `com.patipasaport.document.analyzed.v1`           | AI → medical-record   | `DocumentAnalyzed`          |
+| `com.patipasaport.document.analysis_failed.v1`    | AI → medical-record   | `DocumentAnalysisFailed`    |
+| `com.patipasaport.lab_explanation.requested.v1`   | medical-record → AI   | `LabExplanationRequested`   |
+| `com.patipasaport.lab_explanation.generated.v1`   | AI → medical-record   | `LabExplanationGenerated`   |
+| `com.patipasaport.lab_explanation.failed.v1`      | AI → medical-record   | `LabExplanationFailed`      |
 
 **Güvenilirlik:** kalıcı quorum kuyruk, kalıcı mesaj, yayıncı onayı (publisher confirm), tüketicide iş bittikten sonra elle onay (manual ack), gecikmeli tekrar deneme ve dead-letter kuyruğu. Teslim en az bir kez (at-least-once) olduğundan tüketiciler idempotenttir: aynı `document_id` (tahlil açıklamasında `record_id`) için ikinci sonuç yok sayılır.
 
@@ -408,16 +419,16 @@ AI servisi yönetici hesabını değil, kısıtlı kendi kullanıcısını kulla
 
 **Topoloji** (tamamını medical-record açılışta tanımlar; AI'ın iş kuyrukları dahil, böylece AI çalışmıyorken gelen olaylar kaybolmaz. AI servisi de açılışta iki exchange'i ve kendi kuyruklarını aynı argümanlarla tanımlar):
 
-| Ad | Tür | Not |
-|---|---|---|
-| `patipasaport.events` | topic exchange | Routing key = CloudEvents `type` |
-| `patipasaport.events.dlx` | direct exchange | Routing key = hedef kuyruğun adı |
-| `ai-service.document-uploaded` | quorum kuyruk | ← `com.patipasaport.document.uploaded.v1` |
-| `medical-record.document-events` | quorum kuyruk | ← `processing_started.v1`, `analyzed.v1`, `analysis_failed.v1` |
-| `ai-service.lab-explanation-requested` | quorum kuyruk | ← `com.patipasaport.lab_explanation.requested.v1` |
-| `medical-record.lab-explanation-events` | quorum kuyruk | ← `lab_explanation.generated.v1`, `lab_explanation.failed.v1` |
-| `<kuyruk>.retry` | quorum kuyruk | `x-message-ttl` 30 sn; süre dolunca ana kuyruğa döner |
-| `<kuyruk>.dlq` | quorum kuyruk | Son durak; elle incelenir |
+| Ad                                      | Tür             | Not                                                            |
+| --------------------------------------- | --------------- | -------------------------------------------------------------- |
+| `patipasaport.events`                   | topic exchange  | Routing key = CloudEvents `type`                               |
+| `patipasaport.events.dlx`               | direct exchange | Routing key = hedef kuyruğun adı                               |
+| `ai-service.document-uploaded`          | quorum kuyruk   | ← `com.patipasaport.document.uploaded.v1`                      |
+| `medical-record.document-events`        | quorum kuyruk   | ← `processing_started.v1`, `analyzed.v1`, `analysis_failed.v1` |
+| `ai-service.lab-explanation-requested`  | quorum kuyruk   | ← `com.patipasaport.lab_explanation.requested.v1`              |
+| `medical-record.lab-explanation-events` | quorum kuyruk   | ← `lab_explanation.generated.v1`, `lab_explanation.failed.v1`  |
+| `<kuyruk>.retry`                        | quorum kuyruk   | `x-message-ttl` 30 sn; süre dolunca ana kuyruğa döner          |
+| `<kuyruk>.dlq`                          | quorum kuyruk   | Son durak; elle incelenir                                      |
 
 Ana ve retry kuyruklarının argümanları: `x-queue-type: quorum`, `x-dead-letter-exchange: patipasaport.events.dlx`, `x-dead-letter-routing-key` (ana → `.dlq`, retry → ana kuyruk), `x-dead-letter-strategy: at-least-once`, `x-overflow: reject-publish`; retry'da ayrıca `x-message-ttl: 30000`. AI servisi kendi kuyruklarını aynı argümanlarla tanımlar (`apps/ai-service/app/messaging/topology.py`); farklı argümanla tanımlama RabbitMQ'da hata verir.
 
@@ -465,67 +476,67 @@ Ana ve retry kuyruklarının argümanları: `x-queue-type: quorum`, `x-dead-lett
 
 AI önerisi doğrulanmamış ve biçimi değişken olduğu için **taslakta jsonb** olarak durur; klinik onaylayınca **tipli tablolara** dönüştürülür. Klinik elle kayıt girdiğinde (`CreateRecord`) taslak aşaması atlanır.
 
-> Şema: `apps/medical_record/prisma/schema.prisma`, migration'lar: `apps/medical_record/prisma/migrations/` (`*_init`, `*_documents_pet_created_index`, `*_lab_result_explanations`, `*_lab_explanation_status_default`). Metin uzunlukları DTO sınırlarıyla aynıdır. Kullanıcının girdiği tarihler `date` (YYYY-MM-DD), sistem zamanları `timestamp`.
+> Şema: `apps/medical_record/prisma/schema.prisma`, migration'lar: `apps/medical_record/prisma/migrations/` (`*_init`, `*_documents_pet_created_index`, `*_lab_result_explanations`, `*_lab_explanation_status_default`, `*_health_assessments`). Metin uzunlukları DTO sınırlarıyla aynıdır. Kullanıcının girdiği tarihler `date` (YYYY-MM-DD), sistem zamanları `timestamp`.
 
 #### documents
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | |
-| pet_id | UUID | |
-| clinic_id | UUID | Yükleyen klinik (JWT) |
-| storage_path | varchar(64), unique | Bucket içindeki nesne anahtarı |
-| original_name | varchar(255) | |
-| mime_type | varchar(32) | Dosya imzasından doğrulanmış tür |
-| size_bytes | integer | En fazla 10 MB |
-| sha256 | char(64) | Bütünlük kontrolü |
-| note | varchar(500), nullable | |
-| status | enum `DocumentStatus`, default `QUEUED` | `QUEUED` / `PROCESSING` / `DRAFT_READY` / `FAILED` |
-| failure_reason | varchar(64), nullable | AI hata kodu |
-| created_at / updated_at | timestamp | |
+| Kolon                   | Tip                                     | Not                                                |
+| ----------------------- | --------------------------------------- | -------------------------------------------------- |
+| id                      | UUID (PK)                               |                                                    |
+| pet_id                  | UUID                                    |                                                    |
+| clinic_id               | UUID                                    | Yükleyen klinik (JWT)                              |
+| storage_path            | varchar(64), unique                     | Bucket içindeki nesne anahtarı                     |
+| original_name           | varchar(255)                            |                                                    |
+| mime_type               | varchar(32)                             | Dosya imzasından doğrulanmış tür                   |
+| size_bytes              | integer                                 | En fazla 10 MB                                     |
+| sha256                  | char(64)                                | Bütünlük kontrolü                                  |
+| note                    | varchar(500), nullable                  |                                                    |
+| status                  | enum `DocumentStatus`, default `QUEUED` | `QUEUED` / `PROCESSING` / `DRAFT_READY` / `FAILED` |
+| failure_reason          | varchar(64), nullable                   | AI hata kodu                                       |
+| created_at / updated_at | timestamp                               |                                                    |
 
 **Index:** `(clinic_id, status)`; `(pet_id, created_at)` — `ListDocumentsByPet` için.
 
 #### draft_reviews
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | |
-| document_id | UUID, FK → `documents.id`, unique | Aynı belgeye ikinci taslak açılmaz (idempotent tüketici) |
-| pet_id / clinic_id | UUID | |
-| record_type | enum `RecordType` | |
-| proposed_payload | jsonb | AI'ın ham önerisi (`RecordContent`) |
-| approved_payload | jsonb, nullable | Klinik düzelterek onayladıysa son hali |
-| model_version | varchar(64) | |
-| confidence | double precision | Proto'daki `double` ile birebir |
-| status | enum `DraftReviewStatus`, default `PENDING` | `PENDING` / `APPROVED` / `REJECTED` |
-| review_note | varchar(500), nullable | Red sebebi (redde zorunlu) |
-| reviewed_by_clinic_id | UUID, nullable | Onaylayan/reddeden **klinik** (ortak hesap modeli; ayrıca user id tutulmaz) |
-| reviewed_at | timestamp, nullable | |
-| created_record_id | UUID, FK → `medical_records.id`, unique, nullable | Onayla oluşan kayıt |
-| created_at | timestamp | |
+| Kolon                 | Tip                                               | Not                                                                         |
+| --------------------- | ------------------------------------------------- | --------------------------------------------------------------------------- |
+| id                    | UUID (PK)                                         |                                                                             |
+| document_id           | UUID, FK → `documents.id`, unique                 | Aynı belgeye ikinci taslak açılmaz (idempotent tüketici)                    |
+| pet_id / clinic_id    | UUID                                              |                                                                             |
+| record_type           | enum `RecordType`                                 |                                                                             |
+| proposed_payload      | jsonb                                             | AI'ın ham önerisi (`RecordContent`)                                         |
+| approved_payload      | jsonb, nullable                                   | Klinik düzelterek onayladıysa son hali                                      |
+| model_version         | varchar(64)                                       |                                                                             |
+| confidence            | double precision                                  | Proto'daki `double` ile birebir                                             |
+| status                | enum `DraftReviewStatus`, default `PENDING`       | `PENDING` / `APPROVED` / `REJECTED`                                         |
+| review_note           | varchar(500), nullable                            | Red sebebi (redde zorunlu)                                                  |
+| reviewed_by_clinic_id | UUID, nullable                                    | Onaylayan/reddeden **klinik** (ortak hesap modeli; ayrıca user id tutulmaz) |
+| reviewed_at           | timestamp, nullable                               |                                                                             |
+| created_record_id     | UUID, FK → `medical_records.id`, unique, nullable | Onayla oluşan kayıt                                                         |
+| created_at            | timestamp                                         |                                                                             |
 
 #### medical_records (onaylı kaydın ortak başlığı — değiştirilemez)
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | |
-| pet_id | UUID | |
-| clinic_id | UUID | Kaydı oluşturan / onaylayan klinik |
-| type | enum `RecordType` | `EXAMINATION` / `VACCINATION` / `PRESCRIPTION` / `LAB_RESULT` / `SURGERY` |
-| title | varchar(128) | |
-| notes | text, nullable | En fazla 2000 karakter (DTO) |
-| recorded_at | date | Muayene/uygulama tarihi |
-| source_document_id | UUID, FK → `documents.id`, nullable | AI taslağının kaynak belgesi |
-| source_draft_review_id | UUID, FK → `draft_reviews.id`, nullable | AI taslağından geldiyse |
-| created_at | timestamp | |
+| Kolon                  | Tip                                     | Not                                                                       |
+| ---------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| id                     | UUID (PK)                               |                                                                           |
+| pet_id                 | UUID                                    |                                                                           |
+| clinic_id              | UUID                                    | Kaydı oluşturan / onaylayan klinik                                        |
+| type                   | enum `RecordType`                       | `EXAMINATION` / `VACCINATION` / `PRESCRIPTION` / `LAB_RESULT` / `SURGERY` |
+| title                  | varchar(128)                            |                                                                           |
+| notes                  | text, nullable                          | En fazla 2000 karakter (DTO)                                              |
+| recorded_at            | date                                    | Muayene/uygulama tarihi                                                   |
+| source_document_id     | UUID, FK → `documents.id`, nullable     | AI taslağının kaynak belgesi                                              |
+| source_draft_review_id | UUID, FK → `draft_reviews.id`, nullable | AI taslağından geldiyse                                                   |
+| created_at             | timestamp                               |                                                                           |
 
 #### record_attachments (kayda eklenen belgeler)
 
-| Kolon | Tip | Not |
-|---|---|---|
-| record_id | UUID, FK → `medical_records.id` | Birleşik PK |
-| document_id | UUID, FK → `documents.id` | Birleşik PK; bir belge birden çok kayda eklenebilir |
+| Kolon       | Tip                             | Not                                                 |
+| ----------- | ------------------------------- | --------------------------------------------------- |
+| record_id   | UUID, FK → `medical_records.id` | Birleşik PK                                         |
+| document_id | UUID, FK → `documents.id`       | Birleşik PK; bir belge birden çok kayda eklenebilir |
 
 İstemci `CreateRecord`'da yalnızca `document_id` gönderir; servis belgenin aynı hayvana ve kliniğe ait olduğunu kontrol eder, dosya bilgilerini `documents`'tan doldurur.
 
@@ -533,11 +544,11 @@ AI önerisi doğrulanmamış ve biçimi değişken olduğu için **taslakta json
 
 Her tablonun kendi `id`'si (UUID, PK) vardır. `pet_id` / `clinic_id` tekrar yazılmaz; listeler `medical_records` ile birleştirilerek okunur.
 
-| Tablo | Kolonlar |
-|---|---|
-| `vaccinations` | id, record_id (FK, unique), vaccine_name varchar(128), batch_number varchar(64) nullable, administered_at date, next_due_at date nullable |
-| `prescriptions` | id, record_id (FK, unique), medication_name varchar(128), dosage varchar(64), frequency varchar(64), duration_days integer, instructions varchar(1000) nullable, prescribed_at date |
-| `lab_results` | id, record_id (FK, bir kayıtta birden çok satır), test_name varchar(128), value varchar(64), unit varchar(32) nullable, reference_range varchar(64) nullable, flag enum nullable (`NORMAL` / `LOW` / `HIGH`; belirtilmemişse null), sampled_at date |
+| Tablo           | Kolonlar                                                                                                                                                                                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vaccinations`  | id, record_id (FK, unique), vaccine_name varchar(128), batch_number varchar(64) nullable, administered_at date, next_due_at date nullable                                                                                                           |
+| `prescriptions` | id, record_id (FK, unique), medication_name varchar(128), dosage varchar(64), frequency varchar(64), duration_days integer, instructions varchar(1000) nullable, prescribed_at date                                                                 |
+| `lab_results`   | id, record_id (FK, bir kayıtta birden çok satır), test_name varchar(128), value varchar(64), unit varchar(32) nullable, reference_range varchar(64) nullable, flag enum nullable (`NORMAL` / `LOW` / `HIGH`; belirtilmemişse null), sampled_at date |
 
 **Değişmezlik (trigger, migration SQL'inde):** `forbid_medical_record_change()` fonksiyonu `medical_records`, `record_attachments`, `vaccinations`, `prescriptions` ve `lab_results` tablolarında `UPDATE` ve `DELETE`'i reddeder. Düzeltme yeni kayıt olarak eklenir. Tüm yabancı anahtarlar `ON DELETE RESTRICT`'tir.
 
@@ -545,50 +556,74 @@ Her tablonun kendi `id`'si (UUID, PK) vardır. `pet_id` / `clinic_id` tekrar yaz
 
 Açıklama kayıttan sonra geldiği ve `medical_records` / `lab_results` değiştirilemediği için ayrı tablodadır; bu tabloda değişmezlik trigger'ı yoktur. Migration'lar: `20261026100731_lab_result_explanations` (tablo ve enum) ve `20261026133613_lab_explanation_status_default` (`status` varsayılanı `PENDING`).
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | |
-| record_id | UUID, FK → `medical_records.id`, unique | Her tahlil kaydına tek açıklama; `ON DELETE RESTRICT` |
-| status | enum `LabExplanationStatus`, default `PENDING` | `PENDING` / `READY` / `FAILED` |
-| summary | text, nullable | `READY`'de dolu |
-| items | jsonb, nullable | `[{ testName, explanation }]` |
-| confidence | double precision, nullable | 0–1 (kırpılmış) |
-| model_version | varchar(64), nullable | |
-| failure_reason | varchar(64), nullable | AI hata kodu ya da `INVALID_AI_OUTPUT` |
-| requested_at | timestamp, default now | |
-| generated_at | timestamp, nullable | Sonucun işlendiği an |
+| Kolon          | Tip                                            | Not                                                   |
+| -------------- | ---------------------------------------------- | ----------------------------------------------------- |
+| id             | UUID (PK)                                      |                                                       |
+| record_id      | UUID, FK → `medical_records.id`, unique        | Her tahlil kaydına tek açıklama; `ON DELETE RESTRICT` |
+| status         | enum `LabExplanationStatus`, default `PENDING` | `PENDING` / `READY` / `FAILED`                        |
+| summary        | text, nullable                                 | `READY`'de dolu                                       |
+| items          | jsonb, nullable                                | `[{ testName, explanation }]`                         |
+| confidence     | double precision, nullable                     | 0–1 (kırpılmış)                                       |
+| model_version  | varchar(64), nullable                          |                                                       |
+| failure_reason | varchar(64), nullable                          | AI hata kodu ya da `INVALID_AI_OUTPUT`                |
+| requested_at   | timestamp, default now                         |                                                       |
+| generated_at   | timestamp, nullable                            | Sonucun işlendiği an                                  |
+
+#### health_assessments (hayvanın AI sağlık değerlendirmesi)
+
+Hayvan başına tek, güncellenebilir satırdır; değişmezlik trigger'ı yoktur. `pet_id` başka servisin kimliği olduğu için FK değildir (servis başına veritabanı). Migration: `20261101090419_health_assessments` (tablo ve iki enum).
+
+| Kolon                | Tip                                              | Not                                                                                            |
+| -------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| id                   | UUID (PK)                                        |                                                                                                |
+| pet_id               | UUID, unique                                     | Hayvan başına tek satır                                                                        |
+| request_id           | UUID, unique                                     | Güncel isteğin kimliği; olayların `subject`'i                                                  |
+| status               | enum `HealthAssessmentStatus`, default `PENDING` | `PENDING` / `READY` / `FAILED`                                                                 |
+| input_hash           | char(64)                                         | Anlık görüntünün SHA-256'sı                                                                    |
+| based_on_record_ids  | UUID[]                                           | Değerlendirmeye giren kayıtlar                                                                 |
+| requested_by_user_id | UUID                                             | İsteyen kullanıcı (sahip ya da klinik kullanıcısı)                                             |
+| summary              | text, nullable                                   | `READY`'de dolu                                                                                |
+| risk_level           | enum `HealthRiskLevel`, nullable                 | `LOW` / `MODERATE` / `HIGH` / `URGENT`                                                         |
+| payload              | jsonb, nullable                                  | `findings`, `possibleConditions`, `recommendations`, `vaccinationReminders`, `questionsForVet` |
+| confidence           | double precision, nullable                       | 0–1 (kırpılmış)                                                                                |
+| model_version        | varchar(64), nullable                            | ör. `gemma-4-31b/assess-v1`                                                                    |
+| failure_reason       | varchar(64), nullable                            | AI hata kodu ya da `INVALID_AI_OUTPUT`                                                         |
+| requested_at         | timestamp, default now                           | Son isteğin zamanı                                                                             |
+| generated_at         | timestamp, nullable                              | Sonucun işlendiği an                                                                           |
+
+Yeni istekte satır aynı transaction'da yeni `request_id`, `PENDING`, yeni `input_hash`, `based_on_record_ids`, `requested_by_user_id` ve `requested_at` ile güncellenir; `summary`, `risk_level`, `payload`, `confidence`, `model_version`, `failure_reason` ve `generated_at` boşaltılır.
 
 #### outbox
 
-| Kolon | Tip | Not |
-|---|---|---|
-| id | UUID (PK) | CloudEvents `id` |
-| type | varchar(128) | CloudEvents `type` |
-| payload | jsonb | CloudEvents zarfı |
-| correlation_id | varchar(128) | |
-| attempts | integer, default 0 | |
+| Kolon           | Tip                    | Not                                                        |
+| --------------- | ---------------------- | ---------------------------------------------------------- |
+| id              | UUID (PK)              | CloudEvents `id`                                           |
+| type            | varchar(128)           | CloudEvents `type`                                         |
+| payload         | jsonb                  | CloudEvents zarfı                                          |
+| correlation_id  | varchar(128)           |                                                            |
+| attempts        | integer, default 0     |                                                            |
 | next_attempt_at | timestamp, default now | Hatada artan bekleme; döngü yalnızca zamanı gelenleri alır |
-| last_error | varchar(500), nullable | Son gönderim hatası |
-| created_at | timestamp | |
-| published_at | timestamp, nullable | Doluysa gönderildi |
+| last_error      | varchar(500), nullable | Son gönderim hatası                                        |
+| created_at      | timestamp              |                                                            |
+| published_at    | timestamp, nullable    | Doluysa gönderildi                                         |
 
-**İndeksler:** `documents (clinic_id, status)`, `documents (pet_id, created_at)`, `draft_reviews (clinic_id, status)`, `medical_records (pet_id, recorded_at)`, `record_attachments (document_id)`, `vaccinations (next_due_at)`, `lab_results (record_id)`, `lab_result_explanations (record_id)` unique, `outbox (published_at, next_attempt_at)` — gönderilmemiş ve zamanı gelmiş olayları hızlı bulmak için.
+**İndeksler:** `documents (clinic_id, status)`, `documents (pet_id, created_at)`, `draft_reviews (clinic_id, status)`, `medical_records (pet_id, recorded_at)`, `record_attachments (document_id)`, `vaccinations (next_due_at)`, `lab_results (record_id)`, `lab_result_explanations (record_id)` unique, `health_assessments (pet_id)` unique, `health_assessments (request_id)` unique, `outbox (published_at, next_attempt_at)` — gönderilmemiş ve zamanı gelmiş olayları hızlı bulmak için.
 
 ### Erişim kuralları (zero trust)
 
 Her okuma ve yazmada erişim yeniden kontrol edilir. Klinik için `access.CheckAccess` ile ilgili scope'a bakılır; hasta sahibi için `pets.GetPetOwner` ile sahiplik doğrulanır (rıza gerekmez).
 
-| RPC | Kim | Kontrol |
-|---|---|---|
-| `ListRecordsByPet`, `ListLabResults` | hasta sahibi, klinik | sahiplik / `medical_read` |
-| `ListVaccinations` | hasta sahibi, klinik | sahiplik / `vaccination_read` |
-| `ListPrescriptions` | hasta sahibi, klinik | sahiplik / `prescription_read` |
-| `RegisterDocument` (yalnızca clinics çağırır), `CreateRecord` | klinik | `medical_write` |
-| `GetDocument` | hasta sahibi, klinik | sahiplik / belgeyi yükleyen klinik + `medical_write` |
-| `ListDocumentsByPet` | hasta sahibi, klinik | sahiplik (hayvanın tüm belgeleri) / yalnızca kliniğin kendi yükledikleri + `medical_write` |
-| `ReviewDraft` | klinik | taslağın kliniği + `medical_write` |
-| `GetLabExplanation` | yalnızca hasta sahibi | sahiplik; klinik `FORBIDDEN` |
-| `ListDraftReviews` | klinik | yalnızca kendi taslakları; `pet_id` verilirse o hayvanda `medical_write`, verilmezse `medical_write` rızası aktif olan hayvanlar (`ListMyConsents`) |
+| RPC                                                           | Kim                   | Kontrol                                                                                                                                             |
+| ------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ListRecordsByPet`, `ListLabResults`                          | hasta sahibi, klinik  | sahiplik / `medical_read`                                                                                                                           |
+| `ListVaccinations`                                            | hasta sahibi, klinik  | sahiplik / `vaccination_read`                                                                                                                       |
+| `ListPrescriptions`                                           | hasta sahibi, klinik  | sahiplik / `prescription_read`                                                                                                                      |
+| `RegisterDocument` (yalnızca clinics çağırır), `CreateRecord` | klinik                | `medical_write`                                                                                                                                     |
+| `GetDocument`                                                 | hasta sahibi, klinik  | sahiplik / belgeyi yükleyen klinik + `medical_write`                                                                                                |
+| `ListDocumentsByPet`                                          | hasta sahibi, klinik  | sahiplik (hayvanın tüm belgeleri) / yalnızca kliniğin kendi yükledikleri + `medical_write`                                                          |
+| `ReviewDraft`                                                 | klinik                | taslağın kliniği + `medical_write`                                                                                                                  |
+| `GetLabExplanation`                                           | yalnızca hasta sahibi | sahiplik; klinik `FORBIDDEN`                                                                                                                        |
+| `ListDraftReviews`                                            | klinik                | yalnızca kendi taslakları; `pet_id` verilirse o hayvanda `medical_write`, verilmezse `medical_write` rızası aktif olan hayvanlar (`ListMyConsents`) |
 
 - Rızası olan klinik hayvanın **tüm** kayıtlarını görür (diğer kliniklerin kayıtları dahil); hasta sahibi kendi hayvanının tüm kayıtlarını görür.
 - Rıza yoksa ya da eksikse `FORBIDDEN`; hayvan kullanıcıya ait değilse ya da belge/taslak başka kliniğinse `NOT_FOUND` döner.
