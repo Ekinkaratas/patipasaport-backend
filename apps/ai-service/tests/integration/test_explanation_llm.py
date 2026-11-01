@@ -150,6 +150,6 @@ async def test_explanation_prompt_schema_and_validator_work_with_provider(
     ):
         pytest.fail(f"Beklenmeyen açıklama kalemleri: {names}", pytrace=False)
     assert generated.record_id == RECORD_ID
-    assert generated.model_version == f"{settings.ai_model}/explain-v1"
+    assert generated.model_version == f"{settings.ai_model}/explain-v2"
     assert 0.0 <= generated.confidence <= 1.0
     assert len(successes) == 1

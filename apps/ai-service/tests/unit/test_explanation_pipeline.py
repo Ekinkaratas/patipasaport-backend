@@ -55,7 +55,7 @@ RECORD_ID = "7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e"
 EVENT_ID = "0f6c1d3e-8a2b-4c5d-9e7f-1a2b3c4d5e6f"
 MEDICAL_RECORD_SOURCE = "/patipasaport/medical-record"
 FAKE_MODEL = "sahte-model"
-MODEL_VERSION = "sahte-model/explain-v1"
+MODEL_VERSION = "sahte-model/explain-v2"
 EVENT_TIME = datetime(2026, 10, 21, 9, 30, tzinfo=UTC)
 GENERATED_AT = datetime(
     2026, 10, 21, 12, 30, 8, 456789, tzinfo=timezone(timedelta(hours=3))
@@ -306,7 +306,7 @@ def capture_logs(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG)
 
 
-# modelVersion'ın kurulumda model adı ve explain-v1 sürümünden kurulduğunu doğrular.
+# modelVersion'ın kurulumda model adı ve explain-v2 sürümünden kurulduğunu doğrular.
 def test_model_version_is_computed_at_construction() -> None:
     llm = FakeLlm()
 

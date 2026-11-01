@@ -511,7 +511,7 @@ def test_lifespan_passes_explanation_flow_built_from_llm() -> None:
     assert flow.prefetch == EXPLANATION_PREFETCH
     pipeline = getattr(flow.handle, "__self__", None)
     assert isinstance(pipeline, ExplanationPipeline)
-    assert pipeline.model_version == f"{FAKE_MODEL}/explain-v1"
+    assert pipeline.model_version == f"{FAKE_MODEL}/explain-v2"
     assert flow.build_failure == pipeline.build_failure
     publisher = FakePublisher()
 

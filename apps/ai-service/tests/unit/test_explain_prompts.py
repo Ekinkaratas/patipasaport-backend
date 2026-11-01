@@ -43,21 +43,21 @@ REQUIRED_RULE_PHRASES = [
     pytest.param("Hayvanın sahibine hitap eden", id="sahibe-hitap"),
     pytest.param("ne anlama geldiğini kısaca açıkla", id="terim-aciklama"),
     pytest.param(
-        "Yalnızca veri bloğunda verilen değerleri ve referans aralıklarını yorumla",
-        id="yalnizca-veri",
+        "Değerlendirmeyi veri bloğundaki değerler üzerinden yap", id="veri-uzerinden"
     ),
+    pytest.param("olası sağlık senaryolarını", id="olasi-senaryolar"),
     pytest.param(
-        "Belirti, hastalık geçmişi, kullanılan ilaç ya da veride bulunmayan başka bir "
-        "bilgi varsayma",
-        id="varsayim-yok",
+        "Kesin bir hastalık adı koyup reçeteli ilaç önerme", id="kesin-teshis-yok"
     ),
-    pytest.param("Teşhis koyma", id="teshis-yok"),
-    pytest.param("İlaç, doz ya da tedavi önerme", id="tedavi-yok"),
-    pytest.param('"Endişelenmeyin"', id="endiselenmeyin"),
-    pytest.param("kesin güvenceler verme", id="kesin-guvence-yok"),
-    pytest.param("olasılık diliyle", id="olasilik-dili"),
+    pytest.param("ilaç ya da takviye için doz ve miktar yazma", id="doz-yok"),
+    pytest.param("genel bakım, beslenme ve çözüm önerileri sun", id="destek-onerisi"),
     pytest.param("ne anlama gelebileceğini", id="ne-anlama-gelebilir"),
-    pytest.param("veteriner hekimiyle görüşmeye", id="hekime-yonlendirme"),
+    pytest.param("olası sebeplerini", id="olasi-sebepler"),
+    pytest.param(
+        "nihai değerlendirme için sahibini veteriner hekime yönlendir",
+        id="hekime-yonlendirme",
+    ),
+    pytest.param("olası senaryolar ile çözüm önerilerini içerir", id="summary-icerigi"),
     pytest.param("Türler arasındaki farklara dikkat et", id="tur-farki"),
     pytest.param("kedi ve köpekte referans aralıkları farklıdır", id="kedi-kopek"),
     pytest.param(
@@ -146,9 +146,9 @@ def _data_block(text: str) -> dict[str, Any]:
     return json.loads("\n".join(lines[start + 1 : end]))
 
 
-# Talimat sürümü sözleşmedeki explain-v1 değeridir.
+# Talimat sürümü sözleşmedeki explain-v2 değeridir.
 def test_prompt_version() -> None:
-    assert EXPLAIN_PROMPT_VERSION == "explain-v1"
+    assert EXPLAIN_PROMPT_VERSION == "explain-v2"
 
 
 # Sistem talimatı sözleşme 7.3 ve 8.5'teki zorunlu kuralların hepsini içerir.
@@ -537,14 +537,14 @@ def test_extraction_correction_text_stays_separate(issue: ValidationIssue) -> No
 # modelVersion açıklama talimatının sürümüyle kurulur, varsayılan belge okumadır.
 def test_model_version_with_explain_version() -> None:
     assert model_version("gemma-4-31b", EXPLAIN_PROMPT_VERSION) == (
-        "gemma-4-31b/explain-v1"
+        "gemma-4-31b/explain-v2"
     )
     assert model_version("gemma-4-31b") == "gemma-4-31b/extract-v1"
 
 
 # Açıklama modelVersion'ı tam 64 karakteri kabul eder, 65 karakteri reddeder.
 def test_explain_model_version_limit() -> None:
-    suffix_length = len("/explain-v1")
+    suffix_length = len("/explain-v2")
 
     assert len(model_version("m" * (64 - suffix_length), EXPLAIN_PROMPT_VERSION)) == 64
     with pytest.raises(ValueError):
