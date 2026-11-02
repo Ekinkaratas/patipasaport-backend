@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.assessments.pipeline import AssessmentPipeline
 from app.config import ConfigError, Settings, load_settings
 from app.documents.pipeline import DocumentPipeline
 from app.explanations.pipeline import ExplanationPipeline
@@ -28,7 +29,7 @@ async def _close_llm_after_failure(llm: LlmClient, logger: logging.Logger) -> No
         )
 
 
-# Ayarları, iki akışı ve mesajlaşmayı lifespan içinde kuran uygulamayı oluşturur.
+# Ayarları, üç akışı ve mesajlaşmayı lifespan içinde kuran uygulamayı oluşturur.
 def create_app(
     settings_loader: Callable[[], Settings] = load_settings,
     messaging_starter: MessagingStarter = start_messaging,
@@ -61,10 +62,18 @@ def create_app(
             topology = Topology()
             document = DocumentPipeline(storage, llm, settings.ai_model)
             explanation = ExplanationPipeline(llm, settings.ai_model)
-            flows = [document.flow(topology), explanation.flow(topology)]
+            assessment = AssessmentPipeline(
+                llm, settings.ai_model, settings.assessment_critical_deviation_percent
+            )
+            flows = [
+                document.flow(topology),
+                explanation.flow(topology),
+                assessment.flow(topology),
+            ]
         except BaseException as error:
             logger.error(
-                "Belge okuma ya da tahlil açıklama akışı kurulamadı (%s)",
+                "Belge okuma, tahlil açıklama ya da sağlık değerlendirmesi akışı "
+                "kurulamadı (%s)",
                 type(error).__name__,
             )
             await _close_llm_after_failure(llm, logger)

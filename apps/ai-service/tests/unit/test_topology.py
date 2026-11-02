@@ -11,11 +11,16 @@ from app.messaging.cloudevents import (
     DOCUMENT_ANALYZED,
     DOCUMENT_PROCESSING_STARTED,
     DOCUMENT_UPLOADED,
+    HEALTH_ASSESSMENT_FAILED,
+    HEALTH_ASSESSMENT_GENERATED,
+    HEALTH_ASSESSMENT_REQUESTED,
     LAB_EXPLANATION_FAILED,
     LAB_EXPLANATION_GENERATED,
     LAB_EXPLANATION_REQUESTED,
 )
 from app.messaging.topology import (
+    ASSESSMENT_PREFETCH,
+    ASSESSMENT_QUEUE,
     CORRELATION_ID_HEADER,
     DEAD_LETTER_EXCHANGE,
     DLQ_SUFFIX,
@@ -37,6 +42,7 @@ PRODUCTION_NAMES = (
     "patipasaport.events.dlx",
     "ai-service.document-uploaded",
     "ai-service.lab-explanation-requested",
+    "ai-service.health-assessment-requested",
 )
 MEDICAL_RECORD_QUEUES = (
     "medical-record.document-events",
@@ -48,14 +54,17 @@ MEDICAL_RECORD_EVENT_TYPES = (
     DOCUMENT_ANALYSIS_FAILED,
     LAB_EXPLANATION_GENERATED,
     LAB_EXPLANATION_FAILED,
+    HEALTH_ASSESSMENT_GENERATED,
+    HEALTH_ASSESSMENT_FAILED,
 )
 CUSTOM_TOPOLOGY = Topology(
     events_exchange="test-run.events",
     dead_letter_exchange="test-run.events.dlx",
     document_queue="test-run.documents",
     explanation_queue="test-run.explanations",
+    assessment_queue="test-run.assessments",
 )
-EXPECTED_CALL_COUNT = 2 + 6 + 8
+EXPECTED_CALL_COUNT = 2 + 9 + 12
 
 
 @dataclass
@@ -217,6 +226,7 @@ def test_constants_match_contract() -> None:
     assert DEAD_LETTER_EXCHANGE == "patipasaport.events.dlx"
     assert DOCUMENT_QUEUE == "ai-service.document-uploaded"
     assert EXPLANATION_QUEUE == "ai-service.lab-explanation-requested"
+    assert ASSESSMENT_QUEUE == "ai-service.health-assessment-requested"
     assert RETRY_SUFFIX == ".retry"
     assert DLQ_SUFFIX == ".dlq"
     assert RETRY_DELAY_MS == 30_000
@@ -226,6 +236,7 @@ def test_constants_match_contract() -> None:
     assert CORRELATION_ID_HEADER == "x-correlation-id"
     assert DOCUMENT_PREFETCH == 2
     assert EXPLANATION_PREFETCH == 4
+    assert ASSESSMENT_PREFETCH == 2
 
 
 # Varsayılan adları, türetilen retry ve dlq adlarını ve bağ eşlemesini doğrular.
@@ -236,12 +247,16 @@ def test_topology_defaults_and_derived_names() -> None:
     assert topology.dead_letter_exchange == "patipasaport.events.dlx"
     assert topology.document_queue == "ai-service.document-uploaded"
     assert topology.explanation_queue == "ai-service.lab-explanation-requested"
+    assert topology.assessment_queue == "ai-service.health-assessment-requested"
     assert topology.retry_queue("kuyruk") == "kuyruk.retry"
     assert topology.dead_letter_queue("kuyruk") == "kuyruk.dlq"
     assert topology.bindings() == {
         "ai-service.document-uploaded": ("com.patipasaport.document.uploaded.v1",),
         "ai-service.lab-explanation-requested": (
             "com.patipasaport.lab_explanation.requested.v1",
+        ),
+        "ai-service.health-assessment-requested": (
+            "com.patipasaport.health_assessment.requested.v1",
         ),
     }
     with pytest.raises(FrozenInstanceError):
@@ -259,7 +274,7 @@ async def test_declares_exchanges_with_types_and_durable_flags() -> None:
     assert len(channel.calls) == EXPECTED_CALL_COUNT
 
 
-# Altı kuyruğun durable olarak ve argümanları birebir aynı tanımlandığını doğrular.
+# Dokuz kuyruğun durable olarak ve argümanları birebir aynı tanımlandığını doğrular.
 async def test_declares_queues_with_exact_arguments() -> None:
     channel = await declared_channel()
     queues = channel.queues()
@@ -269,10 +284,14 @@ async def test_declares_queues_with_exact_arguments() -> None:
         **expected_queues(
             "ai-service.lab-explanation-requested", "patipasaport.events.dlx"
         ),
+        **expected_queues(
+            "ai-service.health-assessment-requested", "patipasaport.events.dlx"
+        ),
     }
     for name in (
         "ai-service.document-uploaded",
         "ai-service.lab-explanation-requested",
+        "ai-service.health-assessment-requested",
     ):
         assert type(queues[f"{name}.retry"]["arguments"]["x-message-ttl"]) is int
     assert len(channel.calls) == EXPECTED_CALL_COUNT
@@ -293,6 +312,12 @@ async def test_binds_queues_to_both_exchanges() -> None:
             *expected_binds(
                 "ai-service.lab-explanation-requested",
                 "com.patipasaport.lab_explanation.requested.v1",
+                "patipasaport.events",
+                "patipasaport.events.dlx",
+            ),
+            *expected_binds(
+                "ai-service.health-assessment-requested",
+                "com.patipasaport.health_assessment.requested.v1",
                 "patipasaport.events",
                 "patipasaport.events.dlx",
             ),
@@ -337,6 +362,7 @@ async def test_custom_topology_replaces_every_name() -> None:
     assert channel.queues() == {
         **expected_queues("test-run.documents", "test-run.events.dlx"),
         **expected_queues("test-run.explanations", "test-run.events.dlx"),
+        **expected_queues("test-run.assessments", "test-run.events.dlx"),
     }
     assert sorted_binds(channel.binds()) == sorted_binds(
         [
@@ -349,6 +375,12 @@ async def test_custom_topology_replaces_every_name() -> None:
             *expected_binds(
                 "test-run.explanations",
                 LAB_EXPLANATION_REQUESTED,
+                "test-run.events",
+                "test-run.events.dlx",
+            ),
+            *expected_binds(
+                "test-run.assessments",
+                HEALTH_ASSESSMENT_REQUESTED,
                 "test-run.events",
                 "test-run.events.dlx",
             ),

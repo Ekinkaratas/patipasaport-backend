@@ -15,6 +15,7 @@ ALLOWED_FIELDS: frozenset[str] = frozenset(
     {
         "documentId",
         "recordId",
+        "requestId",
         "eventId",
         "eventType",
         "queue",

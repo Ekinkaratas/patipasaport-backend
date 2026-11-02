@@ -48,6 +48,7 @@ from app.messaging.consumer import Consumer, Flow
 from app.messaging.publisher import Publisher
 from app.messaging.runtime import Messaging, start_messaging
 from app.messaging.topology import (
+    ASSESSMENT_QUEUE,
     CORRELATION_ID_HEADER,
     DOCUMENT_PREFETCH,
     DOCUMENT_QUEUE,
@@ -170,6 +171,7 @@ class IsolatedBroker:
             dead_letter_exchange=f"{prefix}.dlx",
             document_queue=f"{prefix}.document-uploaded",
             explanation_queue=f"{prefix}.lab-explanation-requested",
+            assessment_queue=f"{prefix}.health-assessment-requested",
         )
         self.capture_queue = f"{prefix}.capture"
         self.document_queues = (
@@ -442,7 +444,11 @@ def test_app_starts_and_stops_with_real_settings_without_consuming(
     assert isinstance(messaging, Messaging)
     assert messaging.connection.is_closed
     [flows] = offered
-    assert [flow.queue for flow in flows] == [DOCUMENT_QUEUE, EXPLANATION_QUEUE]
+    assert [flow.queue for flow in flows] == [
+        DOCUMENT_QUEUE,
+        EXPLANATION_QUEUE,
+        ASSESSMENT_QUEUE,
+    ]
     assert consumed == []
     secret_values = {
         "AI_RABBITMQ_PASSWORD": settings.ai_rabbitmq_password.get_secret_value(),

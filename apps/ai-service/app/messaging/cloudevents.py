@@ -25,6 +25,9 @@ DOCUMENT_ANALYSIS_FAILED = "com.patipasaport.document.analysis_failed.v1"
 LAB_EXPLANATION_REQUESTED = "com.patipasaport.lab_explanation.requested.v1"
 LAB_EXPLANATION_GENERATED = "com.patipasaport.lab_explanation.generated.v1"
 LAB_EXPLANATION_FAILED = "com.patipasaport.lab_explanation.failed.v1"
+HEALTH_ASSESSMENT_REQUESTED = "com.patipasaport.health_assessment.requested.v1"
+HEALTH_ASSESSMENT_GENERATED = "com.patipasaport.health_assessment.generated.v1"
+HEALTH_ASSESSMENT_FAILED = "com.patipasaport.health_assessment.failed.v1"
 
 _DATASCHEMA_TABLE = {
     DOCUMENT_UPLOADED: "urn:patipasaport:events:DocumentUploaded:v1",
@@ -34,6 +37,13 @@ _DATASCHEMA_TABLE = {
     LAB_EXPLANATION_REQUESTED: "urn:patipasaport:events:LabExplanationRequested:v1",
     LAB_EXPLANATION_GENERATED: "urn:patipasaport:events:LabExplanationGenerated:v1",
     LAB_EXPLANATION_FAILED: "urn:patipasaport:events:LabExplanationFailed:v1",
+    HEALTH_ASSESSMENT_REQUESTED: (
+        "urn:patipasaport:events:HealthAssessmentRequested:v1"
+    ),
+    HEALTH_ASSESSMENT_GENERATED: (
+        "urn:patipasaport:events:HealthAssessmentGenerated:v1"
+    ),
+    HEALTH_ASSESSMENT_FAILED: "urn:patipasaport:events:HealthAssessmentFailed:v1",
 }
 DATASCHEMAS: Mapping[str, str] = MappingProxyType(_DATASCHEMA_TABLE)
 
@@ -91,6 +101,24 @@ EVENT_SPECS: Mapping[str, EventSpec] = MappingProxyType(
                 dataschema=DATASCHEMAS[LAB_EXPLANATION_FAILED],
                 message_class=events_pb2.LabExplanationFailed,
                 id_field="record_id",
+            ),
+            EventSpec(
+                type=HEALTH_ASSESSMENT_REQUESTED,
+                dataschema=DATASCHEMAS[HEALTH_ASSESSMENT_REQUESTED],
+                message_class=events_pb2.HealthAssessmentRequested,
+                id_field="request_id",
+            ),
+            EventSpec(
+                type=HEALTH_ASSESSMENT_GENERATED,
+                dataschema=DATASCHEMAS[HEALTH_ASSESSMENT_GENERATED],
+                message_class=events_pb2.HealthAssessmentGenerated,
+                id_field="request_id",
+            ),
+            EventSpec(
+                type=HEALTH_ASSESSMENT_FAILED,
+                dataschema=DATASCHEMAS[HEALTH_ASSESSMENT_FAILED],
+                message_class=events_pb2.HealthAssessmentFailed,
+                id_field="request_id",
             ),
         )
     }

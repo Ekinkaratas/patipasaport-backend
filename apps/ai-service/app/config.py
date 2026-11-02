@@ -78,6 +78,9 @@ class Settings(BaseSettings):
         default=120.0, gt=0, allow_inf_nan=False
     )
     ai_enable_thinking: DefaultedBool = True
+    assessment_critical_deviation_percent: DefaultedFloat = Field(
+        default=50.0, gt=0, allow_inf_nan=False
+    )
     log_level: LogLevel = "INFO"
 
 

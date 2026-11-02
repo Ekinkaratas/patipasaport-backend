@@ -1,7 +1,7 @@
 # ============================================================
 # İlk kurulum:
-#   cp .env.example .env        
-#   docker compose build        
+#   cp .env.example .env
+#   docker compose build
 #   docker compose up -d
 #   docker compose ps   (dışarıya port açılmaz; yerel erişim: docker-compose.dev.yml)
 #
@@ -16,14 +16,14 @@
 # ---------- Ortak Parçalar ----------
 
 x-app-common: &app-common
-  init: true                  
+  init: true
   restart: unless-stopped
   networks: [backend]
   logging:
     driver: json-file
     options:
-      max-size: "10m"
-      max-file: "3"
+      max-size: '10m'
+      max-file: '3'
 
 x-grpc-healthcheck: &grpc-healthcheck
   interval: 10s
@@ -38,7 +38,6 @@ x-db-healthcheck: &db-healthcheck
   start_period: 10s
 
 services:
-
   # ============================================================
   # ALTYAPI
   # ============================================================
@@ -54,7 +53,11 @@ services:
     volumes:
       - pg_auth_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth_user} -d ${AUTH_DB_NAME:-auth_db}"]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${AUTH_DB_USER:-auth_user} -d ${AUTH_DB_NAME:-auth_db}',
+        ]
       <<: *db-healthcheck
 
   postgres-users:
@@ -68,7 +71,11 @@ services:
     volumes:
       - pg_users_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${USERS_DB_USER:-users_user} -d ${USERS_DB_NAME:-users_db}"]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${USERS_DB_USER:-users_user} -d ${USERS_DB_NAME:-users_db}',
+        ]
       <<: *db-healthcheck
 
   postgres-clinics:
@@ -82,7 +89,11 @@ services:
     volumes:
       - pg_clinics_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${CLINICS_DB_USER:-clinics_user} -d ${CLINICS_DB_NAME:-clinics_db}"]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${CLINICS_DB_USER:-clinics_user} -d ${CLINICS_DB_NAME:-clinics_db}',
+        ]
       <<: *db-healthcheck
 
   postgres-access:
@@ -96,7 +107,11 @@ services:
     volumes:
       - pg_access_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${ACCESS_DB_USER:-access_user} -d ${ACCESS_DB_NAME:-access_db}"]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${ACCESS_DB_USER:-access_user} -d ${ACCESS_DB_NAME:-access_db}',
+        ]
       <<: *db-healthcheck
 
   postgres-medical-record:
@@ -110,7 +125,11 @@ services:
     volumes:
       - pg_medical_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${MEDICAL_DB_USER:-medical_user} -d ${MEDICAL_DB_NAME:-medical_db}"]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${MEDICAL_DB_USER:-medical_user} -d ${MEDICAL_DB_NAME:-medical_db}',
+        ]
       <<: *db-healthcheck
 
   postgres-pets:
@@ -124,29 +143,55 @@ services:
     volumes:
       - pg_pets_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PETS_DB_USER:-pets_user} -d ${PETS_DB_NAME:-pets_db}"]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${PETS_DB_USER:-pets_user} -d ${PETS_DB_NAME:-pets_db}',
+        ]
       <<: *db-healthcheck
 
   redis-access:
     image: redis:7-alpine
     restart: unless-stopped
     networks: [backend]
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD}"]
+    command:
+      ['redis-server', '--requirepass', '${REDIS_PASSWORD:?REDIS_PASSWORD}']
     volumes:
       - redis_access_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      test:
+        [
+          'CMD',
+          'redis-cli',
+          '--no-auth-warning',
+          '-a',
+          '${REDIS_PASSWORD}',
+          'ping',
+        ]
       <<: *db-healthcheck
 
   redis-auth:
     image: redis:7-alpine
     restart: unless-stopped
     networks: [backend]
-    command: ["redis-server", "--requirepass", "${AUTH_REDIS_PASSWORD:?AUTH_REDIS_PASSWORD}"]
+    command:
+      [
+        'redis-server',
+        '--requirepass',
+        '${AUTH_REDIS_PASSWORD:?AUTH_REDIS_PASSWORD}',
+      ]
     volumes:
       - redis_auth_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${AUTH_REDIS_PASSWORD}", "ping"]
+      test:
+        [
+          'CMD',
+          'redis-cli',
+          '--no-auth-warning',
+          '-a',
+          '${AUTH_REDIS_PASSWORD}',
+          'ping',
+        ]
       <<: *db-healthcheck
 
   rabbitmq:
@@ -159,7 +204,7 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
       interval: 10s
       timeout: 10s
       retries: 12
@@ -167,9 +212,9 @@ services:
 
   rabbitmq-init:
     image: rabbitmq:4.3-management-alpine
-    restart: "no"
+    restart: 'no'
     networks: [backend]
-    entrypoint: ["/bin/sh", "/init/init.sh"]
+    entrypoint: ['/bin/sh', '/init/init.sh']
     environment:
       RABBITMQ_USER: ${RABBITMQ_USER:-rabbit_user}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD}
@@ -184,7 +229,7 @@ services:
     image: fluent/fluent-bit:5.1.3
     restart: unless-stopped
     networks: [backend]
-    command: ["/fluent-bit/bin/fluent-bit", "-c", "/fluent-bit/etc/audit.yaml"]
+    command: ['/fluent-bit/bin/fluent-bit', '-c', '/fluent-bit/etc/audit.yaml']
     volumes:
       - ./tools/fluent-bit/audit.yaml:/fluent-bit/etc/audit.yaml:ro
       - seaweedfs_audit:/audit
@@ -198,7 +243,7 @@ services:
       - seaweedfs_data:/data
       - ./tools/seaweedfs/audit.json:/etc/seaweedfs/audit.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 8333 && nc -z 127.0.0.1 8888"]
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 8333 && nc -z 127.0.0.1 8888']
       interval: 5s
       timeout: 5s
       retries: 12
@@ -208,9 +253,9 @@ services:
 
   seaweedfs-init:
     image: chrislusf/seaweedfs:4.48
-    restart: "no"
+    restart: 'no'
     networks: [backend]
-    entrypoint: ["/bin/sh", "/init/init.sh"]
+    entrypoint: ['/bin/sh', '/init/init.sh']
     environment:
       S3_BUCKET: ${S3_BUCKET:-medical-documents}
       S3_GATEWAY_ACCESS_KEY: ${S3_GATEWAY_ACCESS_KEY}
@@ -239,12 +284,12 @@ services:
       - access_jwt_public
     environment:
       DB_HOST: postgres-access
-      DB_PORT: "5432"
+      DB_PORT: '5432'
       DB_USER: ${ACCESS_DB_USER:-access_user}
       DB_PASSWORD: ${ACCESS_DB_PASSWORD}
       DB_NAME: ${ACCESS_DB_NAME:-access_db}
       REDIS_HOST: redis-access
-      REDIS_PORT: "6379"
+      REDIS_PORT: '6379'
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       AUTH_GRPC_URL: auth:3002
       CLINICS_GRPC_URL: clinics:3003
@@ -252,11 +297,11 @@ services:
       JWT_PRIVATE_KEY_PATH: /run/secrets/access_jwt_private
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "3001"]
+      test: ['CMD', 'nc', '-z', '127.0.0.1', '3001']
       <<: *grpc-healthcheck
     depends_on:
       postgres-access: { condition: service_healthy }
-      redis-access:    { condition: service_healthy }
+      redis-access: { condition: service_healthy }
 
   auth:
     <<: *app-common
@@ -269,22 +314,22 @@ services:
       - access_jwt_public
     environment:
       DB_HOST: postgres-auth
-      DB_PORT: "5432"
+      DB_PORT: '5432'
       DB_USER: ${AUTH_DB_USER:-auth_user}
       DB_PASSWORD: ${AUTH_DB_PASSWORD}
       DB_NAME: ${AUTH_DB_NAME:-auth_db}
       REDIS_HOST: redis-auth
-      REDIS_PORT: "6379"
+      REDIS_PORT: '6379'
       REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD}
       ACCESS_GRPC_URL: access:3001
       USERS_GRPC_URL: users:3006
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "3002"]
+      test: ['CMD', 'nc', '-z', '127.0.0.1', '3002']
       <<: *grpc-healthcheck
     depends_on:
       postgres-auth: { condition: service_healthy }
-      redis-auth:    { condition: service_healthy }
+      redis-auth: { condition: service_healthy }
 
   clinics:
     <<: *app-common
@@ -297,7 +342,7 @@ services:
       - access_jwt_public
     environment:
       DB_HOST: postgres-clinics
-      DB_PORT: "5432"
+      DB_PORT: '5432'
       DB_USER: ${CLINICS_DB_USER:-clinics_user}
       DB_PASSWORD: ${CLINICS_DB_PASSWORD}
       DB_NAME: ${CLINICS_DB_NAME:-clinics_db}
@@ -307,7 +352,7 @@ services:
       USERS_GRPC_URL: users:3006
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "3003"]
+      test: ['CMD', 'nc', '-z', '127.0.0.1', '3003']
       <<: *grpc-healthcheck
     depends_on:
       postgres-clinics: { condition: service_healthy }
@@ -323,23 +368,23 @@ services:
       - access_jwt_public
     environment:
       DB_HOST: postgres-medical-record
-      DB_PORT: "5432"
+      DB_PORT: '5432'
       DB_USER: ${MEDICAL_DB_USER:-medical_user}
       DB_PASSWORD: ${MEDICAL_DB_PASSWORD}
       DB_NAME: ${MEDICAL_DB_NAME:-medical_db}
       ACCESS_GRPC_URL: access:3001
       PETS_GRPC_URL: pets:3005
       RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: "5672"
+      RABBITMQ_PORT: '5672'
       RABBITMQ_USER: ${RABBITMQ_USER:-rabbit_user}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "3004"]
+      test: ['CMD', 'nc', '-z', '127.0.0.1', '3004']
       <<: *grpc-healthcheck
     depends_on:
       postgres-medical-record: { condition: service_healthy }
-      rabbitmq:                { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
 
   pets:
     <<: *app-common
@@ -352,7 +397,7 @@ services:
       - access_jwt_public
     environment:
       DB_HOST: postgres-pets
-      DB_PORT: "5432"
+      DB_PORT: '5432'
       DB_USER: ${PETS_DB_USER:-pets_user}
       DB_PASSWORD: ${PETS_DB_PASSWORD}
       DB_NAME: ${PETS_DB_NAME:-pets_db}
@@ -361,7 +406,7 @@ services:
       PETS_CHIP_INDEX_KEY: ${PETS_CHIP_INDEX_KEY}
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "3005"]
+      test: ['CMD', 'nc', '-z', '127.0.0.1', '3005']
       <<: *grpc-healthcheck
     depends_on:
       postgres-pets: { condition: service_healthy }
@@ -377,14 +422,14 @@ services:
       - access_jwt_public
     environment:
       DB_HOST: postgres-users
-      DB_PORT: "5432"
+      DB_PORT: '5432'
       DB_USER: ${USERS_DB_USER:-users_user}
       DB_PASSWORD: ${USERS_DB_PASSWORD}
       DB_NAME: ${USERS_DB_NAME:-users_db}
       ACCESS_GRPC_URL: access:3001
       JWT_PUBLIC_KEY_PATH: /run/secrets/access_jwt_public
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "3006"]
+      test: ['CMD', 'nc', '-z', '127.0.0.1', '3006']
       <<: *grpc-healthcheck
     depends_on:
       postgres-users: { condition: service_healthy }
@@ -401,38 +446,42 @@ services:
       args: { APP: gateway }
     image: patipasaport/gateway:${IMAGE_TAG:-latest}
     environment:
-      PORT: "3000"
-      ACCESS_GRPC_URL:         access:3001
-      AUTH_GRPC_URL:           auth:3002
-      CLINICS_GRPC_URL:        clinics:3003
+      PORT: '3000'
+      ACCESS_GRPC_URL: access:3001
+      AUTH_GRPC_URL: auth:3002
+      CLINICS_GRPC_URL: clinics:3003
       MEDICAL_RECORD_GRPC_URL: medical-record:3004
-      PETS_GRPC_URL:           pets:3005
-      USERS_GRPC_URL:          users:3006
-      S3_ENDPOINT:             http://seaweedfs:8333
-      S3_BUCKET:               ${S3_BUCKET:-medical-documents}
-      S3_ACCESS_KEY:           ${S3_GATEWAY_ACCESS_KEY}
-      S3_SECRET_KEY:           ${S3_GATEWAY_SECRET_KEY}
-      CORS_ORIGINS:            ${CORS_ORIGINS:-}
+      PETS_GRPC_URL: pets:3005
+      USERS_GRPC_URL: users:3006
+      S3_ENDPOINT: http://seaweedfs:8333
+      S3_BUCKET: ${S3_BUCKET:-medical-documents}
+      S3_ACCESS_KEY: ${S3_GATEWAY_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_GATEWAY_SECRET_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-}
-      RATE_LIMIT_GLOBAL:       ${RATE_LIMIT_GLOBAL:-}
-      RATE_LIMIT_AUTH:         ${RATE_LIMIT_AUTH:-}
-      RATE_LIMIT_UPLOAD:       ${RATE_LIMIT_UPLOAD:-}
-      TRUST_PROXY:             ${TRUST_PROXY:-}
-      REFRESH_COOKIE_PATH:     ${REFRESH_COOKIE_PATH:-}
+      RATE_LIMIT_GLOBAL: ${RATE_LIMIT_GLOBAL:-}
+      RATE_LIMIT_AUTH: ${RATE_LIMIT_AUTH:-}
+      RATE_LIMIT_UPLOAD: ${RATE_LIMIT_UPLOAD:-}
+      TRUST_PROXY: ${TRUST_PROXY:-}
+      REFRESH_COOKIE_PATH: ${REFRESH_COOKIE_PATH:-}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1 || exit 1"]
+      test:
+        [
+          'CMD-SHELL',
+          'wget -qO- http://127.0.0.1:3000/health >/dev/null 2>&1 || exit 1',
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 20s
     depends_on:
-      access:         { condition: service_healthy }
-      auth:           { condition: service_healthy }
-      clinics:        { condition: service_healthy }
+      access: { condition: service_healthy }
+      auth: { condition: service_healthy }
+      clinics: { condition: service_healthy }
       medical-record: { condition: service_healthy }
-      pets:           { condition: service_healthy }
-      users:          { condition: service_healthy }
-      seaweedfs:      { condition: service_healthy }
+      pets: { condition: service_healthy }
+      users: { condition: service_healthy }
+      seaweedfs: { condition: service_healthy }
       seaweedfs-init: { condition: service_completed_successfully }
 
   # ============================================================
@@ -449,7 +498,7 @@ services:
     mem_limit: 512m
     environment:
       RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: "5672"
+      RABBITMQ_PORT: '5672'
       AI_RABBITMQ_USER: ${AI_RABBITMQ_USER:-}
       AI_RABBITMQ_PASSWORD: ${AI_RABBITMQ_PASSWORD:-}
       S3_ENDPOINT: http://seaweedfs:8333
@@ -461,17 +510,24 @@ services:
       AI_MODEL: ${AI_MODEL:-}
       AI_REQUEST_TIMEOUT_SECONDS: ${AI_REQUEST_TIMEOUT_SECONDS:-120}
       AI_ENABLE_THINKING: ${AI_ENABLE_THINKING:-true}
+      ASSESSMENT_CRITICAL_DEVIATION_PERCENT: ${ASSESSMENT_CRITICAL_DEVIATION_PERCENT:-50}
       LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
     depends_on:
-      rabbitmq:       { condition: service_healthy }
-      rabbitmq-init:  { condition: service_completed_successfully }
-      seaweedfs:      { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      rabbitmq-init: { condition: service_completed_successfully }
+      seaweedfs: { condition: service_healthy }
       seaweedfs-init: { condition: service_completed_successfully }
       medical-record: { condition: service_healthy }
 

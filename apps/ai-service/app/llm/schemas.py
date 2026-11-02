@@ -163,3 +163,78 @@ EXPLANATION_SCHEMA: dict[str, Any] = {
     "required": ["confidence", "summary", "items"],
     "additionalProperties": False,
 }
+
+ASSESSMENT_SCHEMA_NAME = "health_assessment"
+
+ASSESSMENT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "confidence": {"type": "number"},
+        "riskLevel": {
+            "type": "string",
+            "enum": ["LOW", "MODERATE", "HIGH", "URGENT"],
+        },
+        "summary": {"type": "string"},
+        "findings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "testName": {"type": "string"},
+                    "interpretation": {"type": "string"},
+                },
+                "required": ["testName", "interpretation"],
+                "additionalProperties": False,
+            },
+        },
+        "possibleConditions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "likelihood": {
+                        "type": "string",
+                        "enum": ["LOW", "MEDIUM", "HIGH"],
+                    },
+                    "evidence": {"type": "array", "items": {"type": "string"}},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["name", "likelihood", "evidence", "explanation"],
+                "additionalProperties": False,
+            },
+        },
+        "recommendations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": [
+                            "NUTRITION",
+                            "CARE",
+                            "FOLLOW_UP_TEST",
+                            "VET_VISIT",
+                            "VACCINATION",
+                        ],
+                    },
+                    "text": {"type": "string"},
+                },
+                "required": ["category", "text"],
+                "additionalProperties": False,
+            },
+        },
+        "questionsForVet": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "confidence",
+        "riskLevel",
+        "summary",
+        "findings",
+        "possibleConditions",
+        "recommendations",
+        "questionsForVet",
+    ],
+    "additionalProperties": False,
+}

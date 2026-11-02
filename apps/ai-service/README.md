@@ -1,6 +1,6 @@
 # PatiPasaport AI Servisi
 
-Belge okuma ve tahlil açıklaması üreten Python 3.14 + FastAPI servisi. Sözleşme ve geliştirme kuralları: [ai-service-contract.md](../../docs/ai-service-contract.md).
+Belge okuma, tahlil açıklaması ve sağlık değerlendirmesi üreten Python 3.14 + FastAPI servisi. Sözleşme ve geliştirme kuralları: [ai-service-contract.md](../../docs/ai-service-contract.md).
 
 ## Kurulum
 
@@ -42,7 +42,7 @@ docker compose logs -f ai-service
 
 ## Entegrasyon testleri
 
-Varsayılan `pytest` çalıştırması entegrasyon testlerini dışarıda bırakır (`-m 'not integration'`) ve ağa çıkmaz. Entegrasyon testleri gerçek RabbitMQ ve SeaweedFS ile çalışır; `test_llm_client.py` ve `test_explanation_llm.py` sentetik içerikle gerçek AI API'ye istek gönderir, bu yüzden her çalıştırma sağlayıcı kotasından düşer.
+Varsayılan `pytest` çalıştırması entegrasyon testlerini dışarıda bırakır (`-m 'not integration'`) ve ağa çıkmaz. Entegrasyon testleri gerçek RabbitMQ ve SeaweedFS ile çalışır; `test_llm_client.py`, `test_explanation_llm.py` ve `test_assessment_llm.py` sentetik içerikle gerçek AI API'ye istek gönderir, bu yüzden her çalıştırma sağlayıcı kotasından düşer.
 
 Ön koşullar:
 

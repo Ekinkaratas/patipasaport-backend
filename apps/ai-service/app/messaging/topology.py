@@ -3,12 +3,17 @@ from dataclasses import dataclass
 from aio_pika import ExchangeType
 from aio_pika.abc import AbstractChannel
 
-from app.messaging.cloudevents import DOCUMENT_UPLOADED, LAB_EXPLANATION_REQUESTED
+from app.messaging.cloudevents import (
+    DOCUMENT_UPLOADED,
+    HEALTH_ASSESSMENT_REQUESTED,
+    LAB_EXPLANATION_REQUESTED,
+)
 
 EVENTS_EXCHANGE = "patipasaport.events"
 DEAD_LETTER_EXCHANGE = "patipasaport.events.dlx"
 DOCUMENT_QUEUE = "ai-service.document-uploaded"
 EXPLANATION_QUEUE = "ai-service.lab-explanation-requested"
+ASSESSMENT_QUEUE = "ai-service.health-assessment-requested"
 RETRY_SUFFIX = ".retry"
 DLQ_SUFFIX = ".dlq"
 RETRY_DELAY_MS = 30_000
@@ -17,6 +22,7 @@ RETRY_COUNT_HEADER = "x-retry-count"
 CORRELATION_ID_HEADER = "x-correlation-id"
 DOCUMENT_PREFETCH = 2
 EXPLANATION_PREFETCH = 4
+ASSESSMENT_PREFETCH = 2
 
 
 @dataclass(frozen=True)
@@ -25,6 +31,7 @@ class Topology:
     dead_letter_exchange: str = DEAD_LETTER_EXCHANGE
     document_queue: str = DOCUMENT_QUEUE
     explanation_queue: str = EXPLANATION_QUEUE
+    assessment_queue: str = ASSESSMENT_QUEUE
 
     # Kuyruğun tekrar deneme kuyruğunun adını döndürür.
     def retry_queue(self, queue: str) -> str:
@@ -39,6 +46,7 @@ class Topology:
         return {
             self.document_queue: (DOCUMENT_UPLOADED,),
             self.explanation_queue: (LAB_EXPLANATION_REQUESTED,),
+            self.assessment_queue: (HEALTH_ASSESSMENT_REQUESTED,),
         }
 
 

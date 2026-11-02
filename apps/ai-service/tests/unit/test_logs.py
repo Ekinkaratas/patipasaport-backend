@@ -43,6 +43,7 @@ UNTOUCHED_LOGGER_NAMES = ("aio_pika", "aiormq")
 ALLOWED_EXTRA = {
     "documentId": "belge-1",
     "recordId": "kayit-1",
+    "requestId": "istek-1",
     "eventId": "olay-1",
     "eventType": "com.patipasaport.document.uploaded.v1",
     "queue": "ai-service.document-uploaded",

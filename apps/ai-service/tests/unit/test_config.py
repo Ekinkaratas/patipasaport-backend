@@ -40,6 +40,7 @@ DEFAULTS = {
     "S3_BUCKET": "medical-documents",
     "AI_REQUEST_TIMEOUT_SECONDS": 120,
     "AI_ENABLE_THINKING": True,
+    "ASSESSMENT_CRITICAL_DEVIATION_PERCENT": 50,
     "LOG_LEVEL": "INFO",
 }
 ALL_REQUIRED_NAMES = (
@@ -125,6 +126,7 @@ def test_loads_required_values_with_defaults(monkeypatch: pytest.MonkeyPatch) ->
     assert settings.s3_bucket == "medical-documents"
     assert settings.ai_request_timeout_seconds == 120
     assert settings.ai_enable_thinking is True
+    assert settings.assessment_critical_deviation_percent == 50
     assert settings.log_level == "INFO"
 
 
@@ -245,6 +247,7 @@ def test_example_file_loads_when_environment_fills_placeholders(
     assert settings.ai_api_key.get_secret_value() == "sahte-ai-api-anahtari"
     assert settings.ai_request_timeout_seconds == 120
     assert settings.ai_enable_thinking is True
+    assert settings.assessment_critical_deviation_percent == 50
     assert settings.log_level == "INFO"
 
 
@@ -311,6 +314,9 @@ def test_invalid_values_are_reported_without_values(
         ("LOG_LEVEL", "TRACE"),
         ("AI_ENABLE_THINKING", "sahte-dusunme"),
         ("AI_ENABLE_THINKING", "2"),
+        ("ASSESSMENT_CRITICAL_DEVIATION_PERCENT", "0"),
+        ("ASSESSMENT_CRITICAL_DEVIATION_PERCENT", "-1"),
+        ("ASSESSMENT_CRITICAL_DEVIATION_PERCENT", "sahte-yuzde"),
     )
     for name, value in invalid_values:
         with subtests.test(name=name, value=value):
@@ -424,6 +430,7 @@ def test_blank_file_value_uses_default(
         ("S3_BUCKET", "dosya-kovasi", "dosya-kovasi"),
         ("AI_REQUEST_TIMEOUT_SECONDS", "30", 30),
         ("AI_ENABLE_THINKING", "false", False),
+        ("ASSESSMENT_CRITICAL_DEVIATION_PERCENT", "75.5", 75.5),
         ("LOG_LEVEL", "debug", "DEBUG"),
     ],
 )
@@ -443,19 +450,41 @@ def test_blank_environment_value_beats_file_and_uses_default(
     assert getattr(load_settings(env_file), name.lower()) == DEFAULTS[name]
 
 
-# Sonlu olmayan zaman aşımının değer içermeyen hatayla reddedildiğini doğrular.
+# Sonlu olmayan ondalıklı ayarların değer içermeyen hatayla reddedildiğini doğrular.
+@pytest.mark.parametrize(
+    "name", ["AI_REQUEST_TIMEOUT_SECONDS", "ASSESSMENT_CRITICAL_DEVIATION_PERCENT"]
+)
 @pytest.mark.parametrize("value", ["inf", "-inf", "nan", "1e400"])
-def test_non_finite_timeout_is_invalid(
-    monkeypatch: pytest.MonkeyPatch, value: str
+def test_non_finite_float_setting_is_invalid(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
 ) -> None:
-    use_environment(
-        monkeypatch, {**REQUIRED_VALUES, "AI_REQUEST_TIMEOUT_SECONDS": value}
-    )
+    use_environment(monkeypatch, {**REQUIRED_VALUES, name: value})
 
     error = load_error()
 
-    assert str(error) == INVALID_PREFIX + "AI_REQUEST_TIMEOUT_SECONDS"
+    assert str(error) == INVALID_PREFIX + name
     assert_values_hidden(error, SECRET_VALUES.values())
+
+
+# Kritik sapma yüzdesinin sıfırdan büyük ondalıklı değerleri kabul ettiğini doğrular.
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param("50", 50.0, id="tam-sayi"),
+        pytest.param("0.5", 0.5, id="kucuk-ondalik"),
+        pytest.param("120.25", 120.25, id="yuzun-ustu"),
+        pytest.param(" 30 ", 30.0, id="bosluklu"),
+    ],
+)
+def test_critical_deviation_percent_accepts_positive_values(
+    monkeypatch: pytest.MonkeyPatch, value: str, expected: float
+) -> None:
+    use_environment(
+        monkeypatch,
+        {**REQUIRED_VALUES, "ASSESSMENT_CRITICAL_DEVIATION_PERCENT": value},
+    )
+
+    assert load_settings(None).assessment_critical_deviation_percent == expected
 
 
 # Varsayılanlı alanda ortamdaki yer tutucunun eksik olarak bildirildiğini doğrular.

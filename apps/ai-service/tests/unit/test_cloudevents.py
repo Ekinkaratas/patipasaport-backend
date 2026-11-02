@@ -18,6 +18,9 @@ from app.messaging.cloudevents import (
     DOCUMENT_PROCESSING_STARTED,
     DOCUMENT_UPLOADED,
     EVENT_SPECS,
+    HEALTH_ASSESSMENT_FAILED,
+    HEALTH_ASSESSMENT_GENERATED,
+    HEALTH_ASSESSMENT_REQUESTED,
     LAB_EXPLANATION_FAILED,
     LAB_EXPLANATION_GENERATED,
     LAB_EXPLANATION_REQUESTED,
@@ -34,6 +37,7 @@ from app.messaging.cloudevents import (
 DOCUMENT_ID = "0dfc0a17-8fb6-4f0b-9732-6a8ca67465de"
 OTHER_DOCUMENT_ID = "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
 RECORD_ID = "7b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d4e"
+REQUEST_ID = "4e8b1d2c-6a3f-4c7e-9b0d-2f1a3c5e7d9b"
 EVENT_ID = "5d0f7a2e-1c3b-4e8f-9a6d-2b7c8e9f0a1b"
 FAKE_SHA256 = "0123456789abcdef" * 4
 FAKE_MODEL_VERSION = "sahte-model/extract-v1"
@@ -56,6 +60,11 @@ LAB_TYPES = [
     LAB_EXPLANATION_REQUESTED,
     LAB_EXPLANATION_GENERATED,
     LAB_EXPLANATION_FAILED,
+]
+HEALTH_TYPES = [
+    HEALTH_ASSESSMENT_REQUESTED,
+    HEALTH_ASSESSMENT_GENERATED,
+    HEALTH_ASSESSMENT_FAILED,
 ]
 LAB_REQUESTED_DATA: dict[str, Any] = {
     "recordId": RECORD_ID,
@@ -174,6 +183,21 @@ CONTRACT_EVENT_TYPES = [
         LAB_EXPLANATION_FAILED,
         "com.patipasaport.lab_explanation.failed.v1",
         "urn:patipasaport:events:LabExplanationFailed:v1",
+    ),
+    (
+        HEALTH_ASSESSMENT_REQUESTED,
+        "com.patipasaport.health_assessment.requested.v1",
+        "urn:patipasaport:events:HealthAssessmentRequested:v1",
+    ),
+    (
+        HEALTH_ASSESSMENT_GENERATED,
+        "com.patipasaport.health_assessment.generated.v1",
+        "urn:patipasaport:events:HealthAssessmentGenerated:v1",
+    ),
+    (
+        HEALTH_ASSESSMENT_FAILED,
+        "com.patipasaport.health_assessment.failed.v1",
+        "urn:patipasaport:events:HealthAssessmentFailed:v1",
     ),
 ]
 UPLOADED_DATA = {
@@ -353,6 +377,99 @@ def lab_generated_message() -> events_pb2.LabExplanationGenerated:
     )
 
 
+# Ölçüm, aşı, reçete ve klinik notu içeren bir HealthAssessmentRequested üretir.
+def health_requested_message() -> events_pb2.HealthAssessmentRequested:
+    return events_pb2.HealthAssessmentRequested(
+        request_id=REQUEST_ID,
+        as_of="2026-10-21",
+        species="DOG",
+        breed="Golden Retriever",
+        sex="FEMALE",
+        is_neutered=True,
+        birth_date="2023-10-01",
+        is_birth_date_estimated=False,
+        lab_series=[
+            events_pb2.LabSeries(
+                test_name="HCT",
+                measurements=[
+                    events_pb2.LabMeasurement(
+                        sampled_at="2026-10-20",
+                        value="33",
+                        unit="%",
+                        reference_range="37-55",
+                        flag=medical_record_pb2.LabResultFlag.LOW,
+                    )
+                ],
+            )
+        ],
+        vaccinations=[
+            medical_record_pb2.VaccinationDetails(
+                vaccine_name="Kuduz",
+                administered_at="2025-10-01",
+                next_due_at="2026-10-01",
+            )
+        ],
+        prescriptions=[
+            medical_record_pb2.PrescriptionDetails(
+                medication_name="Sahte ilaç",
+                duration_days=7,
+                prescribed_at="2026-10-01",
+            )
+        ],
+        clinical_notes=[
+            events_pb2.ClinicalNote(
+                type=medical_record_pb2.EXAMINATION,
+                title="Genel muayene",
+                notes="Not",
+                recorded_at="2026-10-20",
+            )
+        ],
+    )
+
+
+# Bulgu, olası durum, öneri ve hatırlatma içeren bir HealthAssessmentGenerated üretir.
+def health_generated_message() -> events_pb2.HealthAssessmentGenerated:
+    return events_pb2.HealthAssessmentGenerated(
+        request_id=REQUEST_ID,
+        model_version="gemma-4-31b/assess-v1",
+        confidence=0.7,
+        assessment=medical_record_pb2.HealthAssessment(
+            summary="Özet",
+            risk_level=medical_record_pb2.HEALTH_RISK_MODERATE,
+            findings=[
+                medical_record_pb2.HealthFinding(
+                    test_name="HCT",
+                    trend=medical_record_pb2.LAB_TREND_SINGLE,
+                    interpretation="Yorum",
+                )
+            ],
+            possible_conditions=[
+                medical_record_pb2.PossibleCondition(
+                    name="Durum",
+                    likelihood=medical_record_pb2.CONDITION_LIKELIHOOD_MEDIUM,
+                    evidence=["HCT"],
+                    explanation="Açıklama",
+                )
+            ],
+            recommendations=[
+                medical_record_pb2.HealthRecommendation(
+                    category=medical_record_pb2.RECOMMENDATION_VET_VISIT,
+                    text="Öneri",
+                )
+            ],
+            vaccination_reminders=[
+                medical_record_pb2.VaccinationReminder(
+                    vaccine_name="Kuduz",
+                    next_due_at="2026-10-01",
+                    status=medical_record_pb2.VACCINATION_OVERDUE,
+                )
+            ],
+            questions_for_vet=["Soru?"],
+        ),
+        generated_at="2026-10-21T09:35:00.000Z",
+    )
+
+
 # Verilen tür için alanları dolu örnek proto mesajını döndürür.
 def sample_message(event_type: str) -> Message:
     samples: dict[str, Message] = {
@@ -372,6 +489,15 @@ def sample_message(event_type: str) -> Message:
             error_code="AI_PROVIDER_UNAVAILABLE",
             error_message="AI API'ye 5 denemede ulaşılamadı",
             failed_at="2026-10-21T09:32:30.000Z",
+        ),
+        HEALTH_ASSESSMENT_REQUESTED: health_requested_message(),
+        HEALTH_ASSESSMENT_GENERATED: health_generated_message(),
+        HEALTH_ASSESSMENT_FAILED: events_pb2.HealthAssessmentFailed(
+            request_id=REQUEST_ID,
+            model_version="gemma-4-31b/assess-v1",
+            error_code="INVALID_AI_OUTPUT",
+            error_message="Model iki denemede de kurallara uygun JSON vermedi",
+            failed_at="2026-10-21T09:36:00.000Z",
         ),
     }
     return samples[event_type]
@@ -745,7 +871,7 @@ def test_envelope_constants_match_contract() -> None:
     assert SOURCE == "/patipasaport/ai-service"
 
 
-# Yedi tür sabitinin ve URN'lerinin sözleşme 4.3 ile birebir aynı olduğunu doğrular.
+# On tür sabitinin ve URN'lerinin sözleşme 4.3 ile birebir aynı olduğunu doğrular.
 def test_event_types_and_dataschemas_match_contract() -> None:
     for constant, event_type, dataschema in CONTRACT_EVENT_TYPES:
         assert constant == event_type
@@ -753,8 +879,8 @@ def test_event_types_and_dataschemas_match_contract() -> None:
     assert len(DATASCHEMAS) == len(CONTRACT_EVENT_TYPES)
 
 
-# Kayıt defterindeki yedi türün proto sınıfını ve kimlik alanını doğrular.
-def test_event_specs_hold_document_and_lab_types() -> None:
+# Kayıt defterindeki on türün proto sınıfını ve kimlik alanını doğrular.
+def test_event_specs_hold_document_lab_and_health_types() -> None:
     message_classes = {
         DOCUMENT_UPLOADED: (events_pb2.DocumentUploaded, "document_id"),
         DOCUMENT_PROCESSING_STARTED: (
@@ -766,6 +892,15 @@ def test_event_specs_hold_document_and_lab_types() -> None:
         LAB_EXPLANATION_REQUESTED: (events_pb2.LabExplanationRequested, "record_id"),
         LAB_EXPLANATION_GENERATED: (events_pb2.LabExplanationGenerated, "record_id"),
         LAB_EXPLANATION_FAILED: (events_pb2.LabExplanationFailed, "record_id"),
+        HEALTH_ASSESSMENT_REQUESTED: (
+            events_pb2.HealthAssessmentRequested,
+            "request_id",
+        ),
+        HEALTH_ASSESSMENT_GENERATED: (
+            events_pb2.HealthAssessmentGenerated,
+            "request_id",
+        ),
+        HEALTH_ASSESSMENT_FAILED: (events_pb2.HealthAssessmentFailed, "request_id"),
     }
 
     assert list(EVENT_SPECS) == list(message_classes)
@@ -824,6 +959,26 @@ def test_lab_build_then_parse_round_trip(event_type: str) -> None:
         type=event_type,
         source=SOURCE,
         subject=RECORD_ID,
+        time=FIXED_NOW,
+        data=message,
+    )
+
+
+# Üç değerlendirme türünde zarfın requestId ile kurulup aynen okunduğunu doğrular.
+@pytest.mark.parametrize("event_type", HEALTH_TYPES)
+def test_health_build_then_parse_round_trip(event_type: str) -> None:
+    message = sample_message(event_type)
+
+    built = build_event(message, event_type, now=FIXED_NOW, event_id=EVENT_ID)
+    parsed = parse_event(built.body, event_type)
+
+    assert built.subject == REQUEST_ID
+    assert json.loads(built.body)["dataschema"] == DATASCHEMAS[event_type]
+    assert parsed == IncomingEvent(
+        id=EVENT_ID,
+        type=event_type,
+        source=SOURCE,
+        subject=REQUEST_ID,
         time=FIXED_NOW,
         data=message,
     )

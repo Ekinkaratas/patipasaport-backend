@@ -13,18 +13,21 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app import main as main_module
+from app.assessments.pipeline import AssessmentPipeline
 from app.config import ConfigError, Settings, load_settings
 from app.documents.pipeline import DocumentPipeline
 from app.explanations.pipeline import ExplanationPipeline
 from app.generated import events_pb2, medical_record_pb2
 from app.llm.client import LlmClient, LlmReply, create_llm_client
-from app.llm.schemas import EXPLANATION_SCHEMA_NAME
+from app.llm.schemas import ASSESSMENT_SCHEMA_NAME, EXPLANATION_SCHEMA_NAME
 from app.logs import JsonFormatter
 from app.main import create_app
 from app.messaging.cloudevents import (
     DOCUMENT_ANALYZED,
     DOCUMENT_PROCESSING_STARTED,
     DOCUMENT_UPLOADED,
+    HEALTH_ASSESSMENT_GENERATED,
+    HEALTH_ASSESSMENT_REQUESTED,
     LAB_EXPLANATION_GENERATED,
     LAB_EXPLANATION_REQUESTED,
     IncomingEvent,
@@ -34,6 +37,8 @@ from app.messaging.consumer import Flow
 from app.messaging.publisher import Publisher
 from app.messaging.runtime import Messaging, start_messaging
 from app.messaging.topology import (
+    ASSESSMENT_PREFETCH,
+    ASSESSMENT_QUEUE,
     DOCUMENT_PREFETCH,
     DOCUMENT_QUEUE,
     EXPLANATION_PREFETCH,
@@ -90,7 +95,22 @@ VALID_EXPLANATION_OUTPUT = json.dumps(
     },
     ensure_ascii=False,
 )
-FLOW_ERROR_MESSAGE = "Belge okuma ya da tahlil açıklama akışı kurulamadı ({})"
+REQUEST_ID = "2a4c6e8f-1b3d-4f5a-8c7e-9d0b1a2c3e4f"
+VALID_ASSESSMENT_OUTPUT = json.dumps(
+    {
+        "confidence": 0.6,
+        "riskLevel": "HIGH",
+        "summary": "Kayıtlar birlikte değerlendirildi.",
+        "findings": [],
+        "possibleConditions": [],
+        "recommendations": [],
+        "questionsForVet": [],
+    },
+    ensure_ascii=False,
+)
+FLOW_ERROR_MESSAGE = (
+    "Belge okuma, tahlil açıklama ya da sağlık değerlendirmesi akışı kurulamadı ({})"
+)
 
 
 class StartupError(Exception):
@@ -163,14 +183,14 @@ class FakeLlm:
         self.requests: list[Mapping[str, Any]] = []
         self.aclose_calls = 0
 
-    # İsteği kaydeder ve şemaya göre geçerli bir okuma ya da açıklama çıktısı döndürür.
+    # İsteği kaydeder ve şemaya göre geçerli okuma, açıklama ya da değerlendirme verir.
     async def complete_json(self, **request: Any) -> LlmReply:
         self.requests.append(request)
-        output = (
-            VALID_EXPLANATION_OUTPUT
-            if request["schema_name"] == EXPLANATION_SCHEMA_NAME
-            else VALID_OUTPUT
-        )
+        outputs = {
+            EXPLANATION_SCHEMA_NAME: VALID_EXPLANATION_OUTPUT,
+            ASSESSMENT_SCHEMA_NAME: VALID_ASSESSMENT_OUTPUT,
+        }
+        output = outputs.get(request["schema_name"], VALID_OUTPUT)
         return LlmReply(output, prompt_tokens=None, completion_tokens=None)
 
     # Kapanışı sayar, zaman çizelgesine yazar; tanımlıysa hatayı fırlatır.
@@ -284,7 +304,9 @@ def restore_logging(capsys: pytest.CaptureFixture[str]) -> Iterator[None]:
 
 
 # Tüm alanları açıkça sahte değerlerle dolu, env dosyası okumayan ayarlar üretir.
-def fake_settings(ai_model: str = FAKE_MODEL) -> Settings:
+def fake_settings(
+    ai_model: str = FAKE_MODEL, critical_deviation_percent: float = 50.0
+) -> Settings:
     return Settings(
         _env_file=None,
         rabbitmq_host="sahte-rabbitmq",
@@ -299,6 +321,7 @@ def fake_settings(ai_model: str = FAKE_MODEL) -> Settings:
         ai_api_key="sahte-ai-api-anahtari",
         ai_model=ai_model,
         ai_request_timeout_seconds=30.0,
+        assessment_critical_deviation_percent=critical_deviation_percent,
         log_level="INFO",
     )
 
@@ -354,6 +377,35 @@ def requested_event() -> IncomingEvent:
                     unit="10^3/uL",
                     reference_range="5.5-19.5",
                     flag=medical_record_pb2.LabResultFlag.NORMAL,
+                )
+            ],
+        ),
+    )
+
+
+# Referans aralığının %25 altında tek ölçümlü, geçerli bir değerlendirme isteği üretir.
+def assessment_event() -> IncomingEvent:
+    return IncomingEvent(
+        id="6c8e0a2b-4d6f-4a1c-9e3b-5f7d9b1c3e5a",
+        type=HEALTH_ASSESSMENT_REQUESTED,
+        source="/patipasaport/medical-record",
+        subject=REQUEST_ID,
+        time=datetime(2024, 3, 20, 10, 0, tzinfo=UTC),
+        data=events_pb2.HealthAssessmentRequested(
+            request_id=REQUEST_ID,
+            as_of="2024-03-20",
+            species="DOG",
+            lab_series=[
+                events_pb2.LabSeries(
+                    test_name="HCT",
+                    measurements=[
+                        events_pb2.LabMeasurement(
+                            sampled_at="2024-03-15",
+                            value="32",
+                            unit="%",
+                            reference_range="37-57",
+                        )
+                    ],
                 )
             ],
         ),
@@ -457,17 +509,24 @@ def test_dependencies_receive_loaded_settings() -> None:
     assert harness.timeline[:3] == ["storage_factory", "llm_factory", "messaging.start"]
 
 
-# Lifespan'ın starter'a önce belge, sonra açıklama akışını verdiğini doğrular.
-def test_lifespan_passes_document_and_explanation_flows() -> None:
+# Starter'a belge, açıklama ve değerlendirme akışlarının sırayla verildiğini doğrular.
+def test_lifespan_passes_document_explanation_and_assessment_flows() -> None:
     harness = Harness()
 
     with TestClient(harness.app()):
         [(_, flows)] = harness.starter.calls
 
-    assert [flow.queue for flow in flows] == [DOCUMENT_QUEUE, EXPLANATION_QUEUE]
-    document, explanation = (getattr(flow.handle, "__self__", None) for flow in flows)
+    assert [flow.queue for flow in flows] == [
+        DOCUMENT_QUEUE,
+        EXPLANATION_QUEUE,
+        ASSESSMENT_QUEUE,
+    ]
+    document, explanation, assessment = (
+        getattr(flow.handle, "__self__", None) for flow in flows
+    )
     assert isinstance(document, DocumentPipeline)
     assert isinstance(explanation, ExplanationPipeline)
+    assert isinstance(assessment, AssessmentPipeline)
 
 
 # Lifespan'ın depo ve istemciden belge akışını kurup starter'a verdiğini doğrular.
@@ -522,6 +581,47 @@ def test_lifespan_passes_explanation_flow_built_from_llm() -> None:
     assert tuple(request["image_data_urls"]) == ()
     assert harness.storage.reads == []
     assert [event.type for event in publisher.events] == [LAB_EXPLANATION_GENERATED]
+
+
+# Lifespan'ın aynı istemciden değerlendirme akışını kurup starter'a verdiğini doğrular.
+def test_lifespan_passes_assessment_flow_built_from_llm() -> None:
+    harness = Harness()
+
+    with TestClient(harness.app()):
+        [(_, flows)] = harness.starter.calls
+
+    flow = flows[2]
+    assert flow.queue == ASSESSMENT_QUEUE
+    assert flow.event_type == HEALTH_ASSESSMENT_REQUESTED
+    assert flow.prefetch == ASSESSMENT_PREFETCH
+    pipeline = getattr(flow.handle, "__self__", None)
+    assert isinstance(pipeline, AssessmentPipeline)
+    assert pipeline.model_version == f"{FAKE_MODEL}/assess-v1"
+    assert flow.build_failure == pipeline.build_failure
+    publisher = FakePublisher()
+
+    asyncio.run(flow.handle(assessment_event(), cast(Publisher, publisher)))
+
+    [request] = harness.llm.requests
+    assert request["schema_name"] == ASSESSMENT_SCHEMA_NAME
+    assert tuple(request["image_data_urls"]) == ()
+    assert '"critical": false' in request["user_text"]
+    assert harness.storage.reads == []
+    assert [event.type for event in publisher.events] == [HEALTH_ASSESSMENT_GENERATED]
+
+
+# Değerlendirme akışının kritik sapma eşiğini ayarlardan aldığını doğrular.
+def test_assessment_flow_uses_critical_deviation_setting() -> None:
+    harness = Harness()
+
+    with TestClient(harness.app(lambda: fake_settings(critical_deviation_percent=10))):
+        [(_, flows)] = harness.starter.calls
+
+    asyncio.run(flows[2].handle(assessment_event(), cast(Publisher, FakePublisher())))
+
+    [request] = harness.llm.requests
+    assert '"critical": true' in request["user_text"]
+    assert '"deviationPercent": 25.0' in request["user_text"]
 
 
 # Starter'ın döndürdüğü mesajlaşma nesnesinin app.state'e konduğunu doğrular.
@@ -641,6 +741,32 @@ def test_explanation_pipeline_error_closes_llm_and_logs_type_only(
         raise error
 
     monkeypatch.setattr(main_module, "ExplanationPipeline", failing_pipeline)
+    harness = Harness()
+
+    with pytest.raises(StartupError) as raised:
+        with TestClient(harness.app()):
+            pass
+
+    assert raised.value is error
+    assert_single_bootstrap_error(
+        capsys.readouterr().out, FLOW_ERROR_MESSAGE.format("StartupError")
+    )
+    assert harness.starter.calls == []
+    assert harness.llm.aclose_calls == 1
+    assert harness.timeline == ["storage_factory", "llm_factory", "llm.aclose"]
+
+
+# Değerlendirme akışı kurulamazsa istemcinin kapanıp starter'ın çağrılmadığını doğrular.
+def test_assessment_pipeline_error_closes_llm_and_logs_type_only(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    error = StartupError(" ".join(FAKE_SECRETS))
+
+    # Değerlendirme akışı yerine geçip her çağrıda kurulum hatası fırlatır.
+    def failing_pipeline(*args: object, **kwargs: object) -> AssessmentPipeline:
+        raise error
+
+    monkeypatch.setattr(main_module, "AssessmentPipeline", failing_pipeline)
     harness = Harness()
 
     with pytest.raises(StartupError) as raised:

@@ -8,6 +8,8 @@ import pytest
 
 from app.generated import medical_record_pb2
 from app.llm.schemas import (
+    ASSESSMENT_SCHEMA,
+    ASSESSMENT_SCHEMA_NAME,
     EXPLANATION_SCHEMA,
     EXPLANATION_SCHEMA_NAME,
     EXTRACTION_SCHEMA,
@@ -465,3 +467,231 @@ def test_explanation_schema_rejects_invalid_answers(
     mutate(example)
 
     assert expected_path in _violations(EXPLANATION_SCHEMA, example)
+
+
+ASSESSMENT_EXAMPLE: dict[str, Any] = {
+    "confidence": 0.7,
+    "riskLevel": "MODERATE",
+    "summary": "Kayıtlar birlikte değerlendirildi.",
+    "findings": [{"testName": "HCT", "interpretation": "HCT aralığın altında."}],
+    "possibleConditions": [
+        {
+            "name": "Kansızlıkla ilişkili bir durum",
+            "likelihood": "MEDIUM",
+            "evidence": ["HCT"],
+            "explanation": "Düşük HCT kansızlıkla ilişkili olabilir.",
+        }
+    ],
+    "recommendations": [{"category": "VET_VISIT", "text": "Hekime danışın."}],
+    "questionsForVet": ["Kontrol testi gerekir mi?"],
+}
+
+
+# Değerlendirme şemasının adı health_assessment'tır.
+def test_assessment_schema_name() -> None:
+    assert ASSESSMENT_SCHEMA_NAME == "health_assessment"
+
+
+# Değerlendirme şeması JSON'a çevrilip geri okunabilir.
+def test_assessment_schema_is_json_serializable() -> None:
+    text = json.dumps(ASSESSMENT_SCHEMA, ensure_ascii=False)
+
+    assert json.loads(text) == ASSESSMENT_SCHEMA
+
+
+# Kök nesne yedi alanı bu sırayla ve sözleşmedeki türler ve seçeneklerle tanımlar.
+def test_assessment_root_fields() -> None:
+    properties = ASSESSMENT_SCHEMA["properties"]
+
+    assert ASSESSMENT_SCHEMA["type"] == "object"
+    assert list(properties) == [
+        "confidence",
+        "riskLevel",
+        "summary",
+        "findings",
+        "possibleConditions",
+        "recommendations",
+        "questionsForVet",
+    ]
+    assert properties["confidence"] == {"type": "number"}
+    assert properties["riskLevel"] == {
+        "type": "string",
+        "enum": ["LOW", "MODERATE", "HIGH", "URGENT"],
+    }
+    assert properties["summary"] == {"type": "string"}
+    assert properties["questionsForVet"] == {
+        "type": "array",
+        "items": {"type": "string"},
+    }
+
+
+# Liste kalemlerinin alanları, türleri ve seçenekleri sözleşmedeki gibidir.
+def test_assessment_item_fields() -> None:
+    properties = ASSESSMENT_SCHEMA["properties"]
+
+    assert properties["findings"]["items"]["properties"] == {
+        "testName": {"type": "string"},
+        "interpretation": {"type": "string"},
+    }
+    assert properties["possibleConditions"]["items"]["properties"] == {
+        "name": {"type": "string"},
+        "likelihood": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
+        "evidence": {"type": "array", "items": {"type": "string"}},
+        "explanation": {"type": "string"},
+    }
+    assert properties["recommendations"]["items"]["properties"] == {
+        "category": {
+            "type": "string",
+            "enum": ["NUTRITION", "CARE", "FOLLOW_UP_TEST", "VET_VISIT", "VACCINATION"],
+        },
+        "text": {"type": "string"},
+    }
+
+
+# Değerlendirme şemasının her düğümü bilinen anahtar kelimelerle geçerli bir yapı kurar.
+def test_assessment_schema_has_valid_structure() -> None:
+    for path, node in _walk(ASSESSMENT_SCHEMA):
+        assert set(node) <= ALLOWED_KEYWORDS, path
+        assert "anyOf" not in node, path
+        assert node["type"] in JSON_TYPES, path
+        if node["type"] == "array":
+            assert isinstance(node["items"], dict), path
+        if "enum" in node:
+            assert len(node["enum"]) == len(set(node["enum"])), path
+            assert all(_matches_type(node["type"], v) for v in node["enum"]), path
+
+
+# Değerlendirme şemasındaki dört nesne de katıdır, bütün alanları zorunludur.
+def test_assessment_objects_are_strict() -> None:
+    objects = [
+        (path, node)
+        for path, node in _walk(ASSESSMENT_SCHEMA)
+        if node.get("type") == "object"
+    ]
+
+    assert len(objects) == 4
+    for path, node in objects:
+        assert node["additionalProperties"] is False, path
+        assert node["required"] == list(node["properties"]), path
+        for name in node["properties"]:
+            assert LOWER_CAMEL_CASE.fullmatch(name), f"{path}.{name}"
+
+
+# Değerlendirme alanları proto mesajlarının JSON adlarıyla aynıdır.
+def test_assessment_fields_match_proto_json_names() -> None:
+    properties = ASSESSMENT_SCHEMA["properties"]
+    item_names = {
+        name: set(properties[name]["items"]["properties"])
+        for name in ("findings", "possibleConditions", "recommendations")
+    }
+
+    assert set(properties) - {"confidence"} <= _json_names(
+        medical_record_pb2.HealthAssessment
+    )
+    assert _json_names(medical_record_pb2.HealthAssessment) - set(properties) == {
+        "vaccinationReminders"
+    }
+    assert _json_names(medical_record_pb2.HealthFinding) - item_names["findings"] == {
+        "trend"
+    }
+    assert item_names["possibleConditions"] == _json_names(
+        medical_record_pb2.PossibleCondition
+    )
+    assert item_names["recommendations"] == _json_names(
+        medical_record_pb2.HealthRecommendation
+    )
+
+
+# Seçenekler proto enum adlarının UNSPECIFIED dışındaki kısa adlarıdır.
+@pytest.mark.parametrize(
+    ("path", "enum_type", "prefix"),
+    [
+        (("riskLevel",), medical_record_pb2.HealthRiskLevel, "HEALTH_RISK_"),
+        (
+            ("possibleConditions", "likelihood"),
+            medical_record_pb2.ConditionLikelihood,
+            "CONDITION_LIKELIHOOD_",
+        ),
+        (
+            ("recommendations", "category"),
+            medical_record_pb2.RecommendationCategory,
+            "RECOMMENDATION_",
+        ),
+    ],
+)
+def test_assessment_enums_match_proto(
+    path: tuple[str, ...], enum_type: Any, prefix: str
+) -> None:
+    node = ASSESSMENT_SCHEMA["properties"][path[0]]
+    if len(path) == 2:
+        node = node["items"]["properties"][path[1]]
+    names = [
+        name.removeprefix(prefix)
+        for name in enum_type.keys()
+        if not name.endswith("UNSPECIFIED")
+    ]
+
+    assert node["enum"] == names
+
+
+# Örnek değerlendirme ve boş listeli değerlendirme katı şemaya uyar.
+def test_assessment_examples_conform() -> None:
+    empty = {
+        **ASSESSMENT_EXAMPLE,
+        "findings": [],
+        "possibleConditions": [],
+        "recommendations": [],
+        "questionsForVet": [],
+    }
+
+    assert _violations(ASSESSMENT_SCHEMA, ASSESSMENT_EXAMPLE) == []
+    assert _violations(ASSESSMENT_SCHEMA, empty) == []
+
+
+# Değerlendirme şeması fazla alanı, eksik alanı, yanlış türü ve seçeneği kabul etmez.
+@pytest.mark.parametrize(
+    ("mutate", "expected_path"),
+    [
+        (lambda example: example.update({"diagnosis": "x"}), "$.diagnosis"),
+        (lambda example: example.pop("riskLevel"), "$.riskLevel"),
+        (lambda example: example.update({"riskLevel": "CRITICAL"}), "$.riskLevel"),
+        (
+            lambda example: example["findings"][0].pop("testName"),
+            "$.findings[0].testName",
+        ),
+        (
+            lambda example: example["possibleConditions"][0].update(
+                {"likelihood": "CERTAIN"}
+            ),
+            "$.possibleConditions[0].likelihood",
+        ),
+        (
+            lambda example: example["possibleConditions"][0].update(
+                {"evidence": "HCT"}
+            ),
+            "$.possibleConditions[0].evidence",
+        ),
+        (
+            lambda example: example["recommendations"][0].update(
+                {"category": "MEDICATION"}
+            ),
+            "$.recommendations[0].category",
+        ),
+        (
+            lambda example: example["recommendations"][0].update({"dose": "x"}),
+            "$.recommendations[0].dose",
+        ),
+        (
+            lambda example: example.update({"questionsForVet": [1]}),
+            "$.questionsForVet[0]",
+        ),
+        (lambda example: example.update({"confidence": "0.7"}), "$.confidence"),
+    ],
+)
+def test_assessment_schema_rejects_invalid_answers(
+    mutate: Any, expected_path: str
+) -> None:
+    example = copy.deepcopy(ASSESSMENT_EXAMPLE)
+    mutate(example)
+
+    assert expected_path in _violations(ASSESSMENT_SCHEMA, example)
