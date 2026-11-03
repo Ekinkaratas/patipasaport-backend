@@ -9,10 +9,12 @@ import {
 } from './fixtures';
 import { DatabaseName } from './ports';
 import {
+  AI_HEALTH_ASSESSMENT_QUEUE,
   AI_LAB_EXPLANATION_QUEUE,
   AI_UPLOADED_QUEUE,
   DOCUMENT_EVENTS_DLQ,
   EventBus,
+  HEALTH_ASSESSMENT_EVENTS_DLQ,
   LAB_EXPLANATION_EVENTS_DLQ,
   messageSubject,
 } from './rabbitmq';
@@ -42,6 +44,7 @@ export interface TestDataOptions {
 export class TestData {
   private readonly connections = new Map<DatabaseName, Promise<Client>>();
   private readonly messageIds = new Set<string>();
+  private readonly subjects = new Set<string>();
   private readonly clinicIds = new Set<string>();
   private readonly userIds = new Set<string>();
   private readonly petIds = new Set<string>();
@@ -71,6 +74,10 @@ export class TestData {
 
   trackMessage(id: string): void {
     this.messageIds.add(id);
+  }
+
+  trackSubject(id: string): void {
+    this.subjects.add(id);
   }
 
   async insertClinic(
@@ -221,7 +228,15 @@ export class TestData {
       'SELECT record_id FROM lab_result_explanations WHERE record_id = ANY($1::uuid[])',
       [recordIds],
     );
-    const subjects = [...documentIds, ...recordIds];
+    const { rows: assessments } = await medical.query<{ request_id: string }>(
+      'SELECT request_id FROM health_assessments WHERE pet_id = ANY($1::uuid[])',
+      [petIds],
+    );
+    const assessmentSubjects = [
+      ...assessments.map((row) => row.request_id),
+      ...this.subjects,
+    ];
+    const subjects = [...documentIds, ...recordIds, ...assessmentSubjects];
 
     const deadline = Date.now() + OUTBOX_DRAIN_TIMEOUT_MS;
     while (subjects.length > 0 && Date.now() < deadline) {
@@ -244,6 +259,10 @@ export class TestData {
         if (explained.length > 0) {
           await bus.takeWhere(AI_LAB_EXPLANATION_QUEUE, tracked);
           await bus.takeWhere(LAB_EXPLANATION_EVENTS_DLQ, tracked);
+        }
+        if (assessmentSubjects.length > 0) {
+          await bus.takeWhere(AI_HEALTH_ASSESSMENT_QUEUE, tracked);
+          await bus.takeWhere(HEALTH_ASSESSMENT_EVENTS_DLQ, tracked);
         }
       } finally {
         await bus.close();
@@ -276,6 +295,10 @@ export class TestData {
           [recordIds],
         );
       }
+      await medical.query(
+        'DELETE FROM health_assessments WHERE pet_id = ANY($1::uuid[])',
+        [petIds],
+      );
       await medical.query(
         'DELETE FROM draft_reviews WHERE pet_id = ANY($1::uuid[])',
         [petIds],

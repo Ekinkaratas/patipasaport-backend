@@ -11,13 +11,20 @@ export const AI_LAB_EXPLANATION_QUEUE = 'ai-service.lab-explanation-requested';
 export const LAB_EXPLANATION_EVENTS_QUEUE =
   'medical-record.lab-explanation-events';
 export const LAB_EXPLANATION_EVENTS_DLQ = `${LAB_EXPLANATION_EVENTS_QUEUE}.dlq`;
+export const AI_HEALTH_ASSESSMENT_QUEUE =
+  'ai-service.health-assessment-requested';
+export const HEALTH_ASSESSMENT_EVENTS_QUEUE =
+  'medical-record.health-assessment-events';
+export const HEALTH_ASSESSMENT_EVENTS_DLQ = `${HEALTH_ASSESSMENT_EVENTS_QUEUE}.dlq`;
 
 export type AiEventKind =
   | 'processing_started'
   | 'analyzed'
   | 'analysis_failed'
   | 'lab_explanation_generated'
-  | 'lab_explanation_failed';
+  | 'lab_explanation_failed'
+  | 'health_assessment_generated'
+  | 'health_assessment_failed';
 
 const AI_EVENTS: Record<
   AiEventKind,
@@ -47,6 +54,16 @@ const AI_EVENTS: Record<
     type: 'com.patipasaport.lab_explanation.failed.v1',
     schema: 'urn:patipasaport:events:LabExplanationFailed:v1',
     subjectKey: 'recordId',
+  },
+  health_assessment_generated: {
+    type: 'com.patipasaport.health_assessment.generated.v1',
+    schema: 'urn:patipasaport:events:HealthAssessmentGenerated:v1',
+    subjectKey: 'requestId',
+  },
+  health_assessment_failed: {
+    type: 'com.patipasaport.health_assessment.failed.v1',
+    schema: 'urn:patipasaport:events:HealthAssessmentFailed:v1',
+    subjectKey: 'requestId',
   },
 };
 

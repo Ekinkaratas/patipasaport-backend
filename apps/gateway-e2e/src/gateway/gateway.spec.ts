@@ -1,5 +1,6 @@
 import { Client } from '@grpc/grpc-js';
 import {
+  AI_HEALTH_ASSESSMENT_QUEUE,
   callGrpc,
   DOCKER_GRPC_PORTS,
   DOCKER_REDIS_PORTS,
@@ -7,12 +8,14 @@ import {
   expectOk,
   grpcClient,
   GrpcResult,
+  HEALTH_ASSESSMENT_EVENTS_QUEUE,
   httpGet,
   httpRequest,
   HttpResponse,
   httpUpload,
   istanbulToday,
   JwtIssuer,
+  messageSubject,
   ObjectStore,
   pdfOfSize,
   requireEnv,
@@ -2773,6 +2776,277 @@ describe('gateway (e2e)', () => {
           message,
         ]);
       }
+    });
+
+    // ---Amaç: sağlık değerlendirmesi uçlarını sahte AI ile istekten sonuca kadar doğrulamak ---
+    describe('sağlık değerlendirmesi', () => {
+      const { HealthAssessmentStatus, HealthRiskLevel, LabTrend } =
+        medicalRecord;
+      let assessedPetId: string;
+      let firstRequestId: string;
+
+      const post = (token: string, pet = assessedPetId) =>
+        call('POST', `/pets/${pet}/health-assessments`, token);
+      const latest = (token: string, pet = assessedPetId) =>
+        call('GET', `/pets/${pet}/health-assessments/latest`, token);
+      const body = (response: HttpResponse) =>
+        parse<medicalRecord.HealthAssessmentResponse>(response);
+      const requestIdOf = async () =>
+        (
+          await (
+            await data.db('medical_record')
+          ).query<{ request_id: string }>(
+            'SELECT request_id FROM health_assessments WHERE pet_id = $1',
+            [assessedPetId],
+          )
+        ).rows[0].request_id;
+      const addLabRecord = async (value: string) => {
+        const response = await call(
+          'POST',
+          `/pets/${assessedPetId}/records`,
+          clinicToken,
+          {
+            content: {
+              type: medicalRecord.RecordType.LAB_RESULT,
+              title: 'Hemogram',
+              recordedAt: today,
+              labResult: {
+                sampledAt: today,
+                items: [
+                  {
+                    testName: 'HCT',
+                    value,
+                    unit: '%',
+                    referenceRange: '37-55',
+                    flag: medicalRecord.LabResultFlag.LOW,
+                  },
+                ],
+              },
+            },
+          },
+        );
+        expect(response.status).toBe(201);
+      };
+      const waitFor = async (check: () => Promise<boolean>) => {
+        const deadline = Date.now() + 10_000;
+        while (!(await check()) && Date.now() < deadline) {
+          await new Promise((resolvePromise) =>
+            setTimeout(resolvePromise, 250),
+          );
+        }
+      };
+
+      beforeAll(async () => {
+        const created = await call('POST', '/pets', ownerToken, {
+          name: 'Karabaş',
+          species: 'DOG',
+          breed: 'GOLDEN_RETRIEVER',
+          sex: pets.PetSex.FEMALE,
+          ownerUserId: owner.id,
+        });
+        assessedPetId = parse<pets.PetResponse>(created).data?.pet?.id ?? '';
+        data.trackPet(assessedPetId);
+        const granted = await call('POST', '/consents', ownerToken, {
+          clinicId: clinic.id,
+          petId: assessedPetId,
+          scopes: ['medical_read', 'medical_write'],
+          expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+        });
+        expect(granted.status).toBe(200);
+      });
+
+      it('kayıt yokken 422, değerlendirme yokken 404; erişimi olmayan ve bozuk kimlik reddedilir', async () => {
+        for (const [response, status, message] of [
+          [await post(ownerToken), 422, 'HEALTH_ASSESSMENT_NO_RECORDS'],
+          [await latest(ownerToken), 404, 'NOT_FOUND'],
+          [await post(foreignToken), 403, 'FORBIDDEN'],
+          [await latest(foreignToken), 403, 'FORBIDDEN'],
+          [await post(strangerToken), 404, 'NOT_FOUND'],
+          [await post(ownerToken, 'abc'), 400, 'PET_ID_WRONG DATA FORMAT'],
+          [await latest(ownerToken, 'abc'), 400, 'PET_ID_WRONG DATA FORMAT'],
+        ] as const) {
+          expect([response.status, parse(response).message]).toEqual([
+            status,
+            message,
+          ]);
+        }
+      });
+
+      it('POST bekleyen değerlendirme başlatır; tekrar POST yeni istek yazmaz; olayda hayvan adı yoktur', async () => {
+        await addLabRecord('32');
+
+        const first = await post(ownerToken);
+        expect(first.status).toBe(200);
+        expect(body(first)).toMatchObject({
+          message: 'SUCCESS',
+          success: true,
+          data: {
+            status: HealthAssessmentStatus.HEALTH_ASSESSMENT_PENDING,
+            confidence: 0,
+            generatedAt: '',
+            isStale: false,
+          },
+        });
+        firstRequestId = await requestIdOf();
+
+        const repeated = await post(clinicToken);
+        expect(body(repeated).data?.status).toBe(
+          HealthAssessmentStatus.HEALTH_ASSESSMENT_PENDING,
+        );
+        expect(await requestIdOf()).toBe(firstRequestId);
+
+        let events: Awaited<ReturnType<typeof bus.takeWhere>> = [];
+        await waitFor(async () => {
+          events = await bus.takeWhere(
+            AI_HEALTH_ASSESSMENT_QUEUE,
+            (message) => messageSubject(message) === firstRequestId,
+          );
+          return events.length > 0;
+        });
+        expect(events).toHaveLength(1);
+        const content = events[0].content.toString('utf8');
+        expect(content).not.toContain('Karabaş');
+        expect(JSON.parse(content).data).toMatchObject({
+          requestId: firstRequestId,
+          asOf: today,
+          species: 'DOG',
+          breed: 'GOLDEN_RETRIEVER',
+          sex: 'FEMALE',
+          labSeries: [
+            {
+              testName: 'HCT',
+              measurements: [{ value: '32', flag: 'LOW' }],
+            },
+          ],
+        });
+      });
+
+      it('sonuç gelince sahip ve onaylı klinik sayısal enum ile okur; kayıtlar aynıysa POST AI çağırmaz', async () => {
+        await bus.publishAiEvent('health_assessment_generated', {
+          requestId: firstRequestId,
+          modelVersion: 'fake-ai-1/assess-v1',
+          confidence: 0.71,
+          assessment: {
+            summary: 'Hematokrit referansın altında.',
+            riskLevel: 'HEALTH_RISK_MODERATE',
+            findings: [
+              {
+                testName: 'HCT',
+                trend: 'LAB_TREND_SINGLE',
+                interpretation: 'Tek ölçüm referansın altında.',
+              },
+            ],
+            vaccinationReminders: [],
+            questionsForVet: ['Tekrar hemogram gerekli mi?'],
+          },
+          generatedAt: new Date().toISOString(),
+        });
+
+        let ready = await latest(clinicToken);
+        await waitFor(async () => {
+          ready = await latest(clinicToken);
+          return (
+            body(ready).data?.status ===
+            HealthAssessmentStatus.HEALTH_ASSESSMENT_READY
+          );
+        });
+        expect(ready.status).toBe(200);
+        expect(body(ready).data).toMatchObject({
+          status: HealthAssessmentStatus.HEALTH_ASSESSMENT_READY,
+          confidence: 0.71,
+          isStale: false,
+          assessment: {
+            summary: 'Hematokrit referansın altında.',
+            riskLevel: HealthRiskLevel.HEALTH_RISK_MODERATE,
+            findings: [
+              {
+                testName: 'HCT',
+                trend: LabTrend.LAB_TREND_SINGLE,
+                interpretation: 'Tek ölçüm referansın altında.',
+              },
+            ],
+            questionsForVet: ['Tekrar hemogram gerekli mi?'],
+          },
+        });
+        expect(
+          Number.isNaN(Date.parse(body(ready).data?.generatedAt ?? '')),
+        ).toBe(false);
+
+        const again = await post(ownerToken);
+        expect(body(again).data?.status).toBe(
+          HealthAssessmentStatus.HEALTH_ASSESSMENT_READY,
+        );
+        expect(await requestIdOf()).toBe(firstRequestId);
+      });
+
+      it('yeni kayıtta isStale true olur; 10 dakika dolmadan POST 429 döner', async () => {
+        await addLabRecord('30');
+
+        expect(body(await latest(ownerToken)).data?.isStale).toBe(true);
+        const tooSoon = await post(ownerToken);
+        expect([tooSoon.status, parse(tooSoon).message]).toEqual([
+          429,
+          'HEALTH_ASSESSMENT_TOO_SOON',
+        ]);
+      });
+
+      it('süre dolunca yeni istek yazılır; eski isteğin sonucu yok sayılır; hata sonucu FAILED döner', async () => {
+        data.trackSubject(firstRequestId);
+        await (
+          await data.db('medical_record')
+        ).query(
+          "UPDATE health_assessments SET requested_at = now() - interval '11 minutes' WHERE pet_id = $1",
+          [assessedPetId],
+        );
+
+        const renewed = await post(ownerToken);
+        expect(body(renewed).data).toMatchObject({
+          status: HealthAssessmentStatus.HEALTH_ASSESSMENT_PENDING,
+          isStale: false,
+        });
+        const secondRequestId = await requestIdOf();
+        expect(secondRequestId).not.toBe(firstRequestId);
+
+        await bus.publishAiEvent('health_assessment_generated', {
+          requestId: firstRequestId,
+          modelVersion: 'fake-ai-1/assess-v1',
+          confidence: 0.5,
+          assessment: {
+            summary: 'Eski sonuç.',
+            riskLevel: 'HEALTH_RISK_LOW',
+          },
+          generatedAt: new Date().toISOString(),
+        });
+        await waitFor(
+          async () =>
+            (await bus.messageCount(HEALTH_ASSESSMENT_EVENTS_QUEUE)) === 0,
+        );
+        expect(body(await latest(ownerToken)).data?.status).toBe(
+          HealthAssessmentStatus.HEALTH_ASSESSMENT_PENDING,
+        );
+
+        await bus.publishAiEvent('health_assessment_failed', {
+          requestId: secondRequestId,
+          modelVersion: 'fake-ai-1/assess-v1',
+          errorCode: 'INVALID_AI_OUTPUT',
+          errorMessage: 'Model iki denemede de kurallara uygun JSON vermedi',
+          failedAt: new Date().toISOString(),
+        });
+        let failed = await latest(ownerToken);
+        await waitFor(async () => {
+          failed = await latest(ownerToken);
+          return (
+            body(failed).data?.status ===
+            HealthAssessmentStatus.HEALTH_ASSESSMENT_FAILED
+          );
+        });
+        expect(body(failed).data).toMatchObject({
+          status: HealthAssessmentStatus.HEALTH_ASSESSMENT_FAILED,
+          confidence: 0,
+          generatedAt: '',
+        });
+        expect(failed.body).not.toContain('INVALID_AI_OUTPUT');
+      });
     });
   });
 });

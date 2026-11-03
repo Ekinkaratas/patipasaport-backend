@@ -14,12 +14,14 @@ import {
   GetDocumentFileRequestDto,
   GetDocumentRequestDto,
   GetLabExplanationRequestDto,
+  GetLatestHealthAssessmentRequestDto,
   ListDocumentsByPetRequestDto,
   ListDraftReviewsRequestDto,
   ListLabResultsRequestDto,
   ListPrescriptionsRequestDto,
   ListRecordsByPetRequestDto,
   ListVaccinationsRequestDto,
+  RequestHealthAssessmentRequestDto,
   ReviewDraftRequestDto,
 } from '@libs/dto';
 import { medicalRecord } from '@libs/proto';
@@ -62,6 +64,21 @@ export class ApiMedicalRecordController {
     @Param() request: GetLabExplanationRequestDto,
   ): Promise<BaseResponse<medicalRecord.LabExplanationResponse>> {
     return this.medicalRecordService.getLabExplanation(request);
+  }
+
+  @Post('pets/:petId/health-assessments')
+  @HttpCode(HttpStatus.OK)
+  requestHealthAssessment(
+    @Param() request: RequestHealthAssessmentRequestDto,
+  ): Promise<BaseResponse<medicalRecord.HealthAssessmentResponse>> {
+    return this.medicalRecordService.requestHealthAssessment(request);
+  }
+
+  @Get('pets/:petId/health-assessments/latest')
+  getLatestHealthAssessment(
+    @Param() request: GetLatestHealthAssessmentRequestDto,
+  ): Promise<BaseResponse<medicalRecord.HealthAssessmentResponse>> {
+    return this.medicalRecordService.getLatestHealthAssessment(request);
   }
 
   @Post('pets/:petId/records')

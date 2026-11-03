@@ -91,6 +91,26 @@ export class ApiMedicalRecordService implements OnModuleInit {
     );
   }
 
+  async requestHealthAssessment(
+    request: medicalRecord.RequestHealthAssessmentRequest,
+  ): Promise<BaseResponse<medicalRecord.HealthAssessmentResponse>> {
+    return ApiMedicalRecordService.ok(
+      await firstValueFrom(
+        this.medicalRecordClient.requestHealthAssessment(request),
+      ),
+    );
+  }
+
+  async getLatestHealthAssessment(
+    request: medicalRecord.GetLatestHealthAssessmentRequest,
+  ): Promise<BaseResponse<medicalRecord.HealthAssessmentResponse>> {
+    return ApiMedicalRecordService.ok(
+      await firstValueFrom(
+        this.medicalRecordClient.getLatestHealthAssessment(request),
+      ),
+    );
+  }
+
   async createRecord(
     request: CreateRecordRequestDto,
   ): Promise<BaseResponse<medicalRecord.RecordResponse>> {
