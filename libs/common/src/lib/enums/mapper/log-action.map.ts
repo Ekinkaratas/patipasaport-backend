@@ -10,6 +10,7 @@ export const LogActionMap: Record<ResponseMessages, LogAction> = {
   [ResponseMessages.VALIDATION_ERROR]: LogAction.VALIDATION_FAILED,
   [ResponseMessages.INVALID_CLIENT_TYPE]: LogAction.VALIDATION_FAILED,
   [ResponseMessages.REQUEST_BODY_TOO_DEEP]: LogAction.VALIDATION_FAILED,
+  [ResponseMessages.HEALTH_ASSESSMENT_NO_RECORDS]: LogAction.VALIDATION_FAILED,
 
   [ResponseMessages.UNAUTH]: LogAction.UNAUTHORIZED,
   [ResponseMessages.TOKEN_EXPIRED]: LogAction.UNAUTHORIZED,
@@ -30,6 +31,7 @@ export const LogActionMap: Record<ResponseMessages, LogAction> = {
 
   [ResponseMessages.METHOD_NOT_ALLOWED]: LogAction.REQUEST_FAILED,
   [ResponseMessages.TOO_MANY_REQUESTS]: LogAction.RATE_LIMITED,
+  [ResponseMessages.HEALTH_ASSESSMENT_TOO_SOON]: LogAction.RATE_LIMITED,
 
   [ResponseMessages.BAD_GATEWAY]: LogAction.DEPENDENCY_FAILED,
   [ResponseMessages.SERVICE_UNAVAILABLE]: LogAction.DEPENDENCY_FAILED,

@@ -30,6 +30,8 @@ export const GrpcStatusMap: Record<ResponseMessages, status> = {
 
   [ResponseMessages.METHOD_NOT_ALLOWED]: status.UNIMPLEMENTED,
   [ResponseMessages.TOO_MANY_REQUESTS]: status.RESOURCE_EXHAUSTED,
+  [ResponseMessages.HEALTH_ASSESSMENT_TOO_SOON]: status.RESOURCE_EXHAUSTED,
+  [ResponseMessages.HEALTH_ASSESSMENT_NO_RECORDS]: status.INVALID_ARGUMENT,
 
   [ResponseMessages.BAD_GATEWAY]: status.UNAVAILABLE,
   [ResponseMessages.SERVICE_UNAVAILABLE]: status.UNAVAILABLE,

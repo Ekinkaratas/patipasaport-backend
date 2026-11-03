@@ -19,6 +19,7 @@ import { RabbitMqService } from './messaging/rabbitmq.service';
 import { OutboxRelayService } from './messaging/outbox-relay.service';
 import { DocumentEventsConsumer } from './messaging/document-events.consumer';
 import { LabExplanationEventsConsumer } from './messaging/lab-explanation-events.consumer';
+import { HealthAssessmentEventsConsumer } from './messaging/health-assessment-events.consumer';
 
 const grpcClientOptions = (
   url: string,
@@ -73,6 +74,7 @@ const grpcClientOptions = (
     OutboxRelayService,
     DocumentEventsConsumer,
     LabExplanationEventsConsumer,
+    HealthAssessmentEventsConsumer,
     { provide: APP_GUARD, useClass: GrpcJwtGuard },
   ],
 })

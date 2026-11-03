@@ -7,10 +7,12 @@ import {
   DOCUMENT_EVENT_TYPES,
   forwardGrpcError,
   getCorrelationId,
+  HEALTH_ASSESSMENT_EVENT_TYPES,
   LAB_EXPLANATION_EVENT_TYPES,
   rejectRpc,
   ResponseMessages,
 } from '@libs/common';
+import { randomUUID } from 'crypto';
 import {
   CreateRecordRequestDto,
   RecordContentDto,
@@ -24,10 +26,25 @@ import { firstValueFrom } from 'rxjs';
 import { PrismaService } from './prisma/prisma.service';
 import {
   DraftReviewStatus,
+  HealthAssessment,
+  HealthAssessmentStatus,
   LabExplanationStatus,
   Prisma,
 } from '../generated/prisma/client';
-import { CONSENT_PAGE_SIZE } from './medical-record.constants';
+import {
+  CONSENT_PAGE_SIZE,
+  HEALTH_ASSESSMENT_MIN_INTERVAL_MS,
+  HEALTH_ASSESSMENT_STALE_PENDING_MS,
+} from './medical-record.constants';
+import {
+  buildHealthAssessmentSnapshot,
+  EMPTY_HEALTH_ASSESSMENT_PET,
+  HealthAssessmentPetContext,
+  HealthAssessmentSnapshot,
+  toHealthAssessmentPetContext,
+  toHealthAssessmentRequestedData,
+} from './health-assessment.snapshot';
+import { toProtoHealthAssessment } from './health-assessment.mapper';
 import {
   DOCUMENT_INCLUDE,
   DOCUMENT_STATUS_TO_DB,
@@ -515,6 +532,206 @@ export class MedicalRecordService implements OnModuleInit {
     }
 
     return toProtoLabExplanation(record.labExplanation);
+  }
+
+  async requestHealthAssessment(
+    request: medicalRecord.RequestHealthAssessmentRequest,
+    user: AuthUser,
+  ): Promise<medicalRecord.HealthAssessmentResponse> {
+    const method_name = 'requestHealthAssessment';
+    await this.assertPetReadable(
+      request.petId,
+      user,
+      'medical_read',
+      method_name,
+    );
+
+    const asOf = todayInBusinessTimeZone();
+    const snapshot = await buildHealthAssessmentSnapshot(
+      this.prisma,
+      request.petId,
+      asOf,
+    );
+    if (snapshot.isEmpty) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.HEALTH_ASSESSMENT_NO_RECORDS,
+        `${method_name}: değerlendirilecek kayıt yok (petId=${request.petId})`,
+        'log',
+      );
+    }
+
+    const existing = await this.prisma.healthAssessment.findUnique({
+      where: { petId: request.petId },
+    });
+    if (
+      existing &&
+      !this.needsNewHealthAssessment(existing, snapshot.inputHash, method_name)
+    ) {
+      return toProtoHealthAssessment(existing, snapshot.inputHash);
+    }
+
+    const pet = await this.getHealthAssessmentPet(request.petId, method_name);
+    const row = await this.writeHealthAssessmentRequest(
+      request.petId,
+      existing,
+      user,
+      asOf,
+      pet,
+      snapshot,
+    );
+    return toProtoHealthAssessment(row, snapshot.inputHash);
+  }
+
+  async getLatestHealthAssessment(
+    request: medicalRecord.GetLatestHealthAssessmentRequest,
+    user: AuthUser,
+  ): Promise<medicalRecord.HealthAssessmentResponse> {
+    const method_name = 'getLatestHealthAssessment';
+    await this.assertPetReadable(
+      request.petId,
+      user,
+      'medical_read',
+      method_name,
+    );
+
+    const row = await this.prisma.healthAssessment.findUnique({
+      where: { petId: request.petId },
+    });
+    if (!row) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.NOT_FOUND,
+        `${method_name}: sağlık değerlendirmesi yok (petId=${request.petId})`,
+      );
+    }
+
+    const snapshot = await buildHealthAssessmentSnapshot(
+      this.prisma,
+      request.petId,
+      todayInBusinessTimeZone(),
+    );
+    return toProtoHealthAssessment(row, snapshot.inputHash);
+  }
+
+  private needsNewHealthAssessment(
+    existing: HealthAssessment,
+    inputHash: string,
+    method_name: string,
+  ): boolean {
+    const age = Date.now() - existing.requestedAt.getTime();
+
+    if (existing.status === HealthAssessmentStatus.PENDING) {
+      return age >= HEALTH_ASSESSMENT_STALE_PENDING_MS;
+    }
+    if (
+      existing.status === HealthAssessmentStatus.READY &&
+      existing.inputHash === inputHash
+    ) {
+      return false;
+    }
+    if (age < HEALTH_ASSESSMENT_MIN_INTERVAL_MS) {
+      rejectRpc(
+        this.logger,
+        ResponseMessages.HEALTH_ASSESSMENT_TOO_SOON,
+        `${method_name}: son istekten bu yana 10 dakika geçmedi (petId=${existing.petId})`,
+        'log',
+      );
+    }
+    return true;
+  }
+
+  private async getHealthAssessmentPet(
+    petId: string,
+    method_name: string,
+  ): Promise<HealthAssessmentPetContext> {
+    try {
+      const { pet } = await firstValueFrom(
+        this.petsClient.getPet({ id: petId }),
+      );
+      return toHealthAssessmentPetContext(pet);
+    } catch {
+      this.logger.warn(
+        `${method_name}: pets.getPet başarısız, sağlık değerlendirmesi hayvan bilgileri olmadan istenecek (petId=${petId})`,
+      );
+      return EMPTY_HEALTH_ASSESSMENT_PET;
+    }
+  }
+
+  private async writeHealthAssessmentRequest(
+    petId: string,
+    existing: HealthAssessment | null,
+    user: AuthUser,
+    asOf: string,
+    pet: HealthAssessmentPetContext,
+    snapshot: HealthAssessmentSnapshot,
+  ): Promise<HealthAssessment> {
+    const requestId = randomUUID();
+    const fields = {
+      requestId,
+      status: HealthAssessmentStatus.PENDING,
+      inputHash: snapshot.inputHash,
+      basedOnRecordIds: snapshot.recordIds,
+      requestedByUserId: user.userId,
+      requestedAt: new Date(),
+      summary: null,
+      riskLevel: null,
+      payload: Prisma.DbNull,
+      confidence: null,
+      modelVersion: null,
+      failureReason: null,
+      generatedAt: null,
+    };
+    const event = createCloudEvent({
+      type: HEALTH_ASSESSMENT_EVENT_TYPES.REQUESTED,
+      source: CLOUD_EVENT_SOURCES.MEDICAL_RECORD,
+      subject: requestId,
+      data: toHealthAssessmentRequestedData(
+        requestId,
+        asOf,
+        pet,
+        snapshot.records,
+      ),
+    });
+
+    try {
+      const written = await this.prisma.$transaction(async (tx) => {
+        if (existing) {
+          const moved = await tx.healthAssessment.updateMany({
+            where: { id: existing.id, requestId: existing.requestId },
+            data: fields,
+          });
+          if (moved.count === 0) return null;
+        } else {
+          await tx.healthAssessment.create({ data: { petId, ...fields } });
+        }
+
+        await tx.outbox.create({
+          data: {
+            id: event.id,
+            type: event.type,
+            payload: event as unknown as Prisma.InputJsonObject,
+            correlationId: getCorrelationId(),
+          },
+        });
+        return tx.healthAssessment.findUniqueOrThrow({ where: { petId } });
+      });
+      if (written) return written;
+    } catch (e) {
+      if (
+        !(e instanceof Prisma.PrismaClientKnownRequestError) ||
+        e.code !== 'P2002'
+      ) {
+        throw e;
+      }
+    }
+
+    this.logger.log(
+      `writeHealthAssessmentRequest: eş zamanlı istek, güncel satır döndürülüyor (petId=${petId})`,
+    );
+    return this.prisma.healthAssessment.findUniqueOrThrow({
+      where: { petId },
+    });
   }
 
   async listRecordsByPet(

@@ -22,13 +22,25 @@ export const LAB_EXPLANATION_EVENT_TYPES = {
   FAILED: 'com.patipasaport.lab_explanation.failed.v1',
 } as const;
 
+export const HEALTH_ASSESSMENT_EVENT_TYPES = {
+  REQUESTED: 'com.patipasaport.health_assessment.requested.v1',
+  GENERATED: 'com.patipasaport.health_assessment.generated.v1',
+  FAILED: 'com.patipasaport.health_assessment.failed.v1',
+} as const;
+
 export type DocumentEventType =
   (typeof DOCUMENT_EVENT_TYPES)[keyof typeof DOCUMENT_EVENT_TYPES];
 
 export type LabExplanationEventType =
   (typeof LAB_EXPLANATION_EVENT_TYPES)[keyof typeof LAB_EXPLANATION_EVENT_TYPES];
 
-export type CloudEventType = DocumentEventType | LabExplanationEventType;
+export type HealthAssessmentEventType =
+  (typeof HEALTH_ASSESSMENT_EVENT_TYPES)[keyof typeof HEALTH_ASSESSMENT_EVENT_TYPES];
+
+export type CloudEventType =
+  | DocumentEventType
+  | LabExplanationEventType
+  | HealthAssessmentEventType;
 
 export const DOCUMENT_EVENT_SCHEMAS: Record<DocumentEventType, string> = {
   [DOCUMENT_EVENT_TYPES.UPLOADED]:
@@ -53,14 +65,28 @@ export const LAB_EXPLANATION_EVENT_SCHEMAS: Record<
     'urn:patipasaport:events:LabExplanationFailed:v1',
 };
 
+export const HEALTH_ASSESSMENT_EVENT_SCHEMAS: Record<
+  HealthAssessmentEventType,
+  string
+> = {
+  [HEALTH_ASSESSMENT_EVENT_TYPES.REQUESTED]:
+    'urn:patipasaport:events:HealthAssessmentRequested:v1',
+  [HEALTH_ASSESSMENT_EVENT_TYPES.GENERATED]:
+    'urn:patipasaport:events:HealthAssessmentGenerated:v1',
+  [HEALTH_ASSESSMENT_EVENT_TYPES.FAILED]:
+    'urn:patipasaport:events:HealthAssessmentFailed:v1',
+};
+
 export const CLOUD_EVENT_SCHEMAS: Record<CloudEventType, string> = {
   ...DOCUMENT_EVENT_SCHEMAS,
   ...LAB_EXPLANATION_EVENT_SCHEMAS,
+  ...HEALTH_ASSESSMENT_EVENT_SCHEMAS,
 };
 
 const CLOUD_EVENT_TYPES: CloudEventType[] = [
   ...Object.values(DOCUMENT_EVENT_TYPES),
   ...Object.values(LAB_EXPLANATION_EVENT_TYPES),
+  ...Object.values(HEALTH_ASSESSMENT_EVENT_TYPES),
 ];
 
 export interface CloudEvent<T = unknown> {

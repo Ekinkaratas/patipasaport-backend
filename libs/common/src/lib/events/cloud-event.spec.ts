@@ -3,6 +3,8 @@ import {
   createCloudEvent,
   DOCUMENT_EVENT_SCHEMAS,
   DOCUMENT_EVENT_TYPES,
+  HEALTH_ASSESSMENT_EVENT_SCHEMAS,
+  HEALTH_ASSESSMENT_EVENT_TYPES,
   LAB_EXPLANATION_EVENT_SCHEMAS,
   LAB_EXPLANATION_EVENT_TYPES,
   parseCloudEvent,
@@ -98,6 +100,29 @@ describe('createCloudEvent', () => {
       data: { recordId: RECORD_ID },
     });
   });
+
+  it('sağlık değerlendirmesi olay türlerinin URN şeması tanımlıdır', () =>
+    expect(HEALTH_ASSESSMENT_EVENT_SCHEMAS).toEqual({
+      'com.patipasaport.health_assessment.requested.v1':
+        'urn:patipasaport:events:HealthAssessmentRequested:v1',
+      'com.patipasaport.health_assessment.generated.v1':
+        'urn:patipasaport:events:HealthAssessmentGenerated:v1',
+      'com.patipasaport.health_assessment.failed.v1':
+        'urn:patipasaport:events:HealthAssessmentFailed:v1',
+    }));
+
+  it('sağlık değerlendirmesi isteği kendi şemasıyla kurulur', () =>
+    expect(
+      createCloudEvent({
+        type: HEALTH_ASSESSMENT_EVENT_TYPES.REQUESTED,
+        source: CLOUD_EVENT_SOURCES.MEDICAL_RECORD,
+        subject: RECORD_ID,
+        data: { requestId: RECORD_ID },
+      }),
+    ).toMatchObject({
+      type: 'com.patipasaport.health_assessment.requested.v1',
+      dataschema: 'urn:patipasaport:events:HealthAssessmentRequested:v1',
+    }));
 });
 
 // ---Amaç: kuyruktan gelen zarfın standart alanlarını doğrulayıp geçersizleri reddetmek ---
@@ -156,6 +181,27 @@ describe('parseCloudEvent', () => {
       subject: RECORD_ID,
       dataschema,
       data: { recordId: RECORD_ID },
+    };
+    expect(parseCloudEvent(raw)).toEqual(raw);
+  });
+
+  it.each([
+    [
+      'com.patipasaport.health_assessment.generated.v1',
+      'urn:patipasaport:events:HealthAssessmentGenerated:v1',
+    ],
+    [
+      'com.patipasaport.health_assessment.failed.v1',
+      'urn:patipasaport:events:HealthAssessmentFailed:v1',
+    ],
+  ])('sağlık değerlendirmesi olayı %s tanınır', (type, dataschema) => {
+    const raw = {
+      ...valid(),
+      source: '/patipasaport/ai-service',
+      type,
+      subject: RECORD_ID,
+      dataschema,
+      data: { requestId: RECORD_ID },
     };
     expect(parseCloudEvent(raw)).toEqual(raw);
   });

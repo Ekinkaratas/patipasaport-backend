@@ -6,6 +6,10 @@ export const DOCUMENT_EVENTS_QUEUE = 'medical-record.document-events';
 export const AI_LAB_EXPLANATION_QUEUE = 'ai-service.lab-explanation-requested';
 export const LAB_EXPLANATION_EVENTS_QUEUE =
   'medical-record.lab-explanation-events';
+export const AI_HEALTH_ASSESSMENT_QUEUE =
+  'ai-service.health-assessment-requested';
+export const HEALTH_ASSESSMENT_EVENTS_QUEUE =
+  'medical-record.health-assessment-events';
 export const RETRY_QUEUE_SUFFIX = '.retry';
 export const DEAD_LETTER_QUEUE_SUFFIX = '.dlq';
 

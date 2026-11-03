@@ -10,6 +10,10 @@ import {
   GetDocumentRequestDto,
 } from './get-document.dto';
 import { GetLabExplanationRequestDto } from './get-lab-explanation.dto';
+import {
+  GetLatestHealthAssessmentRequestDto,
+  RequestHealthAssessmentRequestDto,
+} from './health-assessment.dto';
 import { ListDocumentsByPetRequestDto } from './list-documents-by-pet.dto';
 import { ListDraftReviewsRequestDto } from './list-draft-reviews.dto';
 import { ListLabResultsRequestDto } from './list-lab-results.dto';
@@ -785,6 +789,20 @@ describe('GetLabExplanationRequestDto', () => {
     expect(nestedErrors(GetLabExplanationRequestDto, { recordId })).toEqual(
       expected,
     ),
+  );
+});
+
+// ---Amaç: sağlık değerlendirmesi isteklerinde petId'nin zorunlu UUID olduğunu doğrulamak ---
+describe.each([
+  ['RequestHealthAssessmentRequestDto', RequestHealthAssessmentRequestDto],
+  ['GetLatestHealthAssessmentRequestDto', GetLatestHealthAssessmentRequestDto],
+])('%s', (_name, dto) => {
+  it.each([
+    ['geçerli', UUID_A, {}],
+    ['boş', '', { petId: msg(P.PET_ID, V.NOT_EMPTY) }],
+    ['UUID değil', 'abc', { petId: msg(P.PET_ID, V.WRONG_DATA_FORMAT) }],
+  ])('petId %s', (_n, petId, expected) =>
+    expect(nestedErrors(dto, { petId })).toEqual(expected),
   );
 });
 

@@ -5,6 +5,7 @@ import {
   CreateRecordRequestDto,
   GetDocumentRequestDto,
   GetLabExplanationRequestDto,
+  GetLatestHealthAssessmentRequestDto,
   ListDocumentsByPetRequestDto,
   ListDraftReviewsRequestDto,
   ListLabResultsRequestDto,
@@ -12,6 +13,7 @@ import {
   ListRecordsByPetRequestDto,
   ListVaccinationsRequestDto,
   RegisterDocumentRequestDto,
+  RequestHealthAssessmentRequestDto,
   ReviewDraftRequestDto,
 } from '@libs/dto';
 import { medicalRecord } from '@libs/proto';
@@ -73,6 +75,30 @@ export class MedicalRecordController {
     @CurrentUser() user: AuthUser,
   ): Promise<medicalRecord.LabExplanationResponse> {
     return this.medicalRecordService.getLabExplanation(request, user);
+  }
+
+  @Roles(['PET_OWNER', 'CLINIC'])
+  @GrpcMethod(
+    medicalRecord.MEDICAL_RECORD_SERVICE_NAME,
+    'RequestHealthAssessment',
+  )
+  async requestHealthAssessment(
+    @Payload() request: RequestHealthAssessmentRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<medicalRecord.HealthAssessmentResponse> {
+    return this.medicalRecordService.requestHealthAssessment(request, user);
+  }
+
+  @Roles(['PET_OWNER', 'CLINIC'])
+  @GrpcMethod(
+    medicalRecord.MEDICAL_RECORD_SERVICE_NAME,
+    'GetLatestHealthAssessment',
+  )
+  async getLatestHealthAssessment(
+    @Payload() request: GetLatestHealthAssessmentRequestDto,
+    @CurrentUser() user: AuthUser,
+  ): Promise<medicalRecord.HealthAssessmentResponse> {
+    return this.medicalRecordService.getLatestHealthAssessment(request, user);
   }
 
   @Roles(['CLINIC'])
