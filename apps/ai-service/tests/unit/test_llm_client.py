@@ -294,6 +294,18 @@ async def test_request_targets_chat_completions_with_bearer_key(
     assert request.headers["content-type"] == "application/json"
 
 
+# Çağıranın verdiği çıktı sınırının isteğe aynen yazıldığını sınar.
+async def test_request_body_uses_given_output_limit(
+    make_client: Callable[..., tuple[LlmClient, Recorder]],
+) -> None:
+    client, recorder = make_client(respond_json(completion()))
+
+    await call(client, max_output_tokens=6000)
+
+    [request] = recorder.requests
+    assert json.loads(request.content)["max_tokens"] == 6000
+
+
 # Gövdenin alanlarını, görsel ve ek tur sırasını ve düşünme ayarını birebir sınar.
 @pytest.mark.parametrize(
     "enable_thinking",

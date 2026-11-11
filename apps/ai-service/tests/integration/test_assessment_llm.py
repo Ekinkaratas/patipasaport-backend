@@ -213,7 +213,7 @@ async def test_assessment_prompt_schema_and_validator_work_with_provider(
     if not set(names) <= REQUEST_TEST_NAMES or not set(evidence) <= REQUEST_TEST_NAMES:
         pytest.fail(f"Beklenmeyen test adları: {names} / {evidence}", pytrace=False)
     assert generated.request_id == REQUEST_ID
-    assert generated.model_version == f"{settings.ai_model}/assess-v1"
+    assert generated.model_version == f"{settings.ai_model}/assess-v2"
     assert 0.0 <= generated.confidence <= 1.0
     assert assessment.risk_level in VALID_RISK_LEVELS
     for finding in assessment.findings:

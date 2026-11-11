@@ -589,7 +589,7 @@ Hayvan başına tek, güncellenebilir satırdır; değişmezlik trigger'ı yoktu
 | risk_level           | enum `HealthRiskLevel`, nullable                 | `LOW` / `MODERATE` / `HIGH` / `URGENT`                                                         |
 | payload              | jsonb, nullable                                  | `findings`, `possibleConditions`, `recommendations`, `vaccinationReminders`, `questionsForVet` |
 | confidence           | double precision, nullable                       | 0–1 (kırpılmış)                                                                                |
-| model_version        | varchar(64), nullable                            | ör. `gemma-4-31b/assess-v1`                                                                    |
+| model_version        | varchar(64), nullable                            | ör. `gemma-4-31b/assess-v2`                                                                    |
 | failure_reason       | varchar(64), nullable                            | AI hata kodu ya da `INVALID_AI_OUTPUT`                                                         |
 | requested_at         | timestamp, default now                           | Son isteğin zamanı                                                                             |
 | generated_at         | timestamp, nullable                              | Sonucun işlendiği an                                                                           |

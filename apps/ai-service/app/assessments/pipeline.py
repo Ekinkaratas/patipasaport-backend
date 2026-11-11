@@ -38,6 +38,7 @@ from app.messaging.publisher import Publisher
 from app.messaging.topology import ASSESSMENT_PREFETCH, Topology
 from app.validation import has_control_character, parse_date, text_length, trim
 
+ASSESSMENT_MAX_OUTPUT_TOKENS = 6000
 PROFILE_TEXT_MAX_LENGTH = 32
 LAB_SERIES_MAX = 60
 TEST_NAME_MAX_LENGTH = 128
@@ -401,4 +402,5 @@ class AssessmentPipeline:
             schema_name=ASSESSMENT_SCHEMA_NAME,
             schema=ASSESSMENT_SCHEMA,
             follow_up=follow_up,
+            max_output_tokens=ASSESSMENT_MAX_OUTPUT_TOKENS,
         )

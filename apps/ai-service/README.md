@@ -59,6 +59,17 @@ Varsayılan `pytest` çalıştırması entegrasyon testlerini dışarıda bırak
 - Diğer denemeler `ai-service.it-<rastgele>` önekli exchange ve kuyruklarla yapılır. Bunlar her testin sonunda, test başarısız olsa bile silinir ve silindikleri doğrulanır.
 - Tekrar deneme testi gerçek 30 sn TTL'i beklediği için çalıştırma yaklaşık bir dakika sürer.
 
+## Değerlendirme
+
+`evaluation/` altındaki araç, sağlık değerlendirmesini sabit sentetik senaryolarla gerçek AI API üzerinde ölçer. Her çalıştırma sağlayıcı kotasından düşer. Sonuçlar git'e girmez (`evaluation/results/`); rapor `docs/ai-evaluation.md` dosyasıdır.
+
+```bash
+.venv/Scripts/python -m evaluation.run evaluation/results/assess-v2.jsonl --runs 5
+.venv/Scripts/python -m evaluation.report evaluation/results/assess-v2.jsonl ../../docs/ai-evaluation.md --model gemma-4-31b
+```
+
+Yarıda kalan bir çalıştırma aynı komutla kaldığı yerden devam eder.
+
 ## Biçim
 
 CI `nx format:check` çalıştırdığı için bu dizindeki `.md`, `.json` ve `.yml` dosyaları Prettier biçiminde olmalıdır. Depo kökünden:

@@ -596,7 +596,7 @@ def test_lifespan_passes_assessment_flow_built_from_llm() -> None:
     assert flow.prefetch == ASSESSMENT_PREFETCH
     pipeline = getattr(flow.handle, "__self__", None)
     assert isinstance(pipeline, AssessmentPipeline)
-    assert pipeline.model_version == f"{FAKE_MODEL}/assess-v1"
+    assert pipeline.model_version == f"{FAKE_MODEL}/assess-v2"
     assert flow.build_failure == pipeline.build_failure
     publisher = FakePublisher()
 

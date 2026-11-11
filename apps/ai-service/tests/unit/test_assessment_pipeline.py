@@ -14,6 +14,7 @@ from app.assessments import validate
 from app.assessments.analyze import analyze
 from app.assessments.knowledge import ANEMIA, VACCINATION, triggered_patterns
 from app.assessments.pipeline import (
+    ASSESSMENT_MAX_OUTPUT_TOKENS,
     CATEGORY_VALUES,
     LIKELIHOOD_VALUES,
     RISK_LEVEL_VALUES,
@@ -31,6 +32,7 @@ from app.errors import (
 )
 from app.generated import events_pb2, medical_record_pb2
 from app.llm.client import (
+    MAX_OUTPUT_TOKENS,
     ChatTurn,
     IncompleteOutputError,
     LlmClient,
@@ -63,7 +65,7 @@ REQUEST_ID = "4e8b1d2c-6a3f-4c7e-9b0d-2f1a3c5e7d9b"
 EVENT_ID = "8a6c4e2f-0b1d-4f3a-9c5e-7d9b1a3c5e7f"
 MEDICAL_RECORD_SOURCE = "/patipasaport/medical-record"
 FAKE_MODEL = "sahte-model"
-MODEL_VERSION = "sahte-model/assess-v1"
+MODEL_VERSION = "sahte-model/assess-v2"
 CRITICAL_PERCENT = 50.0
 AS_OF = date(2026, 10, 21)
 EVENT_TIME = datetime(2026, 10, 21, 9, 30, tzinfo=UTC)
@@ -186,6 +188,7 @@ class LlmCall:
     schema_name: str
     schema: Mapping[str, object]
     follow_up: tuple[ChatTurn, ...]
+    max_output_tokens: int
 
 
 class FakeLlm:
@@ -204,6 +207,7 @@ class FakeLlm:
         schema_name: str,
         schema: Mapping[str, object],
         follow_up: Sequence[ChatTurn] = (),
+        max_output_tokens: int = MAX_OUTPUT_TOKENS,
     ) -> LlmReply:
         self.calls.append(
             LlmCall(
@@ -213,6 +217,7 @@ class FakeLlm:
                 schema_name,
                 schema,
                 tuple(follow_up),
+                max_output_tokens,
             )
         )
         if len(self.calls) > len(self.outcomes):
@@ -428,7 +433,7 @@ def capture_logs(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG)
 
 
-# modelVersion'ın kurulumda model adı ve assess-v1 sürümünden kurulduğunu doğrular.
+# modelVersion'ın kurulumda model adı ve assess-v2 sürümünden kurulduğunu doğrular.
 def test_model_version_is_computed_at_construction() -> None:
     llm = FakeLlm()
 
@@ -501,6 +506,7 @@ async def test_llm_receives_text_only_request_with_prompt_and_schema() -> None:
     assert call.image_data_urls == ()
     assert call.schema_name == ASSESSMENT_SCHEMA_NAME
     assert call.schema is ASSESSMENT_SCHEMA
+    assert call.max_output_tokens == ASSESSMENT_MAX_OUTPUT_TOKENS
     assert call.follow_up == ()
     assert "Anemi bulgusu:" in call.system_prompt
     assert "Aşı takvimi:" in call.system_prompt

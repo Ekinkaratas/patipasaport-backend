@@ -431,7 +431,7 @@ def health_requested_message() -> events_pb2.HealthAssessmentRequested:
 def health_generated_message() -> events_pb2.HealthAssessmentGenerated:
     return events_pb2.HealthAssessmentGenerated(
         request_id=REQUEST_ID,
-        model_version="gemma-4-31b/assess-v1",
+        model_version="gemma-4-31b/assess-v2",
         confidence=0.7,
         assessment=medical_record_pb2.HealthAssessment(
             summary="Özet",
@@ -494,7 +494,7 @@ def sample_message(event_type: str) -> Message:
         HEALTH_ASSESSMENT_GENERATED: health_generated_message(),
         HEALTH_ASSESSMENT_FAILED: events_pb2.HealthAssessmentFailed(
             request_id=REQUEST_ID,
-            model_version="gemma-4-31b/assess-v1",
+            model_version="gemma-4-31b/assess-v2",
             error_code="INVALID_AI_OUTPUT",
             error_message="Model iki denemede de kurallara uygun JSON vermedi",
             failed_at="2026-10-21T09:36:00.000Z",

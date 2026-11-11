@@ -171,9 +171,9 @@ def _data_block(text: str) -> dict[str, Any]:
     return json.loads("\n".join(lines[start + 1 : end]))
 
 
-# Talimat sürümü assess-v1'dir.
+# Talimat sürümü assess-v2'dir.
 def test_prompt_version() -> None:
-    assert ASSESS_PROMPT_VERSION == "assess-v1"
+    assert ASSESS_PROMPT_VERSION == "assess-v2"
 
 
 # Sistem talimatı değerlendirme kurallarının hepsini içerir.
@@ -205,6 +205,18 @@ def test_system_prompt_mentions_schema_fields_and_options() -> None:
 
     for name in (*names, *options):
         assert re.search(rf"\b{name}\b", ASSESS_SYSTEM_PROMPT), name
+
+
+# Şemada explanation evidence'tan önce gelir; ters sırada model boşlukta takılıyordu.
+def test_condition_explanation_precedes_evidence() -> None:
+    items = ASSESSMENT_SCHEMA["properties"]["possibleConditions"]["items"]
+
+    assert list(items["properties"]) == [
+        "name",
+        "likelihood",
+        "explanation",
+        "evidence",
+    ]
 
 
 # Talimat ve görev girişi metinlerinde satır sonu dışında kontrol karakteri bulunmaz.
@@ -711,12 +723,12 @@ def test_explanation_correction_text_stays_separate(issue: ValidationIssue) -> N
         build_explanation_correction_text([issue])
 
 
-# Değerlendirme modelVersion'ı assess-v1 ile kurulur ve 64 karakteri aşamaz.
+# Değerlendirme modelVersion'ı assess-v2 ile kurulur ve 64 karakteri aşamaz.
 def test_assess_model_version() -> None:
-    suffix_length = len("/assess-v1")
+    suffix_length = len("/assess-v2")
 
     assert model_version("gemma-4-31b", ASSESS_PROMPT_VERSION) == (
-        "gemma-4-31b/assess-v1"
+        "gemma-4-31b/assess-v2"
     )
     assert len(model_version("m" * (64 - suffix_length), ASSESS_PROMPT_VERSION)) == 64
     with pytest.raises(ValueError):

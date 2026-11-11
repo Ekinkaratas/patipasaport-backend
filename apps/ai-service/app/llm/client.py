@@ -170,10 +170,17 @@ class LlmClient:
         schema_name: str,
         schema: Mapping[str, object],
         follow_up: Sequence[ChatTurn] = (),
+        max_output_tokens: int = MAX_OUTPUT_TOKENS,
     ) -> LlmReply:
         _check_images(image_data_urls)
         body = self._build_body(
-            system_prompt, user_text, image_data_urls, schema_name, schema, follow_up
+            system_prompt,
+            user_text,
+            image_data_urls,
+            schema_name,
+            schema,
+            follow_up,
+            max_output_tokens,
         )
         started = time.monotonic()
         response = await self._send(body, started)
@@ -210,6 +217,7 @@ class LlmClient:
         schema_name: str,
         schema: Mapping[str, object],
         follow_up: Sequence[ChatTurn],
+        max_output_tokens: int,
     ) -> dict[str, object]:
         user_content: list[dict[str, object]] = [{"type": "text", "text": user_text}]
         user_content.extend(
@@ -224,7 +232,7 @@ class LlmClient:
             "model": self._model,
             "stream": False,
             "temperature": 0,
-            "max_tokens": MAX_OUTPUT_TOKENS,
+            "max_tokens": max_output_tokens,
             "chat_template_kwargs": {"enable_thinking": self._enable_thinking},
             "response_format": {
                 "type": "json_schema",

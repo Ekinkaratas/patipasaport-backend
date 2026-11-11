@@ -39,7 +39,7 @@ from app.validation import trim
 
 EXTRACT_PROMPT_VERSION = "extract-v1"
 EXPLAIN_PROMPT_VERSION = "explain-v2"
-ASSESS_PROMPT_VERSION = "assess-v1"
+ASSESS_PROMPT_VERSION = "assess-v2"
 MODEL_VERSION_MAX_LENGTH = 64
 UNKNOWN_TEXT = "bilinmiyor"
 MONTHS_PER_YEAR = 12
