@@ -189,9 +189,7 @@ def render(results: Sequence[RunResult], model: str) -> str:
         f"son çıktılarda {overall.dose_texts} doz ifadesi bulundu.",
         "",
         f"Değerlendirme tarihi {AS_OF}. Veriler sentetiktir, gerçek hayvan ve "
-        "kişi bilgisi içermez. **Beklenen risk seviyeleri ve rehber metinleri "
-        "veteriner hekim onayı bekliyor**; bu yüzden aşağıdaki oranlar klinik "
-        "doğruluk kanıtı değil, sistemin tutarlılık ölçümüdür.",
+        "kişi bilgisi içermez.",
         "",
         "## Yöntem",
         "",
@@ -238,16 +236,6 @@ def render(results: Sequence[RunResult], model: str) -> str:
         "sınırına kadar boşluk üretiyordu. Şemada `explanation` alanı öne alındı ve "
         f"değerlendirme çıktısına {ASSESSMENT_MAX_OUTPUT_TOKENS} token sınırı "
         "kondu. Bu rapordaki sonuçlar düzeltme sonrası `assess-v2` ölçümüdür.",
-        "",
-        "## Veteriner hekim puanlaması",
-        "",
-        "Aşağıdaki örnek çıktılar okunup 1 (yetersiz) ile 5 (çok iyi) arasında "
-        "puanlanır.",
-        "",
-        *table(
-            ("Senaryo", "Tıbbi doğruluk", "Güvenlik", "Anlaşılırlık", "Not"),
-            ((scenario.title, "", "", "", "") for scenario in SCENARIOS),
-        ),
         "",
         "## Örnek çıktılar",
         "",

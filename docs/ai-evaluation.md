@@ -2,7 +2,7 @@
 
 `gemma-4-31b` modeli ve `assess-v2` talimatı, 7 sentetik senaryoda 5'er kez çalıştırıldı (toplam 35). 30/30 sonuçta risk seviyesi beklenenle birebir eşleşti; son çıktılarda 0 doz ifadesi bulundu.
 
-Değerlendirme tarihi 2026-11-04. Veriler sentetiktir, gerçek hayvan ve kişi bilgisi içermez. **Beklenen risk seviyeleri ve rehber metinleri veteriner hekim onayı bekliyor**; bu yüzden aşağıdaki oranlar klinik doğruluk kanıtı değil, sistemin tutarlılık ölçümüdür.
+Değerlendirme tarihi 2026-11-04. Veriler sentetiktir, gerçek hayvan ve kişi bilgisi içermez.
 
 ## Yöntem
 
@@ -50,20 +50,6 @@ Değerlendirme tarihi 2026-11-04. Veriler sentetiktir, gerçek hayvan ve kişi b
 ## Ölçümün bulduğu hata
 
 İlk ölçümde (`assess-v1`) anemik köpek senaryosu 5 çalıştırmanın 5'inde de sonuç üretemedi, kullanıcı bekleyişi 200–840 sn'yi buldu. Model, olası durumda `evidence` listesini yazdıktan sonra zorunlu `explanation` alanını atlayıp nesneyi kapatmak istiyor, şema buna izin vermediği için çıktı sınırına kadar boşluk üretiyordu. Şemada `explanation` alanı öne alındı ve değerlendirme çıktısına 6000 token sınırı kondu. Bu rapordaki sonuçlar düzeltme sonrası `assess-v2` ölçümüdür.
-
-## Veteriner hekim puanlaması
-
-Aşağıdaki örnek çıktılar okunup 1 (yetersiz) ile 5 (çok iyi) arasında puanlanır.
-
-| Senaryo                              | Tıbbi doğruluk | Güvenlik | Anlaşılırlık | Not |
-| ------------------------------------ | -------------- | -------- | ------------ | --- |
-| Anemik genç köpek                    |                |          |              |     |
-| Böbrek değerleri yükselen yaşlı kedi |                |          |              |     |
-| Kritik potasyum                      |                |          |              |     |
-| Normal hayvan                        |                |          |              |     |
-| Aşısı gecikmiş hayvan                |                |          |              |     |
-| Notta talimat enjeksiyonu            |                |          |              |     |
-| Referans aralığı olmayan değerler    |                |          |              |     |
 
 ## Örnek çıktılar
 

@@ -2,7 +2,7 @@
 
 # PatiPasaport
 
-A pet health passport platform: pet owners keep their animals' medical history in one place and decide, per clinic, who may see or add to it. Clinics upload lab results and images, an AI service drafts structured records from them, and a clinic reviews every draft before it becomes part of the permanent record. For every approved or manually entered lab result, the AI service also writes a plain-language explanation that only the pet owner sees.
+A pet health passport platform: pet owners keep their animals' medical history in one place and decide, per clinic, who may see or add to it. Clinics upload lab results and images, an AI service drafts structured records from them, and a clinic reviews every draft before it becomes part of the permanent record. For every approved or manually entered lab result, the AI service also writes a plain-language explanation that only the pet owner sees. On request, it reviews all of a pet's approved records together and writes a health assessment (risk level, findings and their trends, possible conditions, care and nutrition recommendations, vaccination reminders and questions for the veterinarian) for the pet owner and for clinics allowed to read the records.
 
 This is a graduation project. The backend, including the AI service, is complete and runs with Docker Compose; the frontend lives in a separate repository. What is left is hardening and deployment (see [Roadmap](#roadmap)).
 
@@ -23,23 +23,23 @@ This is a graduation project. The backend, including the AI service, is complete
                                           files  ──► SeaweedFS (S3)
 ```
 
-| Service | Responsibility | Storage |
-|---|---|---|
-| `gateway` | Only public entry point. HTTP/JSON API, request validation, token exchange, file upload | SeaweedFS (write) |
-| `access` | Opaque token ⇄ short-lived JWT exchange, consents (who may access which pet), access checks | PostgreSQL, Redis |
-| `auth` | Registration, login, refresh-token rotation, login lockout | PostgreSQL, Redis |
-| `users` | User profiles | PostgreSQL |
-| `clinics` | Clinics, stock with purchase and sale prices, sales and monthly sales reports, clinic view of a pet, result upload orchestration | PostgreSQL |
-| `pets` | Pets, owner lookup, encrypted chip numbers | PostgreSQL |
-| `medical-record` | Records, vaccinations, prescriptions, lab results, documents, AI draft reviews, AI lab result explanations | PostgreSQL, RabbitMQ, SeaweedFS |
-| `ai-service` | Python worker, no ports. Reads uploaded documents into draft records and writes plain-language lab result explanations through an external AI API | RabbitMQ, SeaweedFS (read-only) |
+| Service          | Responsibility                                                                                                                                                           | Storage                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| `gateway`        | Only public entry point. HTTP/JSON API, request validation, token exchange, file upload                                                                                  | SeaweedFS (write)               |
+| `access`         | Opaque token ⇄ short-lived JWT exchange, consents (who may access which pet), access checks                                                                              | PostgreSQL, Redis               |
+| `auth`           | Registration, login, refresh-token rotation, login lockout                                                                                                               | PostgreSQL, Redis               |
+| `users`          | User profiles                                                                                                                                                            | PostgreSQL                      |
+| `clinics`        | Clinics, stock with purchase and sale prices, sales and monthly sales reports, clinic view of a pet, result upload orchestration                                         | PostgreSQL                      |
+| `pets`           | Pets, owner lookup, encrypted chip numbers                                                                                                                               | PostgreSQL                      |
+| `medical-record` | Records, vaccinations, prescriptions, lab results, documents, AI draft reviews, AI lab result explanations, AI health assessments                                        | PostgreSQL, RabbitMQ, SeaweedFS |
+| `ai-service`     | Python worker, no ports. Reads uploaded documents into draft records and writes plain-language lab result explanations and health assessments through an external AI API | RabbitMQ, SeaweedFS (read-only) |
 
 Design decisions worth knowing:
 
 - **Database per service.** Cross-service relations are checked over gRPC, never with foreign keys.
 - **Zero trust.** Every read and write re-checks access: pet owners through ownership, clinics through an active consent with the right scope.
 - **Phantom tokens.** Clients hold opaque tokens; the gateway exchanges them for short-lived JWTs that internal services verify. Only `access` holds the private key.
-- **Outbox + CloudEvents.** A document upload writes the document and an outbox row in one transaction; a relay publishes CloudEvents to RabbitMQ with retries and a dead-letter queue. A new lab result record (approved draft or manual entry) writes the record, a pending explanation row and an explanation request in one transaction the same way.
+- **Outbox + CloudEvents.** A document upload writes the document and an outbox row in one transaction; a relay publishes CloudEvents to RabbitMQ with retries and a dead-letter queue. A new lab result record (approved draft or manual entry) writes the record, a pending explanation row and an explanation request in one transaction the same way. A health assessment request writes the pending assessment row and the request event the same way.
 - **Human in the loop.** AI output is stored as a draft and only becomes a medical record after a clinic approves it.
 - **Isolated AI service.** It has no database and calls no other service: events come in and go out through RabbitMQ, files are read from SeaweedFS with read-only credentials, and every AI answer is checked against a strict JSON schema and the same validation rules the services use before it is published.
 - **Access audit log.** Every S3 request is logged through Fluent Bit.
@@ -87,45 +87,46 @@ All secrets live in `.env` (git-ignored); `.env.example` documents every variabl
 
 Gateway settings:
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `CORS_ORIGINS` | empty | Comma-separated browser origins allowed to call the API, e.g. `https://app.example.com`. Empty allows none. |
-| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
-| `RATE_LIMIT_GLOBAL` | `100` | Requests per IP per window across all routes |
-| `RATE_LIMIT_AUTH` | `10` | Shared limit for login, register and refresh |
-| `RATE_LIMIT_UPLOAD` | `20` | Limit for document upload |
-| `TRUST_PROXY` | empty | Number of reverse proxies in front of the gateway. Empty for local development, `1` behind nginx, `2` if another layer (e.g. Cloudflare or a load balancer) sits in front of nginx. `true` is rejected, because it would let clients forge their IP. |
-| `REFRESH_COOKIE_PATH` | `/api/auth` | Browser-visible path of the refresh-token cookie. It must match the prefix the reverse proxy uses in front of `/auth`. |
+| Variable                    | Default     | Meaning                                                                                                                                                                                                                                              |
+| --------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CORS_ORIGINS`              | empty       | Comma-separated browser origins allowed to call the API, e.g. `https://app.example.com`. Empty allows none.                                                                                                                                          |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60`        | Rate-limit window                                                                                                                                                                                                                                    |
+| `RATE_LIMIT_GLOBAL`         | `100`       | Requests per IP per window across all routes                                                                                                                                                                                                         |
+| `RATE_LIMIT_AUTH`           | `10`        | Shared limit for login, register and refresh                                                                                                                                                                                                         |
+| `RATE_LIMIT_UPLOAD`         | `20`        | Limit for document upload                                                                                                                                                                                                                            |
+| `TRUST_PROXY`               | empty       | Number of reverse proxies in front of the gateway. Empty for local development, `1` behind nginx, `2` if another layer (e.g. Cloudflare or a load balancer) sits in front of nginx. `true` is rejected, because it would let clients forge their IP. |
+| `REFRESH_COOKIE_PATH`       | `/api/auth` | Browser-visible path of the refresh-token cookie. It must match the prefix the reverse proxy uses in front of `/auth`.                                                                                                                               |
 
 AI service settings (a missing required value stops only `ai-service`; the rest of the stack keeps running):
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL` | required | OpenAI-compatible AI provider |
-| `AI_RABBITMQ_USER`, `AI_RABBITMQ_PASSWORD` | required | Limited RabbitMQ user created by `rabbitmq-init`; must differ from `RABBITMQ_USER` |
-| `S3_AI_ACCESS_KEY`, `S3_AI_SECRET_KEY` | required | Read-only SeaweedFS user created by `seaweedfs-init` |
-| `AI_REQUEST_TIMEOUT_SECONDS` | `120` | Timeout of one AI API request |
-| `AI_ENABLE_THINKING` | `true` | Lets the model reason before answering |
-| `AI_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR` |
+| Variable                                    | Default  | Meaning                                                                            |
+| ------------------------------------------- | -------- | ---------------------------------------------------------------------------------- |
+| `AI_API_BASE_URL`, `AI_API_KEY`, `AI_MODEL` | required | OpenAI-compatible AI provider                                                      |
+| `AI_RABBITMQ_USER`, `AI_RABBITMQ_PASSWORD`  | required | Limited RabbitMQ user created by `rabbitmq-init`; must differ from `RABBITMQ_USER` |
+| `S3_AI_ACCESS_KEY`, `S3_AI_SECRET_KEY`      | required | Read-only SeaweedFS user created by `seaweedfs-init`                               |
+| `AI_REQUEST_TIMEOUT_SECONDS`                | `120`    | Timeout of one AI API request                                                      |
+| `AI_ENABLE_THINKING`                        | `true`   | Lets the model reason before answering                                             |
+| `AI_LOG_LEVEL`                              | `INFO`   | `DEBUG`, `INFO`, `WARNING` or `ERROR`                                              |
 
 ## API overview
 
 Every route except `/health` and `/auth/logout` needs `X-Client-Type: 1` (web) or `2` (mobile). Every route except `/health` and `/auth/*` also needs `Authorization: Bearer <access token>`. Responses use one envelope: `{ data, message, success, correlationId }`; errors carry a stable code in `message`.
 
-| Area | Routes |
-|---|---|
-| Health | `GET /health` |
-| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` (web: refresh token only in an httpOnly cookie; mobile: in the JSON body) |
-| Consents | `POST /consents`, `POST /consents/:consentId/revoke`, `GET /consents`, `GET /consents/status` |
-| Users | `GET` / `PATCH /users/me`, `POST /users/me/deactivate`, `POST /users/display-names` |
-| Pets | `POST /pets`, `GET /pets`, `GET /pets/search`, `GET` / `PATCH /pets/:id` |
-| Clinics | `GET /clinics/:id`, `POST /clinics/:clinicId/deactivate`, `GET /clinics/:clinicId/pets/:petId/overview` |
-| Stock | `POST` / `GET /clinics/:clinicId/stock-items`, `PATCH` / `DELETE /clinics/:clinicId/stock-items/:itemId`, `POST /clinics/:clinicId/stock-items/:itemId/adjust` (atomic `{ delta }`) |
-| Stock sales | `POST /clinics/:clinicId/stock-items/:itemId/sales` (`{ quantity, unitPrice? }`), `GET /clinics/:clinicId/stock-sales` (`fromDate`, `toDate`, paging), `POST /clinics/:clinicId/stock-sales/:saleId/cancel` (same month only), `GET /clinics/:clinicId/stock-sales/summary?month=YYYY-MM` (totals, daily, weekly, per product) |
-| Documents | `POST /clinics/:clinicId/pets/:petId/documents` (multipart: `file` PDF/JPEG/PNG up to 10 MB, optional `note`), `GET /pets/:petId/documents` (optional `status`, paging), `GET /documents/:id`, `GET /documents/:id/file` (opens in the browser; `?download=1` downloads; content is checked against the stored SHA-256) |
-| Medical records | `GET /pets/:petId/records`, `/vaccinations`, `/prescriptions`, `/lab-results`, `POST /pets/:petId/records` |
-| AI draft review | `GET /draft-reviews`, `POST /draft-reviews/:id/review` |
-| Lab result explanation | `GET /records/:recordId/explanation` (pet owner only; `status` 1 pending, 2 ready with summary, items, confidence and `generatedAt`, 3 failed) |
+| Area                   | Routes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Health                 | `GET /health`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Auth                   | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` (web: refresh token only in an httpOnly cookie; mobile: in the JSON body)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Consents               | `POST /consents`, `POST /consents/:consentId/revoke`, `GET /consents`, `GET /consents/status`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Users                  | `GET` / `PATCH /users/me`, `POST /users/me/deactivate`, `POST /users/display-names`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Pets                   | `POST /pets`, `GET /pets`, `GET /pets/search`, `GET` / `PATCH /pets/:id`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Clinics                | `GET /clinics/:id`, `POST /clinics/:clinicId/deactivate`, `GET /clinics/:clinicId/pets/:petId/overview`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Stock                  | `POST` / `GET /clinics/:clinicId/stock-items`, `PATCH` / `DELETE /clinics/:clinicId/stock-items/:itemId`, `POST /clinics/:clinicId/stock-items/:itemId/adjust` (atomic `{ delta }`)                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Stock sales            | `POST /clinics/:clinicId/stock-items/:itemId/sales` (`{ quantity, unitPrice? }`), `GET /clinics/:clinicId/stock-sales` (`fromDate`, `toDate`, paging), `POST /clinics/:clinicId/stock-sales/:saleId/cancel` (same month only), `GET /clinics/:clinicId/stock-sales/summary?month=YYYY-MM` (totals, daily, weekly, per product)                                                                                                                                                                                                                                                                                                      |
+| Documents              | `POST /clinics/:clinicId/pets/:petId/documents` (multipart: `file` PDF/JPEG/PNG up to 10 MB, optional `note`), `GET /pets/:petId/documents` (optional `status`, paging), `GET /documents/:id`, `GET /documents/:id/file` (opens in the browser; `?download=1` downloads; content is checked against the stored SHA-256)                                                                                                                                                                                                                                                                                                             |
+| Medical records        | `GET /pets/:petId/records`, `/vaccinations`, `/prescriptions`, `/lab-results`, `POST /pets/:petId/records`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| AI draft review        | `GET /draft-reviews`, `POST /draft-reviews/:id/review`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Lab result explanation | `GET /records/:recordId/explanation` (pet owner only; `status` 1 pending, 2 ready with summary, items, confidence and `generatedAt`, 3 failed)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Health assessment      | `POST /pets/:petId/health-assessments`, `GET /pets/:petId/health-assessments/latest` (pet owner or a clinic with `medical_read`; one assessment per pet; `status` 1 pending, 2 ready with `assessment`, `confidence` and `generatedAt`, 3 failed; `isStale` is true when the records changed after it. `POST` returns the current one without calling the AI when nothing changed, `429 HEALTH_ASSESSMENT_TOO_SOON` within 10 minutes of the last request, `422 HEALTH_ASSESSMENT_NO_RECORDS` when there is no approved record; a pending request older than 30 minutes can be replaced. `GET` returns `404` if none was requested) |
 
 Money is an integer number of kuruş (`14990` = 149.90 TL). A sale stores the item's name and its purchase and sale prices as they were at the time of sale, so later price changes do not alter past profit. Days, weeks (Monday to Sunday, cut at the month's edges) and months in sales reports follow Istanbul time.
 
@@ -158,6 +159,8 @@ docker compose start ai-service
 
 The AI service has its own lint and tests; see [apps/ai-service/README.md](apps/ai-service/README.md). CI runs them in a separate job: ruff, unit tests with a coverage report, and the Docker image build.
 
+Acceptance test (2026-11-12): a fictional lab report PDF (feline complete blood count, 21 values) went through the frontend from upload to the owner's explanation with the real AI API: the clinic uploaded it, the AI draft matched all 21 values, units and reference ranges, the clinic approved it unchanged, and the pet owner saw the plain-language explanation about 10 seconds later. The health assessment was tried the same way with synthetic records, from both the owner and the clinic account. The AI evaluation set and its results are in [docs/ai-evaluation.md](docs/ai-evaluation.md).
+
 ## Project layout
 
 ```
@@ -173,7 +176,7 @@ docs/        database, messaging and storage design
 
 ## Roadmap
 
-1. **AI service hardening (in progress):** Python checks in CI, timeout and concurrency review, usage and cost review, and an end-to-end test with a real lab report.
+1. **AI service hardening (in progress):** Python checks in CI, timeout and concurrency review, usage and cost review.
 2. **Deployment:** TLS reverse proxy and production configuration.
 
 ## License

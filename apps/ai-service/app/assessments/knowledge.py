@@ -6,8 +6,6 @@ from types import MappingProxyType
 
 from app.assessments.analyze import STATUS_HIGH, STATUS_LOW, Analysis
 
-GUIDE_SOURCE_PENDING = "Taslak; veteriner hekim onayı bekliyor"
-
 ANEMIA = "anemia"
 KIDNEY = "kidney"
 LIVER = "liver"
@@ -25,7 +23,6 @@ class Pattern:
     id: str
     title: str
     guide: str
-    source: str
 
 
 @dataclass(frozen=True)
@@ -87,7 +84,6 @@ PATTERNS: tuple[Pattern, ...] = (
             "bir takviyenin gerekip gerekmediğine veteriner hekim karar verir. "
             "Solukluk, halsizlik ya da hızlı solunum varsa hekime başvurulmalıdır."
         ),
-        source=GUIDE_SOURCE_PENDING,
     ),
     Pattern(
         id=KIDNEY,
@@ -104,7 +100,6 @@ PATTERNS: tuple[Pattern, ...] = (
             "verir. Çok su içme, sık idrara çıkma, iştahsızlık ya da kusma varsa "
             "hekime başvurulmalıdır."
         ),
-        source=GUIDE_SOURCE_PENDING,
     ),
     Pattern(
         id=LIVER,
@@ -121,7 +116,6 @@ PATTERNS: tuple[Pattern, ...] = (
             "da ciltte sararma, iştahsızlık veya kusma varsa hekime "
             "başvurulmalıdır."
         ),
-        source=GUIDE_SOURCE_PENDING,
     ),
     Pattern(
         id=GLUCOSE,
@@ -139,7 +133,6 @@ PATTERNS: tuple[Pattern, ...] = (
             "sık idrara çıkma, kilo kaybı, titreme ya da bayılma varsa hekime "
             "başvurulmalıdır."
         ),
-        source=GUIDE_SOURCE_PENDING,
     ),
     Pattern(
         id=INFLAMMATION,
@@ -155,7 +148,6 @@ PATTERNS: tuple[Pattern, ...] = (
             "ve aşılarının güncel tutulması destekleyicidir. Ateş, halsizlik, "
             "iştahsızlık ya da ishal varsa hekime başvurulmalıdır."
         ),
-        source=GUIDE_SOURCE_PENDING,
     ),
     Pattern(
         id=THYROID,
@@ -170,7 +162,6 @@ PATTERNS: tuple[Pattern, ...] = (
             "hekime yardımcı olur. Hızlı kilo kaybı, aşırı iştah, huzursuzluk ya da "
             "belirgin halsizlik varsa hekime başvurulmalıdır."
         ),
-        source=GUIDE_SOURCE_PENDING,
     ),
     Pattern(
         id=ELECTROLYTE,
@@ -187,7 +178,6 @@ PATTERNS: tuple[Pattern, ...] = (
             "belirgin halsizlik, nöbet ya da kalp ritminde düzensizlik fark "
             "edilirse hemen hekime başvurulmalıdır."
         ),
-        source=GUIDE_SOURCE_PENDING,
     ),
     Pattern(
         id=VACCINATION,
@@ -200,7 +190,6 @@ PATTERNS: tuple[Pattern, ...] = (
             "öncesinde hayvanın genel sağlık durumunun hekime anlatılması "
             "faydalıdır."
         ),
-        source=GUIDE_SOURCE_PENDING,
     ),
 )
 

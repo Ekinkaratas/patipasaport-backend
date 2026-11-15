@@ -254,11 +254,9 @@ def test_system_prompt_with_patterns() -> None:
     assert ASSESS_NO_PATTERNS_LINE not in prompt
 
 
-# Rehberin kimliği ve kaynak bilgisi talimata girmez.
-def test_system_prompt_omits_pattern_id_and_source() -> None:
-    pattern = Pattern(
-        id=SECRET_MARKER, title="Başlık", guide="Rehber.", source=SECRET_MARKER
-    )
+# Rehberin kimliği talimata girmez.
+def test_system_prompt_omits_pattern_id() -> None:
+    pattern = Pattern(id=SECRET_MARKER, title="Başlık", guide="Rehber.")
 
     prompt = build_assess_system_prompt([pattern])
 

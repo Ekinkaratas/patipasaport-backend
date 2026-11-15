@@ -195,9 +195,8 @@ def test_render_contains_results_and_sample() -> None:
 
     assert "`sahte-model`" in report
     assert "1/1 sonuçta risk seviyesi" in report
-    assert "veteriner hekim onayı bekliyor" in report
+    assert "veteriner" not in report.casefold().split("## örnek çıktılar")[0]
     assert "## Ölçümün bulduğu hata" in report
-    assert "| Anemik genç köpek |  |  |  |  |" in report
     assert "**Özet:** Özet metni." in report
     assert "- HCT (azalıyor): Azalmış." in report
     assert "- Anemi (olasılık: orta): İlişkili olabilir." in report

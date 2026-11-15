@@ -12,7 +12,6 @@ from app.assessments.analyze import (
     VaccinationReminderInfo,
 )
 from app.assessments.knowledge import (
-    GUIDE_SOURCE_PENDING,
     PATTERNS,
     SYNONYMS,
     TEST_NAME_ALIASES,
@@ -199,13 +198,11 @@ def test_canonical_test_name(name: str, expected: str | None) -> None:
     assert canonical_test_name(name) == expected
 
 
-# Kalıpların sözleşmedeki sıra, kimlik, başlık ve kaynakla tanımlandığını doğrular.
+# Kalıpların sözleşmedeki sıra, kimlik ve başlıkla tanımlandığını doğrular.
 def test_patterns_are_defined_in_contract_order() -> None:
     assert tuple(pattern.id for pattern in PATTERNS) == PATTERN_IDS
     assert tuple(pattern.title for pattern in PATTERNS) == PATTERN_TITLES
     assert all(isinstance(pattern, Pattern) for pattern in PATTERNS)
-    assert all(pattern.source == GUIDE_SOURCE_PENDING for pattern in PATTERNS)
-    assert GUIDE_SOURCE_PENDING == "Taslak; veteriner hekim onayı bekliyor"
 
 
 # Rehber metinlerinde test adı T4 dışında rakam bulunmadığını doğrular.
